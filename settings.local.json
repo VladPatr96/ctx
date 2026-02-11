@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git clone:*)",
+      "Bash(dir:*)",
+      "Bash(findstr:*)",
+      "Bash(echo:*)",
+      "Bash(node --version:*)",
+      "Bash(npm --version:*)",
+      "Bash(go version:*)",
+      "Bash(rustc:*)",
+      "Bash(dotnet --version:*)",
+      "Bash(git --version)",
+      "Bash(gh:*)",
+      "Bash(jq:*)",
+      "Bash(curl:*)",
+      "Bash(nvim:*)",
+      "Bash(python:*)",
+      "Bash(ls:*)",
+      "Bash(wc:*)",
+      "Bash(export PATH=\"$PATH:/c/Program Files/GitHub CLI\")",
+      "Bash(source:*)"
+    ]
+  }
+}

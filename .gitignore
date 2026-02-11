@@ -1,0 +1,12 @@
+# Cache and temp
+*.pyc
+__pycache__/
+*.tmp
+
+# Credentials (never commit)
+.credentials.json
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini

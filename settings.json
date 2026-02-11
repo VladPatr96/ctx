@@ -1,0 +1,10 @@
+{
+  "language": "Russian",
+  "statusLine": {
+    "type": "command",
+    "command": "node C:/Users/user/.claude/statusline.js"
+  },
+  "enabledPlugins": {
+    "superpowers@superpowers-dev": true
+  }
+}
