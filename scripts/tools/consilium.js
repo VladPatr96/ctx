@@ -1,10 +1,20 @@
 /**
- * Consilium domain tools: ctx_share_result, ctx_read_results, ctx_delegate_task, ctx_inner_consilium
+ * Consilium domain tools: ctx_share_result, ctx_read_results, ctx_delegate_task,
+ * ctx_inner_consilium, ctx_agent_consilium, ctx_consilium_presets
  */
 
 import { z } from 'zod';
 import { route, routeMulti, delegate } from '../providers/router.js';
 import { getProvider, invoke } from '../providers/index.js';
+import { readFileSync, existsSync } from 'node:fs';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { readdirSync } from 'node:fs';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const PLUGIN_ROOT = process.env.CLAUDE_PLUGIN_ROOT || join(__dirname, '..', '..');
+const PRESETS_FILE = join(PLUGIN_ROOT, 'consilium.presets.json');
+const AGENTS_DIR = join(PLUGIN_ROOT, 'agents');
 
 export function registerConsiliumTools(server, { getResults, saveResults }) {
 
@@ -133,6 +143,63 @@ export function registerConsiliumTools(server, { getResults, saveResults }) {
         content: [{
           type: 'text',
           text: JSON.stringify({ provider: providerName, models: requestedModels, results: output }, null, 2)
+        }]
+      };
+    }
+  );
+
+  server.registerTool(
+    'ctx_consilium_presets',
+    {
+      description: 'Получить список пресетов для consilium. Пресеты определяют предустановленные составы провайдеров или агентов.',
+      inputSchema: z.object({}).shape,
+    },
+    async () => {
+      if (!existsSync(PRESETS_FILE)) {
+        return { content: [{ type: 'text', text: '{}' }] };
+      }
+      const presets = JSON.parse(readFileSync(PRESETS_FILE, 'utf-8'));
+      return {
+        content: [{ type: 'text', text: JSON.stringify(presets, null, 2) }]
+      };
+    }
+  );
+
+  server.registerTool(
+    'ctx_agent_consilium',
+    {
+      description: 'Внутренний агентный консилиум: запускает выбранных агентов (architect, researcher, reviewer и др.) для анализа задачи каждый со своей позиции. Возвращает промпты для параллельного запуска через Task tool.',
+      inputSchema: z.object({
+        topic: z.string().describe('Тема для анализа'),
+        agents: z.array(z.string()).describe('Список агентов (например ["architect", "researcher", "reviewer"])'),
+        projectContext: z.string().optional().describe('Контекст проекта (стек, структура)')
+      }).shape,
+    },
+    async ({ topic, agents, projectContext }) => {
+      const prompts = [];
+
+      for (const agentName of agents) {
+        const agentFile = join(AGENTS_DIR, `${agentName}.md`);
+        if (!existsSync(agentFile)) {
+          prompts.push({ agent: agentName, error: `Agent file not found: ${agentFile}` });
+          continue;
+        }
+
+        const agentContent = readFileSync(agentFile, 'utf-8');
+        const roleMatch = agentContent.match(/\*\*(?:Role|Роль)\*\*:\s*(.+)/i);
+        const role = roleMatch ? roleMatch[1].trim() : agentName;
+
+        prompts.push({
+          agent: agentName,
+          role,
+          prompt: `You are the **${agentName}** agent.\nYour role: ${role}\n\nTopic: ${topic}\n${projectContext ? `\nProject context: ${projectContext}` : ''}\n\nAnalyze this topic STRICTLY from your role's perspective.\nDo NOT try to cover all angles — only your specialization.\nProvide: approach, risks from your perspective, key recommendations.\nRespond in Russian. Max 300 words.`
+        });
+      }
+
+      return {
+        content: [{
+          type: 'text',
+          text: JSON.stringify({ topic, agents: prompts }, null, 2)
         }]
       };
     }

@@ -17,6 +17,11 @@
 - ctx_log_action — логировать каждое значимое изменение
 - ctx_log_error — логировать ошибки с решениями
 
+## Skills (Required)
+BEFORE writing code, MUST invoke these skills:
+- `superpowers:executing-plans` — step-by-step plan execution protocol
+- `superpowers:subagent-development` — for delegating subtasks
+
 ## Instructions
 
 You are the **implementer** agent in the CTX pipeline.

@@ -14,11 +14,22 @@ description: >
 
 ## Использование
 
-`/ctx-consilium <описание задачи/вопроса>`
+```
+/ctx-consilium <описание задачи/вопроса>
+/ctx-consilium <тема> --providers claude,gemini
+/ctx-consilium <тема> --agents architect,researcher,reviewer
+/ctx-consilium <тема> --preset fast
+```
+
+### Флаги
+- `--providers p1,p2` — выбрать конкретных провайдеров
+- `--agents a1,a2` — внутренний агентный консилиум
+- `--preset <name>` — пресет из `consilium.presets.json` (full, fast, code-only, agents-core, agents-full)
+- (без флагов) → интерактивный выбор через AskUserQuestion
 
 ## Паттерн: Независимые мнения
 
-Каждый провайдер анализирует задачу **изолированно** — не видит ответы других.
+Каждый участник (провайдер или агент) анализирует задачу **изолированно** — не видит ответы других.
 Это даёт разнообразие подходов и снижает confirmation bias.
 
 ---
@@ -76,6 +87,30 @@ codex exec --ephemeral --skip-git-repo-check "<промпт-шаблон>" 2>&1 
 - Каждый провайдер НЕ ВИДИТ ответы других
 - Таймаут: 60 секунд на провайдера
 - Если провайдер не отвечает — пропусти его
+
+### Режим: Agent Consilium (--agents)
+
+Вместо внешних провайдеров — запусти внутренних агентов параллельно через Task tool.
+
+1. Вызови `ctx_agent_consilium(topic, agents, projectContext)` для получения промптов
+2. Запусти каждого агента через Task tool (subagent_type: "general-purpose")
+3. Каждый отвечает С ПОЗИЦИИ СВОЕЙ РОЛИ:
+   - **architect** → архитектура, масштабируемость, API контракты
+   - **researcher** → паттерны, прецеденты, альтернативы
+   - **reviewer** → риски, качество, edge cases
+   - **tester** → тестируемость, покрытие
+   - **implementer** → сложность, практичность
+
+### Интерактивный выбор (без флагов)
+
+Вызови AskUserQuestion:
+```
+Режим консилиума для: "<тема>"
+[A] Все провайдеры — Claude + Gemini + Codex
+[B] Быстрый — Claude + Gemini
+[C] Агенты — architect + researcher + reviewer
+[D] Выбрать вручную
+```
 
 ### Шаг 3: SYNTHESIZE
 

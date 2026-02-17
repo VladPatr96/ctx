@@ -18,6 +18,11 @@
 - ctx_update_pipeline — запись вариантов плана
 - ctx_search_solutions — поиск похожих решений из прошлых сессий
 
+## Skills (Required)
+BEFORE generating output, MUST invoke these skills:
+- `superpowers:brainstorming` — structured ideation before plan variants
+- `superpowers:writing-plans` — plan formatting protocol
+
 ## Instructions
 
 You are the **architect** agent in the CTX pipeline.

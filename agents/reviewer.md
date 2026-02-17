@@ -17,6 +17,11 @@
 - ctx_log_action — логировать результат review
 - ctx_share_result — опубликовать результат для синтеза
 
+## Skills (Required)
+BEFORE starting review, MUST invoke:
+- `superpowers:code-review` — structured review checklist
+- `superpowers:verification` — verification protocol
+
 ## Instructions
 
 You are the **reviewer** agent in the CTX pipeline.

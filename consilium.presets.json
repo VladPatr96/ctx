@@ -1,0 +1,22 @@
+{
+  "full": {
+    "description": "Все провайдеры",
+    "providers": ["claude", "gemini", "codex"]
+  },
+  "fast": {
+    "description": "Быстрый — только Claude + Gemini",
+    "providers": ["claude", "gemini"]
+  },
+  "code-only": {
+    "description": "Code review — Codex + Claude",
+    "providers": ["codex", "claude"]
+  },
+  "agents-core": {
+    "description": "Внутренний агентный консилиум",
+    "agents": ["architect", "researcher", "reviewer"]
+  },
+  "agents-full": {
+    "description": "Все агенты",
+    "agents": ["architect", "researcher", "reviewer", "tester", "implementer"]
+  }
+}

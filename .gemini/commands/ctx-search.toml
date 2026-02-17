@@ -1,0 +1,4 @@
+[[command]]
+name = "ctx-search"
+description = "Search cross-project knowledge base"
+prompt_file = "skills/ctx-search/SKILL.md"

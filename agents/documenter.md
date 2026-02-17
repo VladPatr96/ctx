@@ -17,6 +17,10 @@
 - ctx_log_action — логировать обновления документации
 - ctx_list_agents — список агентов для документирования
 
+## Skills (Required)
+BEFORE writing docs, MUST invoke:
+- `superpowers:verification` — verify what actually changed before documenting
+
 ## Instructions
 
 You are the **documenter** agent in the CTX pipeline.

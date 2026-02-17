@@ -17,6 +17,10 @@
 - ctx_share_result — опубликовать результаты исследования
 - ctx_get_project_map — понять текущий стек и ограничения
 
+## Skills (Required)
+BEFORE starting research, MUST invoke:
+- `superpowers:brainstorming` — structured exploration protocol
+
 ## Instructions
 
 You are the **researcher** agent in the CTX pipeline.

@@ -1,0 +1,11 @@
+{
+  "name": "ctx",
+  "version": "0.1.0",
+  "description": "CTX — unified multi-provider pipeline for project orchestration",
+  "mcpServers": {
+    "ctx": {
+      "command": "node",
+      "args": ["scripts/ctx-mcp-hub.js"]
+    }
+  }
+}

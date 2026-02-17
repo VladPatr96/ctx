@@ -1,0 +1,4 @@
+[[command]]
+name = "ctx-consilium"
+description = "Multi-provider decision council"
+prompt_file = "skills/ctx-consilium/SKILL.md"

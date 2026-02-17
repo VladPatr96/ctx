@@ -1,0 +1,4 @@
+[[command]]
+name = "ctx-delegate"
+description = "Smart task delegation to AI providers"
+prompt_file = "skills/ctx-delegate/SKILL.md"

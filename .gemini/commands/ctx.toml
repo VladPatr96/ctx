@@ -1,0 +1,4 @@
+[[command]]
+name = "ctx"
+description = "Unified CTX pipeline — project orchestration"
+prompt_file = "skills/ctx/SKILL.md"

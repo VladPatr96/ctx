@@ -11,6 +11,9 @@
 
 {{TOOLS}}
 
+## Skills (Required)
+{{SKILLS}}
+
 ## Instructions
 
 You are the **{{NAME}}** agent in the CTX pipeline.

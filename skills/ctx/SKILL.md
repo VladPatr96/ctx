@@ -124,26 +124,37 @@ Next: /ctx brainstorm — discuss with lead provider
 
 ---
 
-## /ctx brainstorm
+## /ctx brainstorm [флаги]
 
-Диалог с ведущим провайдером (lead) для обсуждения подхода.
+Диалог с ведущим провайдером (lead) или несколькими агентами.
 
-### Если lead = claude (дефолт)
+### Флаги
+- `--agents architect,researcher,reviewer` — мульти-агентный brainstorm
+- (без флагов) → диалог с lead провайдером
+
+### Режим: Lead Provider (дефолт)
+
+#### Если lead = claude (дефолт)
 
 Используй Task tool с subagent_type "general-purpose":
 - Передай контекст: задачу, карту проекта, релевантные уроки
 - Загрузи агента `researcher.md` как промпт для субагента
 - Результат запиши в pipeline: `ctx_update_pipeline({ brainstorm: { messages, summary } })`
 
-### Если lead != claude (gemini, opencode, codex)
+#### Если lead != claude (gemini, codex)
 
 Вызови через bash (one-shot), передав всю историю в промпте:
 ```bash
-# Пример для gemini:
 gemini -p "Context: [project map + task + previous messages]
 Task: [задача]
 Respond with your analysis and suggestions." -o text
 ```
+
+### Режим: Multi-Agent Brainstorm (--agents)
+
+Запусти несколько агентов **параллельно** через Task tool. Каждый анализирует задачу со своей позиции:
+- Используй `ctx_agent_consilium(topic, agents, projectContext)` для промптов
+- Собери ответы и синтезируй
 
 **Лимит:** после 5 ходов brainstorm — автоматическая суммаризация через Task tool.
 
@@ -283,27 +294,61 @@ gh search issues "$ARGUMENTS" --owner VladPatr96 --label consilium --json number
 
 ---
 
-## /ctx consilium <тема>
+## /ctx consilium <тема> [флаги]
 
-Мульти-провайдерный консилиум. 4 провайдера анализируют задачу **изолированно**.
+Мульти-провайдерный или агентный консилиум.
 
-### Подготовка
-Получи карту проекта и подготовь промпт-шаблон с контекстом.
+### Флаги
+- `--providers claude,gemini` — выбрать конкретных провайдеров
+- `--agents architect,researcher,reviewer` — внутренний агентный консилиум
+- `--preset <name>` — использовать пресет из `consilium.presets.json`
+- `--inner <provider>` — мини-консилиум с разными моделями одного провайдера
+- (без флагов) → интерактивный выбор через AskUserQuestion
 
-### Dispatch (параллельно)
-Запусти **4 агента параллельно** через Task tool:
+### Интерактивный выбор (без флагов)
+
+Вызови AskUserQuestion:
+```
+Выберите режим консилиума:
+[A] Все провайдеры (full)
+[B] Быстрый — Claude + Gemini (fast)
+[C] Code review — Codex + Claude (code-only)
+[D] Агенты — architect + researcher + reviewer (agents-core)
+[E] Выбрать вручную
+```
+
+### Пресеты
+
+Загрузи через `ctx_consilium_presets()`. Встроенные пресеты:
+- `full` — все провайдеры (claude, gemini, codex)
+- `fast` — claude + gemini
+- `code-only` — codex + claude
+- `agents-core` — architect + researcher + reviewer
+- `agents-full` — все агенты
+
+### Режим: Provider Consilium (--providers)
+
+Подготовь промпт-шаблон и запусти выбранных провайдеров **параллельно**:
 - **Claude** → Task tool, subagent_type: "general-purpose", model: "sonnet"
 - **Gemini** → `gemini -p "<промпт>" -o text`
-- **OpenCode** → `opencode run "<промпт>"`
 - **Codex** → `codex exec --ephemeral --skip-git-repo-check "<промпт>"`
 
-**Опция `--inner <provider>`**: мини-консилиум с разными моделями одного провайдера. Используй MCP tool `ctx_inner_consilium(provider, models, task)`.
+### Режим: Agent Consilium (--agents)
+
+Запусти выбранных агентов через Task tool **параллельно**. Используй `ctx_agent_consilium(topic, agents, projectContext)` для получения промптов.
+
+Каждый агент анализирует тему **со своей позиции**:
+- **architect** → архитектура, масштабируемость
+- **researcher** → паттерны, прецеденты, альтернативы
+- **reviewer** → риски, качество, edge cases
+- **tester** → тестируемость, покрытие
+- **implementer** → сложность реализации, практичность
 
 ### Synthesize
-1. Общее — в чём согласны
-2. Различия — где расходятся
-3. Уникальное — что увидел только один
-4. Конфликты — противоположные рекомендации
+1. **Общее** — в чём согласны
+2. **Различия** — где расходятся и почему
+3. **Уникальное** — что увидел только один
+4. **Конфликты** — противоположные рекомендации
 
 ### Decide + Log
 Прими решение и сохрани:

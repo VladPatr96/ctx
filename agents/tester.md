@@ -17,6 +17,11 @@
 - ctx_log_action — логировать результаты тестирования
 - ctx_log_error — логировать найденные баги
 
+## Skills (Required)
+BEFORE writing tests, MUST invoke:
+- `superpowers:test-driven` — TDD red-green-refactor cycle
+- `superpowers:verification` — post-implementation verification
+
 ## Instructions
 
 You are the **tester** agent in the CTX pipeline.

@@ -19,6 +19,9 @@
 - ctx_list_agents — доступные агенты
 - ctx_create_agent — генерация кастомных агентов по задаче
 
+## Skills (Required)
+- `superpowers:executing-plans` — pipeline stage execution protocol
+
 ## Instructions
 
 You are the **pipeline-controller** — the internal orchestrator of the CTX pipeline.
