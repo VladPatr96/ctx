@@ -19,3 +19,6 @@ node_modules/
 
 # Session logs (private)
 .sessions/
+
+# Generated agents (per-project, not shared)
+agents/generated/

@@ -150,4 +150,6 @@ export async function healthCheckAll() {
   );
 }
 
+export { route, routeMulti, delegate, setLead } from './router.js';
+
 export default { listProviders, getProvider, invoke, invokeAll, healthCheckAll };

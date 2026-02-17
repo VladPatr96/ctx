@@ -1,234 +1,360 @@
 ---
 name: ctx
 description: >
-  Система управления контекстом сессий. При вызове /ctx — запускает индексацию проекта,
-  загружает контекст из GitHub Issues, ищет релевантные уроки, создаёт лог сессии.
-  При /ctx save — сохраняет результаты в GitHub Issues (проект + центральная база).
+  Unified pipeline для управления проектом: от индексации до выполнения.
+  Одна команда — полный цикл: DETECT → CONTEXT → TASK → BRAINSTORM → PLAN → EXECUTE → DONE.
+  Поддерживает реверсивную оркестрацию (любой AI провайдер как ведущий),
+  агентов-сотрудников и мини-консилиумы внутри провайдера.
 ---
 
-# /ctx — Session & Context Manager
+# /ctx — Unified Pipeline
 
-Управляет контекстом между сессиями. Загружает уроки, индексирует файлы, ведёт логи.
+Единая точка входа для всех операций CTX.
 
-## Использование
+## Команды
 
-- `/ctx` — старт сессии
-- `/ctx save` — конец сессии
-- `/ctx status` — текущее состояние
+```
+/ctx                       → Авто-старт pipeline (DETECT + CONTEXT)
+/ctx task <описание>       → Определить задачу (→ TASK)
+/ctx brainstorm            → Диалог с ведущим агентом (→ BRAINSTORM)
+/ctx plan                  → Генерация плана, одобрение (→ PLAN)
+/ctx execute               → Делегирование агентам (→ EXECUTE)
+/ctx save                  → Сохранение сессии
+/ctx status                → Текущая стадия + состояние
+/ctx lead <провайдер>      → Сменить ведущего (claude/gemini/opencode/codex)
+/ctx agents                → Список агентов
+/ctx search <запрос>       → Поиск по базе знаний
+/ctx consilium <тема>      → Мульти-провайдерный совет
+/ctx delegate <задача>     → Умный роутинг задачи к провайдеру
+```
 
 ---
 
-## Старт сессии (`/ctx` или `/ctx` без аргументов)
+## Pipeline State Machine
 
-### 1. Индексация проекта
+```
+DETECT → CONTEXT → TASK → BRAINSTORM → PLAN → EXECUTE → DONE
+```
 
-Запусти индексатор для построения карты проекта:
+Состояние хранится в `.data/pipeline.json`. Используй MCP tools:
+- `ctx_get_pipeline()` — текущее состояние
+- `ctx_set_stage(stage, data?)` — переход
+- `ctx_update_pipeline(patch)` — обновить поля
 
+---
+
+## /ctx (без аргументов) — Авто-старт
+
+### DETECT
+
+1. Проверь наличие `.data/index.json`:
+   - Есть → проект существующий, `isNew = false`
+   - Нет → новый проект, `isNew = true`
+2. Установи pipeline через `ctx_set_stage("detect", { isNew: ... })`
+
+### CONTEXT
+
+1. Запусти индексацию:
 ```bash
 node "${CLAUDE_PLUGIN_ROOT}/scripts/ctx-indexer.js"
 ```
 
 Если скрипт недоступен, выполни вручную:
-
 ```bash
-# Определить стек
 ls package.json go.mod requirements.txt Cargo.toml pom.xml 2>/dev/null
-
-# Структура проекта (без node_modules, .git, dist)
-find . -maxdepth 3 -type d \
-  -not -path '*/node_modules/*' \
-  -not -path '*/.git/*' \
-  -not -path '*/dist/*' \
-  -not -path '*/.next/*' \
-  -not -path '*/build/*' \
-  -not -name node_modules \
-  -not -name .git | head -50
-
-# Git состояние
+find . -maxdepth 3 -type d -not -path '*/node_modules/*' -not -path '*/.git/*' -not -path '*/dist/*' -not -name node_modules -not -name .git | head -50
 git status --short 2>/dev/null
 git log -5 --oneline 2>/dev/null
-git diff --stat 2>/dev/null
 ```
 
-Покажи пользователю краткую карту проекта.
-
-### 2. Загрузить контекст из GitHub Issues
-
+2. Загрузи контекст из GitHub Issues:
 ```bash
-# Определить текущий проект
 PROJECT_NAME=$(basename "$(git rev-parse --show-toplevel 2>/dev/null || pwd)")
-
-# Открытые задачи текущего проекта
 gh issue list -L 20 --json number,title,labels,state 2>/dev/null
-
-# Уроки из центральной базы знаний (все проекты)
 gh search issues "label:lesson" --owner VladPatr96 --limit 10 --json title,body,repository
-
-# Уроки для текущего стека
 gh search issues "label:lesson label:project:$PROJECT_NAME" --owner VladPatr96 --limit 5 --json title,body
-
-# Текущие блокеры
 gh issue list -l blocker --state open --json number,title,body 2>/dev/null
-
-# WIP задачи
 gh issue list -l wip --state open --json number,title,body 2>/dev/null
 ```
 
-### 3. Создать файл лога сессии
+3. Обнови pipeline: `ctx_set_stage("context", { context: { index, issues, history } })`
 
-Создай файл `.sessions/YYYY-MM-DD-HHmm.md`:
-
+4. Создай файл лога сессии `.sessions/YYYY-MM-DD-HHmm.md`:
 ```markdown
 # Session YYYY-MM-DD HH:mm
 **Project:** [имя проекта]
-**Machine:** [определить из окружения]
 **Branch:** [текущая ветка git]
-**Provider:** Claude Code
+**Lead:** [текущий lead провайдер]
 **Goals:** [спросить у пользователя или определить из контекста]
 
 ## Project Map
-<!-- Краткая карта из индексатора -->
-
 ## Context Loaded
-- Open issues: [количество]
-- Recent lessons: [список]
-- Active blockers: [список]
-
 ## Actions
-<!-- Логировать каждое значимое действие -->
-
 ## Errors & Solutions
-<!-- При обнаружении и решении бага — документировать -->
-
 ## Decisions
-<!-- Архитектурные и технические решения -->
-
 ## Files Modified
-<!-- Список изменённых файлов -->
-
 ## Tasks
-<!-- Трекер задач текущей сессии -->
-- [ ] задача 1
-- [ ] задача 2
-
 ## Summary
-<!-- Заполнить в конце сессии -->
 ```
 
-### 4. Показать сводку
+5. Покажи сводку и предложи определить задачу:
+```
+Pipeline started: DETECT → CONTEXT
+Project: [имя] ([стек])
+Lead: [провайдер]
+Open issues: N
+Lessons found: N
+
+Define your task with: /ctx task <описание>
+Or choose from open issues above.
+```
+
+---
+
+## /ctx task <описание>
+
+1. Запиши задачу: `ctx_update_pipeline({ task: "<описание>" })`
+2. Перейди на стадию TASK: `ctx_set_stage("task")`
+3. Покажи подтверждение и предложи brainstorm:
+```
+Task set: <описание>
+Next: /ctx brainstorm — discuss with lead provider
+      /ctx plan — skip to planning
+```
+
+---
+
+## /ctx brainstorm
+
+Диалог с ведущим провайдером (lead) для обсуждения подхода.
+
+### Если lead = claude (дефолт)
+
+Используй Task tool с subagent_type "general-purpose":
+- Передай контекст: задачу, карту проекта, релевантные уроки
+- Загрузи агента `researcher.md` как промпт для субагента
+- Результат запиши в pipeline: `ctx_update_pipeline({ brainstorm: { messages, summary } })`
+
+### Если lead != claude (gemini, opencode, codex)
+
+Вызови через bash (one-shot), передав всю историю в промпте:
+```bash
+# Пример для gemini:
+gemini -p "Context: [project map + task + previous messages]
+Task: [задача]
+Respond with your analysis and suggestions." -o text
+```
+
+**Лимит:** после 5 ходов brainstorm — автоматическая суммаризация через Task tool.
+
+После завершения brainstorm:
+```
+Brainstorm complete. Summary: [краткое резюме]
+Next: /ctx plan — generate implementation plan
+```
+
+Перейди: `ctx_set_stage("brainstorm", { brainstorm: { summary } })`
+
+---
+
+## /ctx plan
+
+1. Загрузи агента `architect.md`
+2. Используй Task tool с subagent_type "general-purpose":
+   - Передай: задачу, brainstorm summary, контекст проекта
+   - Запроси 2-3 варианта плана с trade-offs
+3. Покажи пользователю варианты через AskUserQuestion
+4. Запиши выбранный план: `ctx_update_pipeline({ plan: { selected: N, variants, agents } })`
+5. Перейди: `ctx_set_stage("plan")`
 
 ```
-📋 Сессия начата: YYYY-MM-DD HH:mm
-📂 Лог: .sessions/YYYY-MM-DD-HHmm.md
-🗺️ Проект: [имя] ([стек])
-
-📁 Структура:
-  src/ — [N файлов] ([типы])
-  ...
-
-🔓 Открытые задачи: N
-  #1 — Название
-
-🚫 Блокеры: N
-  #X — Описание
-
-📚 Релевантные уроки:
-  - [проект] Урок: описание
-  - [проект] Урок: описание
-
-🔧 WIP:
-  #Z — В процессе
+Plan ready. Selected: Variant N
+Agents assigned: [список]
+Next: /ctx execute — start implementation
 ```
+
+---
+
+## /ctx execute
+
+1. Прочитай утверждённый план из pipeline
+2. Определи агентов для каждой подзадачи:
+   - Код → `implementer.md`
+   - Тесты → `tester.md`
+   - Документация → `documenter.md`
+   - При необходимости создай кастомных через `ctx_create_agent`
+3. Запусти агентов через Task tool (параллельно где возможно)
+4. После выполнения запусти `reviewer.md` для code review
+5. При замечаниях — итерация
+6. Перейди: `ctx_set_stage("execute")`, затем `ctx_set_stage("done")` по завершении
+
+---
+
+## /ctx save
+
+### 1. Заполнить Summary в логе сессии
+
+### 2. Сохранить в GitHub Issues (гибридная запись)
+
+**В репозитории проекта:**
+```bash
+gh issue create \
+  --title "Session: $(date +%Y-%m-%d) — краткое описание" \
+  --label "session,provider:claude-code" \
+  --body "[сводка сессии]"
+```
+
+**В центральный репо:**
+```bash
+gh issue create -R VladPatr96/my_claude_code \
+  --title "Session: $PROJECT_NAME $(date +%Y-%m-%d) — краткое описание" \
+  --label "session,project:$PROJECT_NAME" \
+  --body "[ключевые уроки и решения]"
+```
+
+### 3. Обновить WIP issues — закрыть завершённые, создать новые для незавершённого
+
+---
+
+## /ctx status
+
+Покажи текущее состояние pipeline:
+```
+Pipeline: [текущая стадия]
+Lead: [провайдер]
+Task: [описание задачи или "not set"]
+Brainstorm: [summary или "not started"]
+Plan: [selected variant или "not ready"]
+Agents: [N base + M generated]
+```
+
+Данные бери из `ctx_get_pipeline()`.
+
+---
+
+## /ctx lead <провайдер>
+
+1. Проверь health провайдера через `ctx_delegate_task` с пустой задачей или bash:
+```bash
+<provider> --version
+```
+2. Обнови pipeline: `ctx_update_pipeline({ lead: "<провайдер>" })`
+3. Подтверди:
+```
+Lead changed: [old] → [new]
+Brainstorm and planning will now use [new] as primary.
+```
+
+---
+
+## /ctx agents
+
+Вызови `ctx_list_agents()` и покажи:
+```
+Agents (N base + M generated):
+
+Base:
+  architect     — Декомпозиция, API контракты     [PLAN]
+  implementer   — Написание кода                  [EXECUTE]
+  reviewer      — Code review                     [EXECUTE]
+  tester        — Тесты, покрытие                 [EXECUTE]
+  researcher    — Исследование, PoC               [BRAINSTORM]
+  documenter    — README, API docs                [EXECUTE]
+  pipeline-ctrl — Управление pipeline             [internal]
+
+Generated:
+  [список или "none"]
+```
+
+---
+
+## /ctx search <запрос>
+
+Поиск по кросс-проектной базе знаний:
+
+```bash
+gh search issues "$ARGUMENTS" --owner VladPatr96 --label lesson --json number,title,body,repository --limit 15
+gh search issues "$ARGUMENTS" --owner VladPatr96 --label solution --json number,title,body,repository --limit 10
+gh search issues "$ARGUMENTS" --owner VladPatr96 --label session --json number,title,body,repository --limit 10
+gh search issues "$ARGUMENTS" --owner VladPatr96 --label consilium --json number,title,body,repository --limit 5
+```
+
+Покажи результаты и предложи адаптацию для текущего проекта.
+
+---
+
+## /ctx consilium <тема>
+
+Мульти-провайдерный консилиум. 4 провайдера анализируют задачу **изолированно**.
+
+### Подготовка
+Получи карту проекта и подготовь промпт-шаблон с контекстом.
+
+### Dispatch (параллельно)
+Запусти **4 агента параллельно** через Task tool:
+- **Claude** → Task tool, subagent_type: "general-purpose", model: "sonnet"
+- **Gemini** → `gemini -p "<промпт>" -o text`
+- **OpenCode** → `opencode run "<промпт>"`
+- **Codex** → `codex exec --ephemeral --skip-git-repo-check "<промпт>"`
+
+**Опция `--inner <provider>`**: мини-консилиум с разными моделями одного провайдера. Используй MCP tool `ctx_inner_consilium(provider, models, task)`.
+
+### Synthesize
+1. Общее — в чём согласны
+2. Различия — где расходятся
+3. Уникальное — что увидел только один
+4. Конфликты — противоположные рекомендации
+
+### Decide + Log
+Прими решение и сохрани:
+```bash
+gh issue create -R VladPatr96/my_claude_code \
+  --title "Consilium: [тема]" \
+  --label "consilium,project:$PROJECT_NAME" \
+  --body "[решение]"
+```
+
+---
+
+## /ctx delegate <задача>
+
+Умное делегирование. Авто-роутинг по типу задачи.
+
+### Флаги
+- `--provider <name>` — явный выбор
+- `--multi` — параллельно нескольким
+
+### Workflow
+1. **ROUTE**: определи провайдера через роутер
+2. **CONFIRM**: спроси подтверждение (AskUserQuestion)
+3. **DISPATCH**: вызови провайдера
+4. **RESULT**: покажи ответ
+5. **LOG**: запиши через `ctx_log_action`
 
 ---
 
 ## В процессе работы
 
 ### Логирование действий
-После каждого значимого действия добавляй запись в `## Actions`:
-```
-- [HH:mm] действие — файл/компонент — результат
-```
+После каждого значимого действия: `ctx_log_action({ action, file, result })`
 
 ### При обнаружении и решении бага
-1. Задокументируй в `## Errors & Solutions`
-2. Создай GitHub issue с меткой `lesson` в **центральном репо**:
+1. `ctx_log_error({ error, solution, prevention })`
+2. Создай GitHub Issue с меткой `lesson`:
 ```bash
 gh issue create -R VladPatr96/my_claude_code \
   --title "Lesson: краткое описание" \
   --label "lesson,project:$PROJECT_NAME" \
-  --body "## Ошибка
-описание
-
-## Решение
-как исправлено
-
-## Как предотвратить
-рекомендации"
+  --body "[ошибка + решение + предотвращение]"
 ```
-3. Закрой issue сразу:
-```bash
-gh issue close <number> -R VladPatr96/my_claude_code
-```
-
-### При принятии архитектурного решения
-Задокументируй в `## Decisions`. Если значимое — создай issue с `decision` label.
-
----
-
-## Конец сессии (`/ctx save`)
-
-### 1. Заполнить Summary
-Суммируй все действия, ошибки, решения.
-
-### 2. Сохранить в GitHub Issues (гибридная запись)
-
-**В репозитории проекта** (session log + task tracker):
-```bash
-gh issue create \
-  --title "Session: $(date +%Y-%m-%d) — краткое описание" \
-  --label "session,provider:claude-code" \
-  --body "## Сводка сессии
-Дата, ветка, машина
-
-## Что сделано
-- пункт 1
-- пункт 2
-
-## Tasks
-- [x] выполненная задача
-- [ ] незавершённая задача
-
-## Ошибки и решения
-- ошибка → решение
-
-## Изменённые файлы
-- список"
-```
-
-**В центральный репо** (lessons для кросс-проектного поиска):
-```bash
-gh issue create -R VladPatr96/my_claude_code \
-  --title "Session: $PROJECT_NAME $(date +%Y-%m-%d) — краткое описание" \
-  --label "session,project:$PROJECT_NAME" \
-  --body "## Ключевые уроки
-- урок 1
-- урок 2
-
-## Решения
-- решение (контекст для повторного использования)"
-```
-
-### 3. Обновить WIP issues
-- Закрой завершённые
-- Создай новые для незавершённой работы
 
 ---
 
 ## Правила
 
-1. `.sessions/` в `.gitignore` — логи приватны
-2. Issues — только финальные выводы, без чувствительных данных
-3. Уроки закрываются сразу — хранятся как reference
-4. Не дублируй — если урок уже в MEMORY.md, не создавай issue
-5. Task tracker — чекбоксы в issue проекта для видимости прогресса
+1. **Тонкий диспетчер** — SKILL.md только маршрутизирует, вся логика в субагентах
+2. **Pipeline state** — все данные в `.data/pipeline.json` через MCP tools
+3. **Изоляция consilium** — провайдеры не видят ответов друг друга до синтеза
+4. **Уроки** — каждая ошибка → GitHub Issue с `lesson` label
+5. `.sessions/` в `.gitignore` — логи приватны
+6. Не дублируй — если урок уже в MEMORY.md, не создавай issue

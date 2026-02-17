@@ -6,10 +6,12 @@
  * MCP Hub — тонкий оркестратор.
  * Регистрирует tools из доменных модулей: session, knowledge, consilium.
  *
- * Tools (8):
+ * Tools (13):
  * - Session:    ctx_log_action, ctx_log_error, ctx_get_session, ctx_get_tasks
  * - Knowledge:  ctx_get_project_map, ctx_search_solutions
- * - Consilium:  ctx_share_result, ctx_read_results
+ * - Consilium:  ctx_share_result, ctx_read_results, ctx_delegate_task, ctx_inner_consilium
+ * - Pipeline:   ctx_get_pipeline, ctx_set_stage, ctx_update_pipeline
+ * - Agents:     ctx_list_agents, ctx_create_agent
  */
 
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -21,6 +23,8 @@ import { join, basename } from 'node:path';
 import { registerSessionTools } from './tools/session.js';
 import { registerKnowledgeTools } from './tools/knowledge.js';
 import { registerConsiliumTools } from './tools/consilium.js';
+import { registerPipelineTools } from './tools/pipeline.js';
+import { registerAgentTools } from './tools/agents.js';
 
 // ==================== Config ====================
 
@@ -79,6 +83,8 @@ const server = new McpServer({ name: 'ctx-hub', version: '0.2.0' });
 registerSessionTools(server, { getSession, saveSession });
 registerKnowledgeTools(server, { exec, readJson, DATA_DIR, GITHUB_OWNER });
 registerConsiliumTools(server, { getResults, saveResults });
+registerPipelineTools(server);
+registerAgentTools(server);
 
 // ==================== Start ====================
 
