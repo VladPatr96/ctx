@@ -10,3 +10,12 @@ __pycache__/
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# Node
+node_modules/
+
+# Plugin data (session state, index)
+.data/
+
+# Session logs (private)
+.sessions/

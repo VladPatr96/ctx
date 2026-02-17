@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "ctx-hub": {
+      "command": "node",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/ctx-mcp-hub.js"],
+      "env": {
+        "CTX_DATA_DIR": "${CLAUDE_PLUGIN_ROOT}/.data",
+        "GITHUB_OWNER": "VladPatr96"
+      }
+    }
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "name": "ctx",
+  "version": "0.1.0",
+  "description": "Multi-provider context management: session logging, knowledge base, file indexing, and AI consilium",
+  "author": {
+    "name": "VladPatr96",
+    "url": "https://github.com/VladPatr96"
+  },
+  "repository": "https://github.com/VladPatr96/my_claude_code",
+  "license": "MIT",
+  "keywords": ["context", "session", "knowledge-base", "multi-provider", "consilium", "mcp"]
+}
