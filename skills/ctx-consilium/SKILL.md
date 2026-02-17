@@ -57,17 +57,17 @@ description: >
 
 **Gemini CLI** (через bash):
 ```bash
-echo "<промпт-шаблон>" | gemini -p 2>&1 | head -200
+gemini -p "<промпт-шаблон>" -o text 2>&1 | head -200
 ```
 
 **OpenCode** (через bash):
 ```bash
-echo "<промпт-шаблон>" | opencode ask 2>&1 | head -200
+opencode run "<промпт-шаблон>" 2>&1 | head -200
 ```
 
 **Codex CLI** (через bash):
 ```bash
-codex --approval-mode suggest --quiet "<промпт-шаблон>" 2>&1 | head -200
+codex exec --ephemeral --skip-git-repo-check "<промпт-шаблон>" 2>&1 | head -200
 ```
 
 **ВАЖНО:**

@@ -11,17 +11,17 @@ description: Агент делегирования задач внешним AI 
 
 ### Gemini CLI
 ```bash
-echo "<промпт>" | gemini -p 2>&1 | head -200
+gemini -p "<промпт>" -o text 2>&1 | head -200
 ```
 
 ### OpenCode
 ```bash
-echo "<промпт>" | opencode ask 2>&1 | head -200
+opencode run "<промпт>" 2>&1 | head -200
 ```
 
 ### Codex CLI
 ```bash
-codex --approval-mode suggest --quiet "<промпт>" 2>&1 | head -200
+codex exec --ephemeral --skip-git-repo-check "<промпт>" 2>&1 | head -200
 ```
 
 ## Правила
