@@ -8,7 +8,7 @@
   "plugins": [
     {
       "name": "ctx",
-      "source": ".",
+      "source": "./",
       "description": "Multi-provider context management: session logging, knowledge base, file indexing, and AI consilium",
       "version": "0.1.0",
       "author": { "name": "VladPatr96" },
