@@ -10,9 +10,10 @@
  * - consilium.presets.json → consilium presets config
  */
 
-import { readFileSync, readdirSync, watch, existsSync, mkdirSync } from 'node:fs';
+import { readFileSync, readdirSync, watch, existsSync, mkdirSync, appendFileSync } from 'node:fs';
 import { join, basename } from 'node:path';
 import { URL } from 'node:url';
+import * as actions from './dashboard-actions.js';
 
 // 1. CONSTANTS
 const DATA_DIR = '.data';
@@ -22,6 +23,8 @@ const SESSION_FILE = '.data/session.json';
 const LOG_FILE = '.data/log.jsonl';
 const AGENTS_DIR = 'agents';
 const CONSILIUM_FILE = 'consilium.presets.json';
+const RESULTS_FILE = '.data/results.json';
+const SKILLS_DIR = 'skills';
 const LOG_RING_SIZE = 50;
 const POLL_INTERVAL_MS = 2000;
 const DEBOUNCE_MS = 150;
@@ -34,6 +37,9 @@ export const state = {
   agents: [],
   consilium: [],
   log: [],
+  results: [],
+  progress: [],
+  skills: [],
   lastEventId: 0
 };
 
@@ -44,9 +50,14 @@ const nextEventId = () => ++state.lastEventId;
 // 3. DATA READERS
 const safeReadJson = (path) => {
   try {
-    if (!existsSync(path)) return null;
-    return JSON.parse(readFileSync(path, 'utf8'));
-  } catch {
+    if (!existsSync(path)) {
+      console.warn(`[dashboard] Warning: File not found at ${path}`);
+      return null;
+    }
+    const data = readFileSync(path, 'utf8');
+    return JSON.parse(data);
+  } catch (err) {
+    console.error(`[dashboard] Error reading JSON from ${path}:`, err.message);
     return null;
   }
 };
@@ -113,6 +124,47 @@ const readConsiliumPresets = () => {
     providers: val.providers || [],
     agents: val.agents || []
   }));
+};
+
+const readResultsJson = () => {
+  const raw = safeReadJson(RESULTS_FILE);
+  if (!Array.isArray(raw)) return [];
+  const sorted = raw.slice(-50).sort((a, b) => new Date(a.time) - new Date(b.time));
+  let runId = 0, prevTime = null;
+  return sorted.map(r => {
+    const t = new Date(r.time).getTime();
+    if (prevTime && t - prevTime > 5000) runId++;
+    prevTime = t;
+    return { ...r, runId };
+  });
+};
+
+const buildProgress = () => {
+  const session = readSessionJson();
+  if (!session) return [];
+  const items = [];
+  (session.actions || []).forEach(a =>
+    items.push({ ts: a.time, kind: 'action', agent: a.action || '', file: a.file || '', result: a.result || '' })
+  );
+  (session.errors || []).forEach(e =>
+    items.push({ ts: e.time, kind: 'error', agent: '', file: e.error || '', result: e.solution || '' })
+  );
+  return items.sort((a, b) => new Date(b.ts) - new Date(a.ts));
+};
+
+const readSkillsList = () => {
+  try {
+    if (!existsSync(SKILLS_DIR)) return [];
+    const skills = [];
+    const scan = (dir, prefix) => {
+      readdirSync(dir, { withFileTypes: true }).forEach(e => {
+        if (e.isDirectory()) scan(join(dir, e.name), prefix ? prefix + '/' + e.name : e.name);
+        else if (e.name === 'SKILL.md') skills.push(prefix || basename(dir));
+      });
+    };
+    scan(SKILLS_DIR, '');
+    return skills;
+  } catch { return []; }
 };
 
 /** Build unified log from session.json actions/errors + log.jsonl */
@@ -182,6 +234,11 @@ export const refreshAllData = () => {
   // Log
   state.log = buildLog();
 
+  // Results, progress, skills
+  state.results  = readResultsJson();
+  state.progress = buildProgress();
+  state.skills   = readSkillsList();
+
   broadcast('full', getStateSnapshot());
 };
 
@@ -201,6 +258,7 @@ export const startWatchers = (broadcastFn) => {
     if (existsSync(DATA_DIR)) watch(DATA_DIR, debouncedRefresh);
     if (existsSync(AGENTS_DIR)) watch(AGENTS_DIR, debouncedRefresh);
     if (existsSync(CONSILIUM_FILE)) watch(CONSILIUM_FILE, debouncedRefresh);
+    if (existsSync(SKILLS_DIR)) watch(SKILLS_DIR, debouncedRefresh);
   } catch {
     setInterval(refreshAllData, POLL_INTERVAL_MS);
   }
@@ -235,12 +293,62 @@ export const sseConnect = (req, res, getStateFn) => {
 };
 
 // 6. HTTP ROUTER
-export const createRouter = (buildHtmlFn) => (req, res) => {
+const parseBody = (req) => new Promise((resolve) => {
+  let data = '';
+  req.on('data', chunk => { data += chunk; });
+  req.on('end', () => { try { resolve(JSON.parse(data)); } catch { resolve(null); } });
+  req.on('error', () => resolve(null));
+});
+
+export const createRouter = (buildHtmlFn) => async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
   const serve = (status, type, data) => {
     res.writeHead(status, { 'Content-Type': type });
     res.end(typeof data === 'string' ? data : JSON.stringify(data));
   };
+
+  if (req.method === 'POST') {
+    const body = await parseBody(req);
+    try {
+      switch (url.pathname) {
+        case '/api/pipeline/stage':
+          actions.setStage(body?.stage);
+          refreshAllData();
+          return serve(200, 'application/json', { ok: true });
+        case '/api/pipeline/task':
+          actions.setTaskFull(body);
+          refreshAllData();
+          return serve(200, 'application/json', { ok: true });
+        case '/api/pipeline/lead':
+          actions.setLead(body?.lead);
+          refreshAllData();
+          return serve(200, 'application/json', { ok: true });
+        case '/api/pipeline/reset':
+          actions.resetPipeline();
+          refreshAllData();
+          return serve(200, 'application/json', { ok: true });
+        case '/api/log/clear':
+          actions.clearLog();
+          refreshAllData();
+          return serve(200, 'application/json', { ok: true });
+        case '/api/agent/details':
+          if (!body?.id) throw new Error('Agent ID is required');
+          const agentPath = join(AGENTS_DIR, `${body.id}.md`);
+          if (!existsSync(agentPath)) throw new Error('Agent not found');
+          const content = readFileSync(agentPath, 'utf8');
+          return serve(200, 'application/json', { content });
+        case '/api/consilium/activate':
+          actions.activatePreset(body?.preset);
+          refreshAllData();
+          return serve(200, 'application/json', { ok: true });
+        default:
+          return serve(404, 'application/json', { error: 'Not Found' });
+      }
+    } catch (err) {
+      return serve(400, 'application/json', { error: err.message });
+    }
+  }
+
   switch (url.pathname) {
     case '/': return serve(200, 'text/html', buildHtmlFn());
     case '/events': return sseConnect(req, res, getStateSnapshot);
