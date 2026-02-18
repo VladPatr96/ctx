@@ -3,7 +3,7 @@
  * codex exec --ephemeral --skip-git-repo-check "prompt"
  */
 
-import { execSync } from 'node:child_process';
+import { runCommand } from '../utils/shell.js';
 
 export default {
   name: 'codex',
@@ -20,43 +20,46 @@ export default {
 
   async invoke(prompt, opts = {}) {
     const timeout = opts.timeout || 60000;
-    try {
-      const result = execSync(
-        `codex exec --ephemeral --skip-git-repo-check "${prompt.replace(/"/g, '\\"')}"`,
-        { encoding: 'utf-8', timeout, cwd: opts.cwd || process.cwd() }
-      );
-      return { status: 'success', response: result.trim() };
-    } catch (err) {
-      if (err.message.includes('stdin is not a terminal')) {
+    const result = await runCommand(
+      'codex',
+      ['exec', '--ephemeral', '--skip-git-repo-check', String(prompt)],
+      { timeout, cwd: opts.cwd || process.cwd() }
+    );
+
+    if (!result.success) {
+      const msg = result.error || '';
+      if (msg.includes('stdin is not a terminal')) {
         return { status: 'error', error: 'terminal_required', detail: 'Codex requires a terminal' };
       }
-      return { status: 'error', error: err.message };
+      return { status: 'error', error: msg };
     }
+    return { status: 'success', response: result.stdout };
   },
 
   async review(files, opts = {}) {
     const timeout = opts.timeout || 120000;
     const fileList = Array.isArray(files) ? files.join(' ') : files;
-    try {
-      const result = execSync(
-        `codex exec --ephemeral --skip-git-repo-check "Review these files for bugs, style issues, and improvements: ${fileList}"`,
-        { encoding: 'utf-8', timeout, cwd: opts.cwd || process.cwd() }
-      );
-      return { status: 'success', response: result.trim() };
-    } catch (err) {
-      if (err.message.includes('stdin is not a terminal')) {
+    const prompt = `Review these files for bugs, style issues, and improvements: ${fileList}`;
+    const result = await runCommand(
+      'codex',
+      ['exec', '--ephemeral', '--skip-git-repo-check', prompt],
+      { timeout, cwd: opts.cwd || process.cwd() }
+    );
+
+    if (!result.success) {
+      const msg = result.error || '';
+      if (msg.includes('stdin is not a terminal')) {
         return { status: 'error', error: 'terminal_required', detail: 'Codex requires a terminal' };
       }
-      return { status: 'error', error: err.message };
+      return { status: 'error', error: msg };
     }
+    return { status: 'success', response: result.stdout };
   },
 
   async healthCheck() {
-    try {
-      execSync('codex --version', { encoding: 'utf-8', timeout: 5000 });
-      return { available: true };
-    } catch {
-      return { available: false, reason: 'codex CLI not found' };
-    }
+    const result = await runCommand('codex', ['--version'], { timeout: 5000 });
+    return result.success
+      ? { available: true }
+      : { available: false, reason: 'codex CLI not found' };
   }
 };

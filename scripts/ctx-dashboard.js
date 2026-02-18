@@ -11,7 +11,7 @@
 
 import http from 'node:http';
 import { spawn } from 'node:child_process';
-import { refreshAllData, startWatchers, createRouter, broadcast } from './dashboard-backend.js';
+import { refreshAllData, startWatchers, createRouter, broadcast, initAuthToken } from './dashboard-backend.js';
 import { buildHtml } from './dashboard-frontend.js';
 
 const HOST = '127.0.0.1';
@@ -30,11 +30,17 @@ function openBrowser(url) {
 }
 
 function main() {
+  const token = initAuthToken();
   refreshAllData();
   startWatchers(broadcast);
 
-  const router = createRouter(buildHtml);
-  const server = http.createServer(router);
+  const router = createRouter(buildHtml, token);
+  const server = http.createServer((req, res) => {
+    Promise.resolve(router(req, res)).catch(err => {
+      console.error('Router error:', err);
+      if (!res.headersSent) { res.writeHead(500); res.end('Internal Server Error'); }
+    });
+  });
 
   server.on('error', e => {
     if (e.code === 'EADDRINUSE') {
@@ -47,6 +53,8 @@ function main() {
   server.listen(PORT, HOST, () => {
     const url = `http://${HOST}:${PORT}`;
     console.log(`CTX Dashboard → ${url}`);
+    console.log(`Auth token → ${token}`);
+    console.log(`Token file → .data/.dashboard-token`);
     if (!noOpen) openBrowser(url);
   });
 

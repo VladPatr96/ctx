@@ -3,7 +3,7 @@
  * gemini -p "prompt" -o text
  */
 
-import { execSync } from 'node:child_process';
+import { runCommand } from '../utils/shell.js';
 
 export default {
   name: 'gemini',
@@ -20,27 +20,28 @@ export default {
 
   async invoke(prompt, opts = {}) {
     const timeout = opts.timeout || 60000;
-    try {
-      const modelFlag = opts.model ? ` --model ${opts.model}` : '';
-      const result = execSync(
-        `gemini -p "${prompt.replace(/"/g, '\\"')}" -o text${modelFlag}`,
-        { encoding: 'utf-8', timeout, cwd: opts.cwd || process.cwd() }
-      );
-      return { status: 'success', response: result.trim() };
-    } catch (err) {
-      if (err.message.includes('429') || err.message.includes('CAPACITY')) {
+    const args = ['-p', String(prompt), '-o', 'text'];
+    if (opts.model) args.push('--model', String(opts.model));
+
+    const result = await runCommand('gemini', args, {
+      timeout,
+      cwd: opts.cwd || process.cwd()
+    });
+
+    if (!result.success) {
+      const msg = result.error || '';
+      if (msg.includes('429') || msg.includes('CAPACITY')) {
         return { status: 'error', error: 'rate_limit', detail: 'MODEL_CAPACITY_EXHAUSTED' };
       }
-      return { status: 'error', error: err.message };
+      return { status: 'error', error: msg };
     }
+    return { status: 'success', response: result.stdout };
   },
 
   async healthCheck() {
-    try {
-      execSync('gemini --version', { encoding: 'utf-8', timeout: 5000 });
-      return { available: true };
-    } catch {
-      return { available: false, reason: 'gemini CLI not found' };
-    }
+    const result = await runCommand('gemini', ['--version'], { timeout: 5000 });
+    return result.success
+      ? { available: true }
+      : { available: false, reason: 'gemini CLI not found' };
   }
 };

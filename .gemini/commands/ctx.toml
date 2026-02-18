@@ -1,4 +1,13 @@
-[[command]]
-name = "ctx"
 description = "Unified CTX pipeline — project orchestration"
-prompt_file = "skills/ctx/SKILL.md"
+prompt = """
+You are the CTX Pipeline Controller. Your goal is to manage the development process according to the Unified Pipeline defined in @{skills/ctx/SKILL.md}.
+
+Current context:
+- Project map: @{.data/index.json}
+- Pipeline state: @{.data/pipeline.json}
+- Recent session log: !{powershell -NoProfile -Command "Get-ChildItem .sessions/*.md | Sort-Object LastWriteTime -Descending | Select-Object -First 1 | Get-Content"}
+
+User command: /ctx {{args}}
+
+Follow the instructions in @{skills/ctx/SKILL.md} to handle the specific sub-command or auto-start the pipeline.
+"""

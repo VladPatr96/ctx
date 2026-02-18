@@ -4,6 +4,7 @@
   "description": "Multi-provider context management plugin for Claude Code",
   "type": "module",
   "scripts": {
+    "test": "node --test --test-concurrency=1",
     "test:mcp": "node scripts/ctx-mcp-hub.js"
   },
   "dependencies": {

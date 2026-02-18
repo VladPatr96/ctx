@@ -10,22 +10,33 @@
  * Usage: node ctx-session-save.js --event <compact|stop>
  */
 
-import { execSync } from 'node:child_process';
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { basename, join } from 'node:path';
+import { runCommandSync } from './utils/shell.js';
 
-const CENTRAL_REPO = 'VladPatr96/my_claude_code';
+const DEFAULT_CENTRAL_REPO = 'VladPatr96/my_claude_code';
 
-function exec(cmd) {
-  try {
-    return execSync(cmd, { encoding: 'utf-8', timeout: 15000 }).trim();
-  } catch {
-    return '';
-  }
+function getCentralRepo() {
+  // 1. Env variable
+  if (process.env.CTX_CENTRAL_REPO) return process.env.CTX_CENTRAL_REPO;
+
+  // 2. Git config
+  const gitConfig = exec('git', ['config', '--get', 'ctx.central-repo']);
+  if (gitConfig) return gitConfig;
+
+  // 3. Fallback
+  return DEFAULT_CENTRAL_REPO;
+}
+
+const CENTRAL_REPO = getCentralRepo();
+
+function exec(command, args = []) {
+  const result = runCommandSync(command, args, { timeout: 15000 });
+  return result.success ? result.stdout : '';
 }
 
 function getProjectName() {
-  const toplevel = exec('git rev-parse --show-toplevel');
+  const toplevel = exec('git', ['rev-parse', '--show-toplevel']);
   if (toplevel) return basename(toplevel);
 
   const dir = process.env.CLAUDE_PROJECT_DIR || process.cwd();
@@ -33,7 +44,7 @@ function getProjectName() {
 }
 
 function getProjectRepo() {
-  const remote = exec('git remote get-url origin');
+  const remote = exec('git', ['remote', 'get-url', 'origin']);
   if (!remote) return null;
 
   // Extract owner/repo from git URL
@@ -42,10 +53,10 @@ function getProjectRepo() {
 }
 
 function getGitContext() {
-  const branch = exec('git branch --show-current');
-  const diffStat = exec('git diff --stat');
-  const log = exec('git log -5 --oneline');
-  const status = exec('git status --short');
+  const branch = exec('git', ['branch', '--show-current']);
+  const diffStat = exec('git', ['diff', '--stat']);
+  const log = exec('git', ['log', '-5', '--oneline']);
+  const status = exec('git', ['status', '--short']);
 
   return { branch, diffStat, log, status };
 }
@@ -137,22 +148,21 @@ ${sections.actions || sections.summary || '_None_'}`;
 }
 
 function createIssue(repo, title, body, labels) {
-  const labelsArg = labels.map(l => `-l "${l}"`).join(' ');
-  const repoArg = repo ? `-R ${repo}` : '';
+  const args = ['issue', 'create'];
+  if (repo) args.push('--repo', repo);
+  args.push('--title', title);
+  for (const label of labels) {
+    args.push('-l', label);
+  }
+  args.push('--body', body);
 
-  // Escape body for shell
-  const escapedBody = body.replace(/"/g, '\\"').replace(/`/g, '\\`');
-
-  const cmd = `gh issue create ${repoArg} --title "${title}" ${labelsArg} --body "${escapedBody}"`;
-
-  try {
-    const result = exec(cmd);
-    console.log(`Issue created: ${result}`);
-    return result;
-  } catch (e) {
-    console.error(`Failed to create issue in ${repo || 'current repo'}: ${e.message}`);
+  const result = runCommandSync('gh', args, { timeout: 30000 });
+  if (!result.success) {
+    console.error(`Failed to create issue in ${repo || 'current repo'}: ${result.error}`);
     return null;
   }
+  console.log(`Issue created: ${result.stdout}`);
+  return result.stdout;
 }
 
 function main() {

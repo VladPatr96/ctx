@@ -10,13 +10,15 @@
  * - consilium.presets.json → consilium presets config
  */
 
-import { readFileSync, readdirSync, watch, existsSync, mkdirSync, appendFileSync } from 'node:fs';
-import { join, basename } from 'node:path';
+import { readFileSync, readdirSync, watch, existsSync, mkdirSync, appendFileSync, writeFileSync } from 'node:fs';
+import { join, basename, resolve, sep } from 'node:path';
 import { URL } from 'node:url';
+import { randomBytes } from 'node:crypto';
 import * as actions from './dashboard-actions.js';
 
 // 1. CONSTANTS
 const DATA_DIR = '.data';
+const TOKEN_FILE = join(DATA_DIR, '.dashboard-token');
 const PIPELINE_FILE = '.data/pipeline.json';
 const INDEX_FILE = '.data/index.json';
 const SESSION_FILE = '.data/session.json';
@@ -29,6 +31,39 @@ const LOG_RING_SIZE = 50;
 const POLL_INTERVAL_MS = 2000;
 const DEBOUNCE_MS = 150;
 const SSE_KEEPALIVE_MS = 15000;
+const MAX_BODY_BYTES = 1024 * 1024;
+const AGENT_ID_RE = /^[a-zA-Z0-9_-]{1,64}$/;
+const RATE_LIMIT_MAX = 30;          // max POST requests per minute per IP
+const RATE_LIMIT_WINDOW_MS = 60000; // 1 minute
+const ALLOWED_ORIGINS = ['http://127.0.0.1', 'http://localhost', 'null'];
+
+// 1b. AUTH TOKEN
+let authToken = '';
+export function initAuthToken() {
+  if (authToken) return authToken;   // idempotent — only generate once
+  if (!existsSync(DATA_DIR)) mkdirSync(DATA_DIR, { recursive: true });
+  authToken = randomBytes(24).toString('hex');
+  writeFileSync(TOKEN_FILE, authToken, 'utf8');
+  return authToken;
+}
+
+// 1c. RATE LIMITER (in-memory, per IP)
+const rateBuckets = new Map();
+function checkRateLimit(ip) {
+  const now = Date.now();
+  let bucket = rateBuckets.get(ip);
+  if (!bucket || now - bucket.start > RATE_LIMIT_WINDOW_MS) {
+    bucket = { start: now, count: 0 };
+    rateBuckets.set(ip, bucket);
+  }
+  bucket.count++;
+  return bucket.count <= RATE_LIMIT_MAX;
+}
+// Clean stale buckets every 5 minutes
+setInterval(() => {
+  const cutoff = Date.now() - RATE_LIMIT_WINDOW_MS * 2;
+  for (const [ip, b] of rateBuckets) if (b.start < cutoff) rateBuckets.delete(ip);
+}, 300000).unref();
 
 // 2. STATE MANAGER
 export const state = {
@@ -40,6 +75,8 @@ export const state = {
   results: [],
   progress: [],
   skills: [],
+  brainstorm: null,
+  plan: null,
   lastEventId: 0
 };
 
@@ -235,9 +272,13 @@ export const refreshAllData = () => {
   state.log = buildLog();
 
   // Results, progress, skills
-  state.results  = readResultsJson();
-  state.progress = buildProgress();
-  state.skills   = readSkillsList();
+  state.results   = readResultsJson();
+  state.progress  = buildProgress();
+  state.skills    = readSkillsList();
+
+  // Brainstorm + Plan from pipeline.json
+  state.brainstorm = pipeData ? (pipeData.brainstorm || null) : null;
+  state.plan       = pipeData ? (pipeData.plan || null)       : null;
 
   broadcast('full', getStateSnapshot());
 };
@@ -294,13 +335,56 @@ export const sseConnect = (req, res, getStateFn) => {
 
 // 6. HTTP ROUTER
 const parseBody = (req) => new Promise((resolve) => {
-  let data = '';
-  req.on('data', chunk => { data += chunk; });
-  req.on('end', () => { try { resolve(JSON.parse(data)); } catch { resolve(null); } });
-  req.on('error', () => resolve(null));
+  let totalBytes = 0;
+  const chunks = [];
+  let tooLarge = false;
+
+  req.on('data', chunk => {
+    if (tooLarge) return;
+    totalBytes += chunk.length;
+    if (totalBytes > MAX_BODY_BYTES) {
+      tooLarge = true;
+      return;
+    }
+    chunks.push(chunk);
+  });
+
+  req.on('end', () => {
+    if (tooLarge) {
+      resolve({ error: 'payload_too_large' });
+      return;
+    }
+
+    const raw = Buffer.concat(chunks).toString('utf8').trim();
+    if (!raw) {
+      resolve({ body: null });
+      return;
+    }
+
+    try {
+      resolve({ body: JSON.parse(raw) });
+    } catch {
+      resolve({ error: 'invalid_json' });
+    }
+  });
+
+  req.on('error', () => resolve({ error: 'read_error' }));
 });
 
-export const createRouter = (buildHtmlFn) => async (req, res) => {
+export function resolveAgentDetailsPath(agentId, agentsDir = AGENTS_DIR) {
+  if (!AGENT_ID_RE.test(String(agentId || ''))) {
+    throw new Error('Invalid agent ID');
+  }
+  const baseDir = resolve(agentsDir);
+  const agentPath = resolve(baseDir, `${agentId}.md`);
+  const inBase = agentPath === baseDir || agentPath.startsWith(`${baseDir}${sep}`);
+  if (!inBase) {
+    throw new Error('Invalid agent path');
+  }
+  return agentPath;
+}
+
+export const createRouter = (buildHtmlFn, token) => async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
   const serve = (status, type, data) => {
     res.writeHead(status, { 'Content-Type': type });
@@ -308,7 +392,36 @@ export const createRouter = (buildHtmlFn) => async (req, res) => {
   };
 
   if (req.method === 'POST') {
-    const body = await parseBody(req);
+    // Auth: require Bearer token for POST /api/*
+    if (url.pathname.startsWith('/api/')) {
+      const authHeader = req.headers['authorization'] || '';
+      if (authHeader !== `Bearer ${token || authToken}`) {
+        return serve(401, 'application/json', { error: 'Unauthorized. Provide Authorization: Bearer <token>' });
+      }
+      // Origin check: allow only localhost
+      const origin = req.headers['origin'] || '';
+      if (origin && !ALLOWED_ORIGINS.some(o => origin.startsWith(o))) {
+        return serve(403, 'application/json', { error: 'Forbidden origin' });
+      }
+      // Rate limit
+      const clientIp = req.socket.remoteAddress || '0.0.0.0';
+      if (!checkRateLimit(clientIp)) {
+        return serve(429, 'application/json', { error: 'Too many requests. Max 30 per minute.' });
+      }
+    }
+
+    const parsed = await parseBody(req);
+    if (parsed.error === 'payload_too_large') {
+      return serve(413, 'application/json', { error: 'Payload too large' });
+    }
+    if (parsed.error === 'invalid_json') {
+      return serve(400, 'application/json', { error: 'Invalid JSON body' });
+    }
+    if (parsed.error) {
+      return serve(400, 'application/json', { error: 'Failed to read request body' });
+    }
+
+    const body = parsed.body;
     try {
       switch (url.pathname) {
         case '/api/pipeline/stage':
@@ -333,12 +446,16 @@ export const createRouter = (buildHtmlFn) => async (req, res) => {
           return serve(200, 'application/json', { ok: true });
         case '/api/agent/details':
           if (!body?.id) throw new Error('Agent ID is required');
-          const agentPath = join(AGENTS_DIR, `${body.id}.md`);
+          const agentPath = resolveAgentDetailsPath(body.id);
           if (!existsSync(agentPath)) throw new Error('Agent not found');
           const content = readFileSync(agentPath, 'utf8');
           return serve(200, 'application/json', { content });
         case '/api/consilium/activate':
           actions.activatePreset(body?.preset);
+          refreshAllData();
+          return serve(200, 'application/json', { ok: true });
+        case '/api/pipeline/plan':
+          actions.setPlanSelected(body?.selected);
           refreshAllData();
           return serve(200, 'application/json', { ok: true });
         default:
@@ -350,7 +467,7 @@ export const createRouter = (buildHtmlFn) => async (req, res) => {
   }
 
   switch (url.pathname) {
-    case '/': return serve(200, 'text/html', buildHtmlFn());
+    case '/': return serve(200, 'text/html', buildHtmlFn(token));
     case '/events': return sseConnect(req, res, getStateSnapshot);
     case '/state': return serve(200, 'application/json', getStateSnapshot());
     case '/health': return serve(200, 'text/plain', 'OK');

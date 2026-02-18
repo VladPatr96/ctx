@@ -8,12 +8,23 @@
  */
 
 import { getProvider, invoke, listProviders, healthCheckAll } from './index.js';
-import { readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { readJsonFile, withLockSync, writeJsonAtomic } from '../utils/state-io.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PIPELINE_FILE = join(__dirname, '..', '..', '.data', 'pipeline.json');
+const PIPELINE_LOCK_FILE = join(__dirname, '..', '..', '.data', '.pipeline.lock');
+
+/**
+ * Escapes a string for use as an argument in a Windows shell (CMD/PowerShell).
+ */
+function shellEscape(str) {
+  if (typeof str !== 'string') return '';
+  // Basic escaping for Windows shell interpolation
+  return str.replace(/[&|()^<>=!%]/g, '^$&').replace(/"/g, '""');
+}
 
 // \b не работает с кириллицей — используем (?:^|[\s,;.!?]) как границу слова
 const B = '(?:^|[\\s,;.!?:()\\[\\]"\'«»])'; // before
@@ -236,14 +247,14 @@ export async function setLead(providerName) {
 
   // Update pipeline.json
   try {
-    let pipeline = {};
-    if (existsSync(PIPELINE_FILE)) {
-      pipeline = JSON.parse(readFileSync(PIPELINE_FILE, 'utf-8'));
-    }
-    const prevLead = pipeline.lead || 'claude';
-    pipeline.lead = providerName;
-    pipeline.updatedAt = new Date().toISOString();
-    writeFileSync(PIPELINE_FILE, JSON.stringify(pipeline, null, 2));
+    let prevLead = 'claude';
+    withLockSync(PIPELINE_LOCK_FILE, () => {
+      const pipeline = existsSync(PIPELINE_FILE) ? readJsonFile(PIPELINE_FILE, {}) : {};
+      prevLead = pipeline.lead || 'claude';
+      pipeline.lead = providerName;
+      pipeline.updatedAt = new Date().toISOString();
+      writeJsonAtomic(PIPELINE_FILE, pipeline);
+    });
     return { success: true, lead: providerName, previous: prevLead };
   } catch (err) {
     return { success: false, error: `Failed to update pipeline: ${err.message}` };

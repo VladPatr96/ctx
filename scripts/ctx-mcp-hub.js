@@ -16,10 +16,10 @@
 
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { execSync } from 'node:child_process';
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
+import { readFileSync, existsSync, mkdirSync } from 'node:fs';
 import { join, basename } from 'node:path';
-
+import { runCommand } from './utils/shell.js';
+import { writeJsonAtomic } from './utils/state-io.js';
 import { registerSessionTools } from './tools/session.js';
 import { registerKnowledgeTools } from './tools/knowledge.js';
 import { registerConsiliumTools } from './tools/consilium.js';
@@ -36,14 +36,6 @@ if (!existsSync(DATA_DIR)) mkdirSync(DATA_DIR, { recursive: true });
 
 // ==================== Shared utilities ====================
 
-function exec(cmd) {
-  try {
-    return execSync(cmd, { encoding: 'utf-8', cwd: PROJECT_DIR, timeout: 15000 }).trim();
-  } catch {
-    return '';
-  }
-}
-
 function readJson(file) {
   try {
     return JSON.parse(readFileSync(file, 'utf-8'));
@@ -53,7 +45,7 @@ function readJson(file) {
 }
 
 function writeJson(file, data) {
-  writeFileSync(file, JSON.stringify(data, null, 2));
+  writeJsonAtomic(file, data);
 }
 
 // ==================== State ====================
@@ -81,7 +73,7 @@ const server = new McpServer({ name: 'ctx-hub', version: '0.2.0' });
 
 // Register domain tools
 registerSessionTools(server, { getSession, saveSession });
-registerKnowledgeTools(server, { exec, readJson, DATA_DIR, GITHUB_OWNER });
+registerKnowledgeTools(server, { runCommand, readJson, DATA_DIR, GITHUB_OWNER });
 registerConsiliumTools(server, { getResults, saveResults });
 registerPipelineTools(server);
 registerAgentTools(server);

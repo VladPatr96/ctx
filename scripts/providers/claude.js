@@ -4,7 +4,7 @@
  * Для внешнего вызова — через claude CLI.
  */
 
-import { execSync } from 'node:child_process';
+import { runCommand } from '../utils/shell.js';
 
 export default {
   name: 'claude',
@@ -22,24 +22,24 @@ export default {
 
   async invoke(prompt, opts = {}) {
     const timeout = opts.timeout || 60000;
-    try {
-      const modelFlag = opts.model ? ` --model ${opts.model}` : '';
-      const result = execSync(
-        `claude -p "${prompt.replace(/"/g, '\\"')}"${modelFlag}`,
-        { encoding: 'utf-8', timeout, cwd: opts.cwd || process.cwd() }
-      );
-      return { status: 'success', response: result.trim() };
-    } catch (err) {
-      return { status: 'error', error: err.message };
+    const args = ['-p', String(prompt)];
+    if (opts.model) args.push('--model', String(opts.model));
+
+    const result = await runCommand('claude', args, {
+      timeout,
+      cwd: opts.cwd || process.cwd()
+    });
+
+    if (!result.success) {
+      return { status: 'error', error: result.error };
     }
+    return { status: 'success', response: result.stdout };
   },
 
   async healthCheck() {
-    try {
-      execSync('claude --version', { encoding: 'utf-8', timeout: 5000 });
-      return { available: true };
-    } catch {
-      return { available: false, reason: 'claude CLI not found' };
-    }
+    const result = await runCommand('claude', ['--version'], { timeout: 5000 });
+    return result.success
+      ? { available: true }
+      : { available: false, reason: 'claude CLI not found' };
   }
 };

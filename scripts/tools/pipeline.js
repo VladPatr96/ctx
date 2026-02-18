@@ -6,12 +6,36 @@
  */
 
 import { z } from 'zod';
-import { readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { existsSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
+import { readJsonFile, withLockSync, writeJsonAtomic } from '../utils/state-io.js';
 
 const STAGES = ['detect', 'context', 'task', 'brainstorm', 'plan', 'execute', 'done'];
+const PROVIDERS = ['claude', 'gemini', 'opencode', 'codex'];
+const ID_RE = /^[a-zA-Z0-9_-]{1,64}$/;
+const SKILL_RE = /^[a-zA-Z0-9_:/.-]{1,80}$/;
+const MODEL_RE = /^[a-zA-Z0-9_./:-]{1,64}$/;
+const PRESET_RE = /^[a-zA-Z0-9_-]{1,64}$/;
 const DATA_DIR = process.env.CTX_DATA_DIR || join(process.cwd(), '.data');
 const PIPELINE_FILE = join(DATA_DIR, 'pipeline.json');
+const PIPELINE_LOCK_FILE = join(DATA_DIR, '.pipeline.lock');
+
+export const PIPELINE_DATA_SCHEMA = z.object({
+  lead: z.enum(PROVIDERS).optional(),
+  task: z.string().trim().min(1).max(4000).nullable().optional(),
+  isNew: z.boolean().optional(),
+  context: z.record(z.unknown()).optional(),
+  brainstorm: z.record(z.unknown()).optional(),
+  plan: z.record(z.unknown()).optional(),
+  activePreset: z.string().trim().regex(PRESET_RE).max(64).optional(),
+  activeAgents: z.array(z.string().regex(ID_RE)).max(30).optional(),
+  activeSkills: z.array(z.string().regex(SKILL_RE)).max(40).optional(),
+  models: z.record(z.string().regex(MODEL_RE), z.string().regex(MODEL_RE)).optional()
+}).strict();
+
+function ensureDataDir() {
+  if (!existsSync(DATA_DIR)) mkdirSync(DATA_DIR, { recursive: true });
+}
 
 function getDefaultPipeline() {
   return {
@@ -28,16 +52,23 @@ function getDefaultPipeline() {
 }
 
 function loadPipeline() {
-  try {
-    return JSON.parse(readFileSync(PIPELINE_FILE, 'utf-8'));
-  } catch {
-    return getDefaultPipeline();
-  }
+  return readJsonFile(PIPELINE_FILE, getDefaultPipeline());
 }
 
 function savePipeline(pipeline) {
-  pipeline.updatedAt = new Date().toISOString();
-  writeFileSync(PIPELINE_FILE, JSON.stringify(pipeline, null, 2));
+  ensureDataDir();
+  withLockSync(PIPELINE_LOCK_FILE, () => {
+    pipeline.updatedAt = new Date().toISOString();
+    writeJsonAtomic(PIPELINE_FILE, pipeline);
+  });
+}
+
+export function parseDataPatch(value) {
+  const parsed = PIPELINE_DATA_SCHEMA.safeParse(value || {});
+  if (!parsed.success) {
+    throw new Error(`Invalid pipeline data: ${parsed.error.issues[0]?.message || 'schema validation failed'}`);
+  }
+  return parsed.data;
 }
 
 export function registerPipelineTools(server) {
@@ -60,14 +91,17 @@ export function registerPipelineTools(server) {
       description: 'Перейти на указанную стадию pipeline. Стадии: detect, context, task, brainstorm, plan, execute, done.',
       inputSchema: z.object({
         stage: z.enum(STAGES).describe('Целевая стадия pipeline'),
-        data: z.record(z.any()).optional().describe('Дополнительные данные для записи при переходе')
+        data: PIPELINE_DATA_SCHEMA.optional().describe('Дополнительные данные для записи при переходе')
       }).shape,
     },
     async ({ stage, data }) => {
       const pipeline = loadPipeline();
       const prevStage = pipeline.stage;
       pipeline.stage = stage;
-      if (data) Object.assign(pipeline, data);
+      if (data) {
+        const safeData = parseDataPatch(data);
+        Object.assign(pipeline, safeData);
+      }
       savePipeline(pipeline);
       return {
         content: [{ type: 'text', text: `Pipeline: ${prevStage} → ${stage}` }]
@@ -80,12 +114,16 @@ export function registerPipelineTools(server) {
     {
       description: 'Обновить произвольные поля pipeline (deep merge первого уровня).',
       inputSchema: z.object({
-        patch: z.record(z.any()).describe('Объект с полями для обновления (например { lead: "gemini", task: "..." })')
+        patch: PIPELINE_DATA_SCHEMA.describe('Объект с полями для обновления (например { lead: "gemini", task: "..." })')
       }).shape,
     },
     async ({ patch }) => {
+      const safePatch = parseDataPatch(patch);
+      if (Object.keys(safePatch).length === 0) {
+        throw new Error('Patch must include at least one allowed field');
+      }
       const pipeline = loadPipeline();
-      for (const [key, value] of Object.entries(patch)) {
+      for (const [key, value] of Object.entries(safePatch)) {
         if (typeof value === 'object' && value !== null && !Array.isArray(value) && typeof pipeline[key] === 'object' && pipeline[key] !== null) {
           pipeline[key] = { ...pipeline[key], ...value };
         } else {
@@ -94,7 +132,7 @@ export function registerPipelineTools(server) {
       }
       savePipeline(pipeline);
       return {
-        content: [{ type: 'text', text: `Pipeline updated: ${Object.keys(patch).join(', ')}` }]
+        content: [{ type: 'text', text: `Pipeline updated: ${Object.keys(safePatch).join(', ')}` }]
       };
     }
   );

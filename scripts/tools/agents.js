@@ -6,11 +6,30 @@
 
 import { z } from 'zod';
 import { readdirSync, readFileSync, existsSync, mkdirSync } from 'node:fs';
-import { join, basename } from 'node:path';
+import { join, basename, resolve, sep } from 'node:path';
 
 const PLUGIN_ROOT = process.env.CLAUDE_PLUGIN_ROOT || join(process.cwd());
 const AGENTS_DIR = join(PLUGIN_ROOT, 'agents');
 const GENERATED_DIR = join(AGENTS_DIR, 'generated');
+const AGENT_NAME_RE = /^[a-z0-9](?:[a-z0-9-]{0,62})$/;
+
+export function isValidAgentName(name) {
+  return typeof name === 'string' && AGENT_NAME_RE.test(name);
+}
+
+export function resolveGeneratedAgentPath(name) {
+  if (!isValidAgentName(name)) {
+    throw new Error('Invalid agent name. Use kebab-case: lowercase letters, digits, hyphen.');
+  }
+
+  const baseDir = resolve(GENERATED_DIR);
+  const outFile = resolve(baseDir, `${name}.md`);
+  const inBase = outFile === baseDir || outFile.startsWith(`${baseDir}${sep}`);
+  if (!inBase) {
+    throw new Error('Invalid agent path');
+  }
+  return outFile;
+}
 
 function listAgentFiles(dir) {
   if (!existsSync(dir)) return [];
@@ -55,7 +74,7 @@ export function registerAgentTools(server) {
     {
       description: 'Создать нового агента из шаблона. Файл сохраняется в agents/generated/<name>.md.',
       inputSchema: z.object({
-        name: z.string().describe('Имя агента (латиница, kebab-case)'),
+        name: z.string().regex(AGENT_NAME_RE).describe('Имя агента (латиница, kebab-case)'),
         role: z.string().describe('Роль агента (кратко)'),
         responsibilities: z.array(z.string()).describe('Список обязанностей'),
         stage: z.string().optional().describe('Стадия pipeline когда агент активен'),
@@ -78,7 +97,7 @@ export function registerAgentTools(server) {
 
       if (!existsSync(GENERATED_DIR)) mkdirSync(GENERATED_DIR, { recursive: true });
 
-      const outFile = join(GENERATED_DIR, `${name}.md`);
+      const outFile = resolveGeneratedAgentPath(name);
       const { writeFileSync } = await import('node:fs');
       writeFileSync(outFile, template);
 

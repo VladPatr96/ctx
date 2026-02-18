@@ -3,7 +3,7 @@
  * opencode run "prompt"
  */
 
-import { execSync } from 'node:child_process';
+import { runCommand } from '../utils/shell.js';
 
 export default {
   name: 'opencode',
@@ -20,24 +20,24 @@ export default {
 
   async invoke(prompt, opts = {}) {
     const timeout = opts.timeout || 60000;
-    try {
-      const modelFlag = opts.model ? ` --model ${opts.model}` : '';
-      const result = execSync(
-        `opencode run "${prompt.replace(/"/g, '\\"')}" --format json${modelFlag}`,
-        { encoding: 'utf-8', timeout, cwd: opts.cwd || process.cwd() }
-      );
-      return { status: 'success', response: result.trim() };
-    } catch (err) {
-      return { status: 'error', error: err.message };
+    const args = ['run', String(prompt), '--format', 'json'];
+    if (opts.model) args.push('--model', String(opts.model));
+
+    const result = await runCommand('opencode', args, {
+      timeout,
+      cwd: opts.cwd || process.cwd()
+    });
+
+    if (!result.success) {
+      return { status: 'error', error: result.error };
     }
+    return { status: 'success', response: result.stdout };
   },
 
   async healthCheck() {
-    try {
-      execSync('opencode --version', { encoding: 'utf-8', timeout: 5000 });
-      return { available: true };
-    } catch {
-      return { available: false, reason: 'opencode CLI not found' };
-    }
+    const result = await runCommand('opencode', ['--version'], { timeout: 5000 });
+    return result.success
+      ? { available: true }
+      : { available: false, reason: 'opencode CLI not found' };
   }
 };
