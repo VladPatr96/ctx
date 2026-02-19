@@ -1,15 +1,16 @@
 ---
 name: ctx-search
 description: >
-  Search solutions in cross-project knowledge base (GitHub Issues) via gh CLI.
+  Search solutions in cross-project knowledge base.
+  Uses local SQLite KB (FTS5) first, then gh CLI as fallback.
   Finds lessons, error solutions, and architectural decisions from all projects.
   Use when facing a problem — it may have been solved before.
-  No MCP required — pure bash with gh CLI.
+  No MCP required — uses kb-verify.js CLI or gh CLI.
 ---
 
 # /ctx-search — Knowledge Base Search (Codex CLI)
 
-Search past solutions across all projects. No MCP — uses gh CLI directly.
+Search past solutions across all projects. Uses local KB first, gh CLI as fallback.
 
 ## Usage
 
@@ -17,28 +18,17 @@ Search past solutions across all projects. No MCP — uses gh CLI directly.
 
 ## Workflow
 
-### 1. Search lessons
+### 1. Search local Knowledge Base (FTS5)
+
+```bash
+node "${CLAUDE_PLUGIN_ROOT:-$(dirname "$(dirname "$0")")}/scripts/knowledge/kb-verify.js" search "$ARGUMENTS"
+```
+
+### 2. If KB unavailable or empty — fallback to gh CLI
 
 ```bash
 gh search issues "$ARGUMENTS" --owner VladPatr96 --label lesson --json number,title,body,repository --limit 15
-```
-
-### 2. Search solutions
-
-```bash
 gh search issues "$ARGUMENTS" --owner VladPatr96 --label solution --json number,title,body,repository --limit 10
-```
-
-### 3. Search sessions
-
-```bash
-gh search issues "$ARGUMENTS" --owner VladPatr96 --label session --json number,title,body,repository --limit 10
-```
-
-### 4. Search consilium decisions
-
-```bash
-gh search issues "$ARGUMENTS" --owner VladPatr96 --label consilium --json number,title,body,repository --limit 5
 ```
 
 ### 5. Show results

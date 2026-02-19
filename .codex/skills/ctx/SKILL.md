@@ -83,11 +83,14 @@ git status --short 2>/dev/null
 git log -5 --oneline 2>/dev/null
 ```
 
-2. Load context from GitHub Issues:
+2. Load context from local Knowledge Base (if available):
 ```bash
 PROJECT_NAME=$(basename "$(git rev-parse --show-toplevel 2>/dev/null || pwd)")
+node "${CLAUDE_PLUGIN_ROOT:-$(dirname "$(dirname "$0")")}/scripts/knowledge/kb-verify.js" context "$PROJECT_NAME"
+```
+If kb-verify.js unavailable or KB empty, fallback to GitHub Issues:
+```bash
 gh issue list -L 20 --json number,title,labels,state 2>/dev/null
-gh search issues "label:lesson" --owner VladPatr96 --limit 10 --json title,body,repository
 gh search issues "label:lesson label:project:$PROJECT_NAME" --owner VladPatr96 --limit 5 --json title,body
 gh issue list -l blocker --state open --json number,title,body 2>/dev/null
 gh issue list -l wip --state open --json number,title,body 2>/dev/null
@@ -347,13 +350,16 @@ gh issue create -R VladPatr96/my_claude_code \
 
 ## /ctx search <query>
 
-Search the cross-project knowledge base:
+Search the cross-project knowledge base. Try local KB first:
 
+```bash
+node "${CLAUDE_PLUGIN_ROOT:-$(dirname "$(dirname "$0")")}/scripts/knowledge/kb-verify.js" search "$ARGUMENTS"
+```
+
+If KB unavailable or empty, fallback to GitHub Issues:
 ```bash
 gh search issues "$ARGUMENTS" --owner VladPatr96 --label lesson --json number,title,body,repository --limit 15
 gh search issues "$ARGUMENTS" --owner VladPatr96 --label solution --json number,title,body,repository --limit 10
-gh search issues "$ARGUMENTS" --owner VladPatr96 --label session --json number,title,body,repository --limit 10
-gh search issues "$ARGUMENTS" --owner VladPatr96 --label consilium --json number,title,body,repository --limit 5
 ```
 
 Show results and suggest how to adapt for current project.

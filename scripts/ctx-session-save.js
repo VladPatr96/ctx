@@ -13,6 +13,7 @@
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { runCommandSync } from './utils/shell.js';
+import { computeHash } from './knowledge/knowledge-store.js';
 
 const DEFAULT_CENTRAL_REPO = 'VladPatr96/my_claude_code';
 
@@ -165,7 +166,87 @@ function createIssue(repo, title, body, labels) {
   return result.stdout;
 }
 
-function main() {
+async function loadKnowledgeStore() {
+  if (process.env.CTX_KB_DISABLED === '1') return null;
+  try {
+    const { KnowledgeStore } = await import('./knowledge/knowledge-store.js');
+    return new KnowledgeStore();
+  } catch {
+    try {
+      const { JsonKnowledgeStore } = await import('./knowledge/kb-json-fallback.js');
+      return new JsonKnowledgeStore();
+    } catch {
+      return null;
+    }
+  }
+}
+
+async function saveToKB(store, project, sections, git) {
+  let saved = 0;
+
+  // Save errors/solutions as 'error' category
+  if (sections.errors_solutions) {
+    const result = store.saveEntry({
+      project,
+      category: 'error',
+      title: `Errors & Solutions — ${new Date().toISOString().split('T')[0]}`,
+      body: sections.errors_solutions,
+      tags: 'auto-session',
+      source: 'session-save'
+    });
+    if (result.saved) saved++;
+  }
+
+  // Save decisions
+  if (sections.decisions) {
+    const result = store.saveEntry({
+      project,
+      category: 'decision',
+      title: `Decisions — ${new Date().toISOString().split('T')[0]}`,
+      body: sections.decisions,
+      tags: 'auto-session',
+      source: 'session-save'
+    });
+    if (result.saved) saved++;
+  }
+
+  // Save session summary
+  const summaryBody = sections.actions || sections.summary;
+  if (summaryBody) {
+    const result = store.saveEntry({
+      project,
+      category: 'session-summary',
+      title: `Session — ${new Date().toISOString().split('T')[0]}`,
+      body: summaryBody,
+      tags: 'auto-session',
+      source: 'session-save'
+    });
+    if (result.saved) saved++;
+  }
+
+  // Save snapshot
+  store.saveSnapshot(project, {
+    branch: git.branch || 'unknown',
+    status: git.status || '',
+    log: git.log || '',
+    date: new Date().toISOString()
+  });
+
+  return saved;
+}
+
+async function syncKB() {
+  try {
+    const { KbSync } = await import('./knowledge/kb-sync.js');
+    const sync = new KbSync();
+    const result = await sync.push('kb: session save');
+    return result;
+  } catch {
+    return { status: 'sync-unavailable' };
+  }
+}
+
+async function main() {
   const args = process.argv.slice(2);
   const eventIdx = args.indexOf('--event');
   const event = eventIdx !== -1 ? args[eventIdx + 1] : 'unknown';
@@ -181,8 +262,17 @@ function main() {
 
   console.log(`[ctx] Saving session for ${project} (event: ${event})`);
 
+  // 0. Save to local KB (fast, <5ms)
+  const store = await loadKnowledgeStore();
+  if (store) {
+    const kbSaved = await saveToKB(store, project, sections, git);
+    console.log(`[ctx] KB: ${kbSaved} entries saved`);
+    store.close();
+  }
+
   // 1. Issue в репозитории проекта (если есть GitHub remote)
-  if (projectRepo) {
+  const hasContent = sections.errors_solutions || sections.decisions || sections.actions || sections.summary;
+  if (projectRepo && hasContent) {
     const title = `Session: ${dateStr} — ${event}`;
     const body = buildIssueBody(event, project, git, sections);
     createIssue(projectRepo, title, body, ['session', `provider:claude-code`]);
@@ -193,6 +283,12 @@ function main() {
   if (lessonBody) {
     const title = `Session: ${project} ${dateStr} — lessons`;
     createIssue(CENTRAL_REPO, title, lessonBody, ['lesson', `project:${project}`]);
+  }
+
+  // 3. Sync KB to remote (background)
+  if (store) {
+    const syncResult = await syncKB();
+    console.log(`[ctx] KB sync: ${syncResult.status}`);
   }
 
   console.log(`[ctx] Session saved successfully`);

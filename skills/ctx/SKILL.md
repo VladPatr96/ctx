@@ -67,11 +67,14 @@ git status --short 2>/dev/null
 git log -5 --oneline 2>/dev/null
 ```
 
-2. Загрузи контекст из GitHub Issues:
+2. Загрузи контекст из Knowledge Base:
+```
+ctx_get_project_context(project: PROJECT_NAME, limit: 5)
+```
+Если KB пуста или недоступна — fallback на gh CLI:
 ```bash
 PROJECT_NAME=$(basename "$(git rev-parse --show-toplevel 2>/dev/null || pwd)")
 gh issue list -L 20 --json number,title,labels,state 2>/dev/null
-gh search issues "label:lesson" --owner VladPatr96 --limit 10 --json title,body,repository
 gh search issues "label:lesson label:project:$PROJECT_NAME" --owner VladPatr96 --limit 5 --json title,body
 gh issue list -l blocker --state open --json number,title,body 2>/dev/null
 gh issue list -l wip --state open --json number,title,body 2>/dev/null
@@ -205,7 +208,13 @@ Next: /ctx execute — start implementation
 
 ### 1. Заполнить Summary в логе сессии
 
-### 2. Сохранить в GitHub Issues (гибридная запись)
+### 2. Сохранить в Knowledge Base (локально, <5ms)
+```
+ctx_save_lesson(project: PROJECT_NAME, category: "session-summary", title: "Session summary", body: "[сводка]")
+ctx_kb_sync(action: "push")
+```
+
+### 3. Сохранить в GitHub Issues (гибридная запись)
 
 **В репозитории проекта:**
 ```bash
@@ -223,7 +232,7 @@ gh issue create -R VladPatr96/my_claude_code \
   --body "[ключевые уроки и решения]"
 ```
 
-### 3. Обновить WIP issues — закрыть завершённые, создать новые для незавершённого
+### 4. Обновить WIP issues — закрыть завершённые, создать новые для незавершённого
 
 ---
 
@@ -281,14 +290,13 @@ Generated:
 
 ## /ctx search <запрос>
 
-Поиск по кросс-проектной базе знаний:
+Поиск по кросс-проектной базе знаний (FTS5):
 
-```bash
-gh search issues "$ARGUMENTS" --owner VladPatr96 --label lesson --json number,title,body,repository --limit 15
-gh search issues "$ARGUMENTS" --owner VladPatr96 --label solution --json number,title,body,repository --limit 10
-gh search issues "$ARGUMENTS" --owner VladPatr96 --label session --json number,title,body,repository --limit 10
-gh search issues "$ARGUMENTS" --owner VladPatr96 --label consilium --json number,title,body,repository --limit 5
 ```
+ctx_search_solutions(query: "$ARGUMENTS", limit: 10)
+```
+
+Если результаты пусты и `CTX_KB_GH_FALLBACK=1`, автоматически используется gh CLI fallback.
 
 Покажи результаты и предложи адаптацию для текущего проекта.
 

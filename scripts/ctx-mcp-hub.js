@@ -25,6 +25,8 @@ import { registerKnowledgeTools } from './tools/knowledge.js';
 import { registerConsiliumTools } from './tools/consilium.js';
 import { registerPipelineTools } from './tools/pipeline.js';
 import { registerAgentTools } from './tools/agents.js';
+import { createKnowledgeStore } from './knowledge/kb-json-fallback.js';
+import { KbSync } from './knowledge/kb-sync.js';
 
 // ==================== Config ====================
 
@@ -67,16 +69,41 @@ function saveSession(session) { writeJson(sessionFile, session); }
 function getResults() { return readJson(resultsFile) || []; }
 function saveResults(results) { writeJson(resultsFile, results); }
 
+// ==================== Knowledge Base ====================
+
+let knowledgeStore = null;
+let kbSync = null;
+
+try {
+  const kb = await createKnowledgeStore();
+  knowledgeStore = kb.store;
+  if (knowledgeStore) {
+    kbSync = new KbSync();
+    // Background pull at startup (non-blocking)
+    kbSync.pull().catch(() => {});
+  }
+} catch {
+  // KB unavailable — tools will report "KB disabled"
+}
+
 // ==================== MCP Server ====================
 
-const server = new McpServer({ name: 'ctx-hub', version: '0.2.0' });
+const server = new McpServer({ name: 'ctx-hub', version: '0.3.0' });
 
 // Register domain tools
 registerSessionTools(server, { getSession, saveSession });
-registerKnowledgeTools(server, { runCommand, readJson, DATA_DIR, GITHUB_OWNER });
+registerKnowledgeTools(server, { runCommand, readJson, DATA_DIR, GITHUB_OWNER, knowledgeStore, kbSync });
 registerConsiliumTools(server, { getResults, saveResults });
 registerPipelineTools(server);
 registerAgentTools(server);
+
+// ==================== Cleanup ====================
+
+process.on('exit', () => {
+  if (knowledgeStore && typeof knowledgeStore.close === 'function') {
+    knowledgeStore.close();
+  }
+});
 
 // ==================== Start ====================
 

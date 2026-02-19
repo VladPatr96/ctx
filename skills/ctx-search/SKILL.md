@@ -17,26 +17,20 @@ description: >
 
 ## Workflow
 
-### 1. Поиск уроков (lessons)
+### 1. Поиск в локальной Knowledge Base (FTS5)
+
+```
+ctx_search_solutions(query: "$ARGUMENTS", limit: 10)
+```
+
+FTS5 поиск в локальной SQLite KB. Если KB пуста — автоматический fallback на gh CLI (при `CTX_KB_GH_FALLBACK=1`).
+
+### 2. Если KB отключена или пуста — fallback на gh CLI
 
 ```bash
-# Поиск по всем проектам — уроки
 gh search issues "$ARGUMENTS" --owner VladPatr96 --label lesson --json number,title,body,repository --limit 15
-
-# Поиск решений
 gh search issues "$ARGUMENTS" --owner VladPatr96 --label solution --json number,title,body,repository --limit 10
-```
-
-### 2. Поиск по сессиям
-
-```bash
-# Если уроки не нашлись — ищем в сессиях
 gh search issues "$ARGUMENTS" --owner VladPatr96 --label session --json number,title,body,repository --limit 10
-```
-
-### 3. Поиск по решениям консилиума
-
-```bash
 gh search issues "$ARGUMENTS" --owner VladPatr96 --label consilium --json number,title,body,repository --limit 5
 ```
 
