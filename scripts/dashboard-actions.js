@@ -4,29 +4,24 @@
  * No HTTP, no SSE — just file I/O.
  */
 
-import { existsSync, mkdirSync } from 'node:fs';
-import { join } from 'node:path';
 import { z } from 'zod';
-import {
-  appendLineLocked,
-  readJsonFile,
-  withLockSync,
-  writeFileAtomic,
-  writeJsonAtomic
-} from './utils/state-io.js';
+import { createStorageAdapter } from './storage/index.js';
 
 const STAGES = ['detect', 'context', 'task', 'brainstorm', 'plan', 'execute', 'done'];
 const PROVIDERS = ['claude', 'gemini', 'opencode', 'codex'];
-const DATA_DIR = '.data';
-const PIPELINE_FILE = join(DATA_DIR, 'pipeline.json');
-const LOG_FILE = join(DATA_DIR, 'log.jsonl');
-const PIPELINE_LOCK_FILE = join(DATA_DIR, '.pipeline.lock');
-const LOG_LOCK_FILE = join(DATA_DIR, '.log.lock');
+const DATA_DIR = process.env.CTX_DATA_DIR || '.data';
 const ID_RE = /^[a-zA-Z0-9_-]{1,64}$/;
 const SKILL_RE = /^[a-zA-Z0-9_:/.-]{1,80}$/;
 const MODEL_RE = /^[a-zA-Z0-9_./:-]{1,64}$/;
 const PRESET_RE = /^[a-zA-Z0-9_-]{1,64}$/;
 const TASK_MAX_LEN = 4000;
+const storageAdapter = createStorageAdapter({
+  dataDir: DATA_DIR,
+  preferred: process.env.CTX_STORAGE,
+  sqliteFallbackJson: process.env.CTX_SQLITE_FALLBACK_JSON,
+  onWarning: (message) => console.warn(`[storage] ${message}`)
+});
+const storage = storageAdapter.store;
 
 export const TASK_FULL_SCHEMA = z.object({
   task: z.string().trim().min(1).max(TASK_MAX_LEN),
@@ -40,32 +35,28 @@ export const TASK_FULL_SCHEMA = z.object({
   ).optional()
 }).strict();
 
-function ensureDataDir() {
-  if (!existsSync(DATA_DIR)) mkdirSync(DATA_DIR, { recursive: true });
-}
-
-function loadPipeline() {
-  return readJsonFile(PIPELINE_FILE, {
+function getDefaultPipeline() {
+  return {
     stage: 'detect',
     lead: 'claude',
     task: null,
     startedAt: new Date().toISOString(),
     updatedAt: new Date().toISOString()
-  });
+  };
+}
+
+function loadPipeline() {
+  return storage.readPipeline(getDefaultPipeline());
 }
 
 function savePipeline(pipeline) {
-  ensureDataDir();
-  withLockSync(PIPELINE_LOCK_FILE, () => {
-    pipeline.updatedAt = new Date().toISOString();
-    writeJsonAtomic(PIPELINE_FILE, pipeline);
-  });
+  pipeline.updatedAt = new Date().toISOString();
+  storage.writePipeline(pipeline);
 }
 
 function appendLog(action, message) {
-  ensureDataDir();
   const entry = { ts: new Date().toISOString(), action, message };
-  appendLineLocked(LOG_FILE, JSON.stringify(entry), LOG_LOCK_FILE);
+  storage.appendLog(entry);
 }
 
 export function setStage(stage) {
@@ -168,9 +159,38 @@ export function setPlanSelected(selected) {
 }
 
 export function clearLog() {
-  ensureDataDir();
-  withLockSync(LOG_LOCK_FILE, () => {
-    writeFileAtomic(LOG_FILE, '');
-  });
+  storage.clearLog();
   appendLog('clear', 'Log cleared');
+}
+
+export function getStorageHealth() {
+  const base = {
+    mode: storageAdapter.mode || 'json',
+    failover: Boolean(storageAdapter.failover),
+    shadow: Boolean(storageAdapter.shadow)
+  };
+
+  if (typeof storage.getHealthSnapshot === 'function') {
+    return {
+      ...base,
+      ...storage.getHealthSnapshot(),
+      ts: new Date().toISOString()
+    };
+  }
+
+  if (typeof storage.getShadowStats === 'function') {
+    return {
+      ...base,
+      mode: 'json-shadow',
+      warningActive: false,
+      counters: storage.getShadowStats(),
+      ts: new Date().toISOString()
+    };
+  }
+
+  return {
+    ...base,
+    warningActive: false,
+    ts: new Date().toISOString()
+  };
 }

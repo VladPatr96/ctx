@@ -316,6 +316,22 @@ body{font-family:var(--font-ui);font-size:13px;line-height:1.5;background:var(--
 .toast-error{background:rgba(240,82,82,.12);border:1px solid var(--red);color:var(--red)}
 @keyframes toast-in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
 
+/* ── Keyboard Hints ── */
+.kbd-hint{position:absolute;bottom:2px;right:2px;font-size:8px;font-weight:700;color:var(--subtle);font-family:var(--font-mono);line-height:1;pointer-events:none;opacity:.6}
+.nav-item:hover .kbd-hint{opacity:1;color:var(--muted)}
+
+/* ── Help Overlay ── */
+.help-overlay{position:fixed;inset:0;background:rgba(0,0,0,.78);z-index:2000;display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity .2s}
+.help-overlay.open{opacity:1;pointer-events:auto}
+.help-card{background:var(--surface);border:1px solid var(--border-2);border-radius:12px;padding:24px 32px;max-width:480px;width:90vw;box-shadow:0 24px 64px rgba(0,0,0,.5)}
+.help-card h2{font-size:15px;font-weight:700;margin-bottom:16px;color:var(--text)}
+.help-table{width:100%;border-collapse:collapse}
+.help-table th{text-align:left;font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;padding:4px 0;border-bottom:1px solid var(--border)}
+.help-table td{padding:5px 0;font-size:12px;border-bottom:1px solid var(--border)}
+.help-table td:first-child{width:60px}
+.help-table kbd{display:inline-block;background:var(--surface-2);border:1px solid var(--border-2);border-radius:4px;padding:1px 7px;font-family:var(--font-mono);font-size:11px;font-weight:600;color:var(--text);min-width:22px;text-align:center}
+.help-hint{font-size:11px;color:var(--muted);margin-top:14px;text-align:center}
+
 /* ── Responsive ── */
 @media(max-width:900px){
   .dashboard{grid-template-columns:40px 1fr}
@@ -331,13 +347,13 @@ body{font-family:var(--font-ui);font-size:13px;line-height:1.5;background:var(--
 
   <!-- Sidebar navigation -->
   <nav class="sidebar" id="sidebar" aria-label="Main navigation">
-    <button class="nav-item active" data-tab="pipeline" title="Pipeline" type="button">&#9658;<span class="nav-badge" id="badge-pipeline"></span></button>
-    <button class="nav-item" data-tab="console" title="Console" type="button">&gt;_<span class="nav-badge" id="badge-console"></span></button>
-    <button class="nav-item" data-tab="brainstorm" title="Brainstorm" type="button">&#9672;<span class="nav-badge" id="badge-brainstorm"></span></button>
-    <button class="nav-item" data-tab="agents" title="Agents" type="button">&#9673;<span class="nav-badge" id="badge-agents"></span></button>
-    <button class="nav-item" data-tab="consilium" title="Consilium" type="button">&#11041;<span class="nav-badge" id="badge-consilium"></span></button>
+    <button class="nav-item active" data-tab="pipeline" title="Pipeline" type="button">&#9658;<span class="nav-badge" id="badge-pipeline"></span><span class="kbd-hint">1</span></button>
+    <button class="nav-item" data-tab="console" title="Console" type="button">&gt;_<span class="nav-badge" id="badge-console"></span><span class="kbd-hint">2</span></button>
+    <button class="nav-item" data-tab="brainstorm" title="Brainstorm" type="button">&#9672;<span class="nav-badge" id="badge-brainstorm"></span><span class="kbd-hint">3</span></button>
+    <button class="nav-item" data-tab="agents" title="Agents" type="button">&#9673;<span class="nav-badge" id="badge-agents"></span><span class="kbd-hint">4</span></button>
+    <button class="nav-item" data-tab="consilium" title="Consilium" type="button">&#11041;<span class="nav-badge" id="badge-consilium"></span><span class="kbd-hint">5</span></button>
     <div class="nav-spacer"></div>
-    <button class="nav-item" data-tab="settings" title="Settings" type="button">&#9881;</button>
+    <button class="nav-item" data-tab="settings" title="Settings" type="button">&#9881;<span class="kbd-hint">6</span></button>
   </nav>
 
   <!-- Header -->
@@ -511,6 +527,24 @@ body{font-family:var(--font-ui);font-size:13px;line-height:1.5;background:var(--
   </div>
 </div>
 
+<!-- Keyboard Shortcuts Help -->
+<div class="help-overlay" id="helpOverlay">
+  <div class="help-card">
+    <h2>Keyboard Shortcuts</h2>
+    <table class="help-table">
+      <tr><th>Key</th><th>Action</th></tr>
+      <tr><td><kbd>1</kbd>-<kbd>6</kbd></td><td>Switch tabs (Pipeline, Console, Brainstorm, Agents, Consilium, Settings)</td></tr>
+      <tr><td><kbd>t</kbd></td><td>Focus task input</td></tr>
+      <tr><td><kbd>n</kbd></td><td>Open new task modal</td></tr>
+      <tr><td><kbd>/</kbd></td><td>Focus search in Console</td></tr>
+      <tr><td><kbd>r</kbd></td><td>Refresh state</td></tr>
+      <tr><td><kbd>?</kbd></td><td>Toggle this help</td></tr>
+      <tr><td><kbd>Esc</kbd></td><td>Close modal / help</td></tr>
+    </table>
+    <div class="help-hint">Press <kbd>?</kbd> or <kbd>Esc</kbd> to close</div>
+  </div>
+</div>
+
 <script>
 (function() {
   'use strict';
@@ -519,10 +553,10 @@ body{font-family:var(--font-ui);font-size:13px;line-height:1.5;background:var(--
   var STAGES = ['DETECT','CONTEXT','TASK','BRAINSTORM','PLAN','EXECUTE','DONE'];
   var PROVIDERS = ['claude','gemini','opencode','codex'];
   var MODELS = {
-    claude:   ['claude-opus-4-6','claude-sonnet-4-6','claude-haiku-4-5-20251001'],
-    gemini:   ['gemini-2.0-flash','gemini-2.0-pro','gemini-1.5-pro','gemini-1.5-flash'],
-    codex:    ['gpt-4o','o3-mini','gpt-4.5-preview'],
-    opencode: ['claude-sonnet-4-6','gemini-2.0-flash','gpt-4o']
+    claude:   ['opus-4.6','sonnet-4.6'],
+    gemini:   ['gemini-3-pro-preview','gemini-3-flash-preview'],
+    codex:    ['gpt-5.3-codex'],
+    opencode: ['zai-coding-plan/glm-4.7','glm-4.7','opencode/kimi-k2.5']
   };
   var _state = {};
   var modalState = { lead: 'claude', preset: '', agents: {}, skills: {}, models: {} };
@@ -535,10 +569,14 @@ body{font-family:var(--font-ui);font-size:13px;line-height:1.5;background:var(--
     return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
 
+  var BT = String.fromCharCode(96); // backtick char (cannot use literal inside template)
+  var RE_FENCE = new RegExp('^' + BT + BT + BT);
+  var RE_INLINE_CODE = new RegExp(BT + '([^' + BT + ']+)' + BT, 'g');
+
   /** Mini markdown → HTML renderer. Supports: headers, bold, italic, code, inline code, lists, links */
   function miniMd(s) {
     var text = esc(s);
-    var lines = text.split('\n');
+    var lines = text.split('\\n');
     var html = [];
     var inList = false;
     var inCode = false;
@@ -548,9 +586,9 @@ body{font-family:var(--font-ui);font-size:13px;line-height:1.5;background:var(--
       var line = lines[i];
 
       // Fenced code blocks
-      if (/^\x60\x60\x60/.test(line)) {
+      if (RE_FENCE.test(line)) {
         if (inCode) {
-          html.push('<pre class="md-code">' + codeLines.join('\n') + '</pre>');
+          html.push('<pre class="md-code">' + codeLines.join('\\n') + '</pre>');
           codeLines = [];
           inCode = false;
         } else {
@@ -562,7 +600,7 @@ body{font-family:var(--font-ui);font-size:13px;line-height:1.5;background:var(--
       if (inCode) { codeLines.push(line); continue; }
 
       // Close list if line is not a list item
-      if (inList && !/^\s*[-*]\s/.test(line)) { html.push('</ul>'); inList = false; }
+      if (inList && !/^\\s*[-*]\\s/.test(line)) { html.push('</ul>'); inList = false; }
 
       // Headers
       if (/^### /.test(line)) { html.push('<h4 class="md-h4">' + inlineMd(line.slice(4)) + '</h4>'); continue; }
@@ -570,9 +608,9 @@ body{font-family:var(--font-ui);font-size:13px;line-height:1.5;background:var(--
       if (/^# /.test(line)) { html.push('<h2 class="md-h2">' + inlineMd(line.slice(2)) + '</h2>'); continue; }
 
       // List items
-      if (/^\s*[-*]\s/.test(line)) {
+      if (/^\\s*[-*]\\s/.test(line)) {
         if (!inList) { html.push('<ul class="md-list">'); inList = true; }
-        html.push('<li>' + inlineMd(line.replace(/^\s*[-*]\s/, '')) + '</li>');
+        html.push('<li>' + inlineMd(line.replace(/^\\s*[-*]\\s/, '')) + '</li>');
         continue;
       }
 
@@ -582,17 +620,17 @@ body{font-family:var(--font-ui);font-size:13px;line-height:1.5;background:var(--
       // Regular paragraph
       html.push('<p class="md-p">' + inlineMd(line) + '</p>');
     }
-    if (inCode && codeLines.length) html.push('<pre class="md-code">' + codeLines.join('\n') + '</pre>');
+    if (inCode && codeLines.length) html.push('<pre class="md-code">' + codeLines.join('\\n') + '</pre>');
     if (inList) html.push('</ul>');
-    return html.join('\n');
+    return html.join('\\n');
   }
 
   function inlineMd(s) {
     return s
-      .replace(/\x60([^\x60]+)\x60/g, '<code class="md-inline-code">$1</code>')
-      .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
-      .replace(/\*([^*]+)\*/g, '<em>$1</em>')
-      .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener" class="md-link">$1</a>');
+      .replace(RE_INLINE_CODE, '<code class="md-inline-code">$1</code>')
+      .replace(/\\*\\*([^*]+)\\*\\*/g, '<strong>$1</strong>')
+      .replace(/\\*([^*]+)\\*/g, '<em>$1</em>')
+      .replace(/\\[([^\\]]+)\\]\\(([^)]+)\\)/g, '<a href="$2" target="_blank" rel="noopener" class="md-link">$1</a>');
   }
 
   function apiPost(path, body) {
@@ -603,6 +641,15 @@ body{font-family:var(--font-ui);font-size:13px;line-height:1.5;background:var(--
       headers: headers,
       body: JSON.stringify(body)
     }).then(function(r) { return r.json(); });
+  }
+
+  function withAuthToken(path) {
+    if (!AUTH_TOKEN) return path;
+    return path + (path.indexOf('?') === -1 ? '?' : '&') + 'token=' + encodeURIComponent(AUTH_TOKEN);
+  }
+
+  function apiGet(path) {
+    return fetch(withAuthToken(path)).then(function(r) { return r.json(); });
   }
 
   function showToast(msg, type) {
@@ -1119,7 +1166,7 @@ body{font-family:var(--font-ui);font-size:13px;line-height:1.5;background:var(--
   }
 
   /* ── Project Map ── */
-  function renderMap(project, pipeline) {
+  function renderMap(project, pipeline, storageHealth) {
     var body = document.querySelector('#panelMap .panel-body');
     if (!body) return;
     var pairs = [];
@@ -1144,6 +1191,26 @@ body{font-family:var(--font-ui);font-size:13px;line-height:1.5;background:var(--
     if (pipeline.lead) pairs.push(['Lead', pipeline.lead]);
     if (pipeline.activePreset) pairs.push(['Preset', pipeline.activePreset]);
     if ((pipeline.activeAgents || []).length) pairs.push(['Agents', pipeline.activeAgents.join(', ')]);
+    if (storageHealth && storageHealth.mode) {
+      pairs.push(['Storage', storageHealth.mode]);
+      if (storageHealth.failover) {
+        var warning = storageHealth.warningActive ? 'warning' : 'ok';
+        var rollback = storageHealth.inRollbackMode ? ' (rollback active)' : '';
+        pairs.push(['Storage health', warning + rollback]);
+        if (storageHealth.totals && typeof storageHealth.totals.failureRatio === 'number') {
+          pairs.push(['SQLite fail ratio', (storageHealth.totals.failureRatio * 100).toFixed(1) + '%']);
+        }
+        if (storageHealth.counters) {
+          pairs.push(['Rollback count', String(storageHealth.counters.rollback_to_json || 0)]);
+        }
+        if (storageHealth.warningActive || storageHealth.inRollbackMode) {
+          pairs.push([
+            'Rollback hint',
+            'Use CTX_STORAGE=json for hard rollback; keep CTX_SQLITE_FALLBACK_JSON=1 for runtime fallback.'
+          ]);
+        }
+      }
+    }
     var html = pairs.map(function(p) {
       var val = String(p[1]);
       if (val.length > 80) val = val.slice(0, 77) + '...';
@@ -1202,7 +1269,7 @@ body{font-family:var(--font-ui);font-size:13px;line-height:1.5;background:var(--
     var refreshBtn = document.getElementById('refreshStateBtn');
     if (refreshBtn) {
       refreshBtn.onclick = function() {
-        fetch('/state').then(function(r) { return r.json(); }).then(function(s) {
+        apiGet('/state').then(function(s) {
           renderAll(s);
           showToast('Refreshed', 'ok');
         }).catch(function() { showToast('Error', 'error'); });
@@ -1260,7 +1327,7 @@ body{font-family:var(--font-ui);font-size:13px;line-height:1.5;background:var(--
     renderConsilium(state.consilium || [], state.results || [], state.pipeline || {});
     renderProgress(state.progress || []);
     renderLog(state.log || []);
-    renderMap(state.project || {}, state.pipeline || {});
+    renderMap(state.project || {}, state.pipeline || {}, state.storageHealth || null);
     renderBrainstorm(state.brainstorm, state.plan);
     renderHistory(state.pipeline || {});
     renderSettings(state);
@@ -1277,12 +1344,13 @@ body{font-family:var(--font-ui);font-size:13px;line-height:1.5;background:var(--
 
   /* ── SSE ── */
   function connectSSE() {
-    var es = new EventSource('/events');
+    var es = new EventSource(withAuthToken('/events'));
     es.addEventListener('full', function(e) { renderAll(JSON.parse(e.data)); });
     es.addEventListener('pipeline', function(e) { renderPipeline(JSON.parse(e.data)); });
     es.addEventListener('agents', function(e) { renderAgents(JSON.parse(e.data)); });
     es.addEventListener('log', function(e) { renderLog(JSON.parse(e.data)); });
     es.addEventListener('consilium', function(e) { renderConsilium(JSON.parse(e.data), [], {}); });
+    es.addEventListener('reload', function() { location.reload(); });
     es.onopen = function() { setStatus('connected'); };
     es.onerror = function() { setStatus('error'); es.close(); setTimeout(connectSSE, 3000); };
   }
@@ -1383,8 +1451,68 @@ body{font-family:var(--font-ui);font-size:13px;line-height:1.5;background:var(--
   switchTab(currentTab);
 
   // Boot
-  fetch('/state').then(function(r) { return r.json(); }).then(renderAll).catch(function() {});
+  apiGet('/state').then(renderAll).catch(function() {});
   connectSSE();
+
+  /* ── Help overlay ── */
+  function toggleHelp() {
+    var el = document.getElementById('helpOverlay');
+    if (el) el.classList.toggle('open');
+  }
+  function hideHelp() {
+    var el = document.getElementById('helpOverlay');
+    if (el) el.classList.remove('open');
+  }
+  document.getElementById('helpOverlay').addEventListener('click', function(e) {
+    if (e.target === this) hideHelp();
+  });
+
+  /* ── Keyboard shortcuts ── */
+  document.addEventListener('keydown', function(e) {
+    var tag = (e.target.tagName || '').toLowerCase();
+    if (tag === 'input' || tag === 'textarea' || tag === 'select' || e.target.isContentEditable) return;
+
+    switch(e.key) {
+      case '1': switchTab('pipeline'); break;
+      case '2': switchTab('console'); break;
+      case '3': switchTab('brainstorm'); break;
+      case '4': switchTab('agents'); break;
+      case '5': switchTab('consilium'); break;
+      case '6': switchTab('settings'); break;
+      case 't':
+        switchTab('pipeline');
+        var ti = document.getElementById('taskInput');
+        if (ti) ti.focus();
+        break;
+      case 'n':
+        openModal(
+          taskInput ? taskInput.value : '',
+          _state.agents || [],
+          _state.skills || [],
+          _state.consilium || [],
+          (_state.pipeline || {}).lead || 'claude',
+          (_state.pipeline || {}).activePreset || ''
+        );
+        break;
+      case '/':
+        if (e.shiftKey) { toggleHelp(); }
+        else { e.preventDefault(); switchTab('console'); var ls = document.getElementById('logSearch'); if (ls) ls.focus(); }
+        break;
+      case 'r':
+        apiGet('/state').then(function(s) {
+          renderAll(s);
+          showToast('Refreshed', 'ok');
+        }).catch(function() { showToast('Error', 'error'); });
+        break;
+      case '?':
+        toggleHelp();
+        break;
+      case 'Escape':
+        closeModal();
+        hideHelp();
+        break;
+    }
+  });
 
 })();
 </script>

@@ -1,0 +1,36 @@
+{
+  "name": "ctx-app",
+  "version": "1.0.0",
+  "main": "dist-electron/main.js",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build && electron-builder",
+    "preview": "vite preview",
+    "electron:dev": "vite",
+    "server:dev": "node server/index.js"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "zustand": "^4.5.2",
+    "zod": "^3.24.0",
+    "@xterm/xterm": "^5.5.0",
+    "@xterm/addon-fit": "^0.10.0",
+    "reactflow": "^11.11.3",
+    "lucide-react": "^0.378.0",
+    "framer-motion": "^11.2.10",
+    "@monaco-editor/react": "^4.6.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.3.1",
+    "electron": "^30.0.6",
+    "electron-builder": "^24.13.3",
+    "typescript": "^5.4.5",
+    "vite": "^5.2.11",
+    "vite-plugin-electron": "^0.28.6",
+    "vite-plugin-electron-renderer": "^0.14.5"
+  }
+}

@@ -6,9 +6,8 @@
  */
 
 import { z } from 'zod';
-import { existsSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { readJsonFile, withLockSync, writeJsonAtomic } from '../utils/state-io.js';
+import { createStorageAdapter } from '../storage/index.js';
 
 const STAGES = ['detect', 'context', 'task', 'brainstorm', 'plan', 'execute', 'done'];
 const PROVIDERS = ['claude', 'gemini', 'opencode', 'codex'];
@@ -17,8 +16,12 @@ const SKILL_RE = /^[a-zA-Z0-9_:/.-]{1,80}$/;
 const MODEL_RE = /^[a-zA-Z0-9_./:-]{1,64}$/;
 const PRESET_RE = /^[a-zA-Z0-9_-]{1,64}$/;
 const DATA_DIR = process.env.CTX_DATA_DIR || join(process.cwd(), '.data');
-const PIPELINE_FILE = join(DATA_DIR, 'pipeline.json');
-const PIPELINE_LOCK_FILE = join(DATA_DIR, '.pipeline.lock');
+const { store: storage } = createStorageAdapter({
+  dataDir: DATA_DIR,
+  preferred: process.env.CTX_STORAGE,
+  sqliteFallbackJson: process.env.CTX_SQLITE_FALLBACK_JSON,
+  onWarning: (message) => console.warn(`[storage] ${message}`)
+});
 
 export const PIPELINE_DATA_SCHEMA = z.object({
   lead: z.enum(PROVIDERS).optional(),
@@ -32,10 +35,6 @@ export const PIPELINE_DATA_SCHEMA = z.object({
   activeSkills: z.array(z.string().regex(SKILL_RE)).max(40).optional(),
   models: z.record(z.string().regex(MODEL_RE), z.string().regex(MODEL_RE)).optional()
 }).strict();
-
-function ensureDataDir() {
-  if (!existsSync(DATA_DIR)) mkdirSync(DATA_DIR, { recursive: true });
-}
 
 function getDefaultPipeline() {
   return {
@@ -52,15 +51,12 @@ function getDefaultPipeline() {
 }
 
 function loadPipeline() {
-  return readJsonFile(PIPELINE_FILE, getDefaultPipeline());
+  return storage.readPipeline(getDefaultPipeline());
 }
 
 function savePipeline(pipeline) {
-  ensureDataDir();
-  withLockSync(PIPELINE_LOCK_FILE, () => {
-    pipeline.updatedAt = new Date().toISOString();
-    writeJsonAtomic(PIPELINE_FILE, pipeline);
-  });
+  pipeline.updatedAt = new Date().toISOString();
+  storage.writePipeline(pipeline);
 }
 
 export function parseDataPatch(value) {

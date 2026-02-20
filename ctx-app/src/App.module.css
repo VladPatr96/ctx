@@ -1,0 +1,121 @@
+.dashboard {
+  display: grid;
+  height: 100vh;
+  grid-template-areas:
+    "sidebar header"
+    "sidebar content";
+  grid-template-columns: 64px 1fr;
+  grid-template-rows: 56px 1fr;
+  background-color: #0d0d0f;
+  color: #e8e8ed;
+}
+
+.sidebar {
+  grid-area: sidebar;
+  background-color: #141418;
+  border-right: 1px solid #242429;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 16px 0;
+  gap: 12px;
+  z-index: 10;
+}
+
+.logo {
+  font-size: 24px;
+  color: #5b8af5;
+  margin-bottom: 20px;
+}
+
+.navItem {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  color: #56565f;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.navItem:hover {
+  background-color: #1c1c22;
+  color: #e8e8ed;
+}
+
+.navItem.active {
+  background-color: #111827;
+  color: #5b8af5;
+  box-shadow: inset 0 0 0 1px #2a3f7a;
+}
+
+.header {
+  grid-area: header;
+  background-color: #141418;
+  border-bottom: 1px solid #242429;
+  display: flex;
+  align-items: center;
+  padding: 0 24px;
+  justify-content: space-between;
+  -webkit-app-region: drag; /* Support Electron window dragging */
+}
+
+.header h1 {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.badge {
+  font-size: 10px;
+  background-color: #1c1c22;
+  padding: 2px 8px;
+  border-radius: 4px;
+  color: #5b8af5;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #56565f;
+}
+
+.statusDot {
+  width: 8px;
+  height: 8px;
+  background-color: #3ecf8e;
+  border-radius: 50%;
+  box-shadow: 0 0 8px #3ecf8e;
+}
+
+.content {
+  grid-area: content;
+  overflow: auto;
+  padding: 24px;
+}
+
+.placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #56565f;
+  text-align: center;
+}
+
+.placeholder h2 {
+  color: #e8e8ed;
+  margin-bottom: 8px;
+}

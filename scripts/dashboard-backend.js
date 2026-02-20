@@ -11,31 +11,45 @@
  */
 
 import { readFileSync, readdirSync, watch, existsSync, mkdirSync, appendFileSync, writeFileSync } from 'node:fs';
-import { join, basename, resolve, sep } from 'node:path';
+import { join, basename, resolve, sep, relative } from 'node:path';
 import { URL } from 'node:url';
-import { randomBytes } from 'node:crypto';
+import { randomBytes, timingSafeEqual } from 'node:crypto';
 import * as actions from './dashboard-actions.js';
+import { createKnowledgeStore } from './knowledge/kb-json-fallback.js';
+import { KbSync } from './knowledge/kb-sync.js';
 
 // 1. CONSTANTS
 const DATA_DIR = '.data';
 const TOKEN_FILE = join(DATA_DIR, '.dashboard-token');
 const PIPELINE_FILE = '.data/pipeline.json';
 const INDEX_FILE = '.data/index.json';
+const PROVIDER_HEALTH_FILE = '.data/provider-health.json';
 const SESSION_FILE = '.data/session.json';
 const LOG_FILE = '.data/log.jsonl';
 const AGENTS_DIR = 'agents';
 const CONSILIUM_FILE = 'consilium.presets.json';
 const RESULTS_FILE = '.data/results.json';
 const SKILLS_DIR = 'skills';
+const SCRIPTS_DIR = 'scripts';
 const LOG_RING_SIZE = 50;
 const POLL_INTERVAL_MS = 2000;
 const DEBOUNCE_MS = 150;
 const SSE_KEEPALIVE_MS = 15000;
+const SSE_RETRY_MS = 3000;
+const SSE_REPLAY_SIZE = 100;
 const MAX_BODY_BYTES = 1024 * 1024;
 const AGENT_ID_RE = /^[a-zA-Z0-9_-]{1,64}$/;
 const RATE_LIMIT_MAX = 30;          // max POST requests per minute per IP
 const RATE_LIMIT_WINDOW_MS = 60000; // 1 minute
 const ALLOWED_ORIGINS = ['http://127.0.0.1', 'http://localhost', 'null'];
+const KB_CATEGORY_SET = new Set(['solution', 'decision', 'pattern', 'error', 'session-summary']);
+const SECURE_HEADERS = {
+  'X-Content-Type-Options': 'nosniff',
+  'X-Frame-Options': 'DENY',
+  'Referrer-Policy': 'no-referrer',
+  'Cross-Origin-Resource-Policy': 'same-origin'
+};
+const APP_CSP = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:;";
 
 // 1b. AUTH TOKEN
 let authToken = '';
@@ -65,6 +79,87 @@ setInterval(() => {
   for (const [ip, b] of rateBuckets) if (b.start < cutoff) rateBuckets.delete(ip);
 }, 300000).unref();
 
+let kbRuntimePromise = null;
+let kbSyncClient = null;
+
+async function getKnowledgeRuntime() {
+  if (!kbRuntimePromise) {
+    kbRuntimePromise = createKnowledgeStore({
+      dbPath: process.env.CTX_KB_PATH,
+      onWarning: (message) => console.warn(`[knowledge] ${message}`)
+    });
+  }
+  return kbRuntimePromise;
+}
+
+function getKbSyncClient() {
+  if (!kbSyncClient) {
+    kbSyncClient = new KbSync();
+  }
+  return kbSyncClient;
+}
+
+function getExpectedToken(token) {
+  return token || authToken;
+}
+
+function readRequestToken(req, url) {
+  const authHeader = req.headers['authorization'] || '';
+  if (authHeader.startsWith('Bearer ')) {
+    return authHeader.slice('Bearer '.length).trim();
+  }
+  return url.searchParams.get('token') || '';
+}
+
+function isAuthorized(req, url, token) {
+  const expected = getExpectedToken(token);
+  const provided = readRequestToken(req, url);
+  if (!expected || !provided) return false;
+  // Constant-time comparison to prevent timing attacks
+  const expectedBuf = Buffer.from(expected, 'utf8');
+  const providedBuf = Buffer.from(provided, 'utf8');
+  if (expectedBuf.length !== providedBuf.length) return false;
+  return timingSafeEqual(expectedBuf, providedBuf);
+}
+
+function getClientIp(req) {
+  return req.socket?.remoteAddress || '0.0.0.0';
+}
+
+function parsePositiveInt(raw, fallback, min = 1, max = 1000) {
+  const parsed = Number.parseInt(String(raw ?? ''), 10);
+  if (!Number.isFinite(parsed)) return fallback;
+  if (parsed < min) return min;
+  if (parsed > max) return max;
+  return parsed;
+}
+
+function normalizeKbEntry(body) {
+  const payload = body || {};
+  const project = String(payload.project || '').trim();
+  const category = String(payload.category || '').trim();
+  const title = String(payload.title || '').trim();
+  const data = String(payload.body || '').trim();
+  const tags = typeof payload.tags === 'string' ? payload.tags.trim() : '';
+  const source = typeof payload.source === 'string' ? payload.source.trim() : '';
+  const github_url = typeof payload.github_url === 'string' ? payload.github_url.trim() : '';
+
+  if (!project) throw new Error('project is required');
+  if (!KB_CATEGORY_SET.has(category)) throw new Error(`category must be one of: ${Array.from(KB_CATEGORY_SET).join(', ')}`);
+  if (!title) throw new Error('title is required');
+  if (!data) throw new Error('body is required');
+
+  return {
+    project: project.slice(0, 120),
+    category,
+    title: title.slice(0, 240),
+    body: data.slice(0, 20000),
+    tags: tags.slice(0, 300),
+    source: source.slice(0, 200),
+    github_url: github_url.slice(0, 500)
+  };
+}
+
 // 2. STATE MANAGER
 export const state = {
   pipeline: { stage: 'idle', task: '', lead: 'claude' },
@@ -75,6 +170,8 @@ export const state = {
   results: [],
   progress: [],
   skills: [],
+  storageHealth: null,
+  providerHealth: {},
   brainstorm: null,
   plan: null,
   lastEventId: 0
@@ -111,6 +208,7 @@ const safeReadLines = (path) => {
 const readPipelineJson = () => safeReadJson(PIPELINE_FILE);
 
 const readIndexJson = () => safeReadJson(INDEX_FILE);
+const readProviderHealthJson = () => safeReadJson(PROVIDER_HEALTH_FILE);
 
 const readSessionJson = () => safeReadJson(SESSION_FILE);
 
@@ -165,6 +263,18 @@ const readConsiliumPresets = () => {
 
 const readResultsJson = () => {
   const raw = safeReadJson(RESULTS_FILE);
+  if (!raw) return [];
+  if (!Array.isArray(raw) && Array.isArray(raw.providers)) {
+    const baseTs = raw.generatedAt || new Date().toISOString();
+    return raw.providers.map((entry, idx) => ({
+      time: baseTs,
+      provider: entry.provider,
+      task: raw.topic || 'consilium',
+      result: entry.response || entry.error || '',
+      confidence: null,
+      runId: idx
+    }));
+  }
   if (!Array.isArray(raw)) return [];
   const sorted = raw.slice(-50).sort((a, b) => new Date(a.time) - new Date(b.time));
   let runId = 0, prevTime = null;
@@ -275,6 +385,10 @@ export const refreshAllData = () => {
   state.results   = readResultsJson();
   state.progress  = buildProgress();
   state.skills    = readSkillsList();
+  state.storageHealth = typeof actions.getStorageHealth === 'function'
+    ? actions.getStorageHealth()
+    : null;
+  state.providerHealth = readProviderHealthJson() || {};
 
   // Brainstorm + Plan from pipeline.json
   state.brainstorm = pipeData ? (pipeData.brainstorm || null) : null;
@@ -292,14 +406,27 @@ const debounce = (fn, ms) => {
   };
 };
 
-export const startWatchers = (broadcastFn) => {
+export const startWatchers = (broadcastFn, reloadFrontendFn) => {
   if (broadcastFn) broadcast = broadcastFn;
   const debouncedRefresh = debounce(refreshAllData, DEBOUNCE_MS);
+  const debouncedReload = debounce(async (_eventType, filename) => {
+    try {
+      const file = typeof filename === 'string' ? filename : (filename ? filename.toString() : '');
+      if (!file || !file.endsWith('.js')) return;
+      if (reloadFrontendFn && file.includes('frontend')) {
+        await reloadFrontendFn();
+      }
+      broadcast('reload', { file });
+    } catch (err) {
+      console.error('[dashboard] Reload watcher error:', err.message);
+    }
+  }, DEBOUNCE_MS);
   try {
     if (existsSync(DATA_DIR)) watch(DATA_DIR, debouncedRefresh);
     if (existsSync(AGENTS_DIR)) watch(AGENTS_DIR, debouncedRefresh);
     if (existsSync(CONSILIUM_FILE)) watch(CONSILIUM_FILE, debouncedRefresh);
     if (existsSync(SKILLS_DIR)) watch(SKILLS_DIR, debouncedRefresh);
+    if (existsSync(SCRIPTS_DIR)) watch(SCRIPTS_DIR, debouncedReload);
   } catch {
     setInterval(refreshAllData, POLL_INTERVAL_MS);
   }
@@ -307,30 +434,84 @@ export const startWatchers = (broadcastFn) => {
 
 // 5. SSE MANAGER
 const sseClients = new Map();
+const sseEventRing = [];
 
 const sseSend = (res, type, payload, id) => {
-  res.write(`id: ${id}\nevent: ${type}\ndata: ${JSON.stringify(payload)}\n\n`);
+  try {
+    res.write(`id: ${id}\nevent: ${type}\ndata: ${JSON.stringify(payload)}\n\n`);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+const pushReplayEvent = (id, type, payload) => {
+  sseEventRing.push({ id, type, payload });
+  if (sseEventRing.length > SSE_REPLAY_SIZE) {
+    sseEventRing.splice(0, sseEventRing.length - SSE_REPLAY_SIZE);
+  }
+};
+
+const parseLastEventId = (req, url) => {
+  const fromHeader = req.headers['last-event-id'];
+  const fromQuery = url?.searchParams.get('lastEventId');
+  const raw = String(fromHeader ?? fromQuery ?? '').trim();
+  if (!raw) return null;
+  const parsed = Number.parseInt(raw, 10);
+  return Number.isFinite(parsed) ? parsed : null;
 };
 
 export let broadcast = (type, payload) => {
   const id = nextEventId();
-  sseClients.forEach(res => sseSend(res, type, payload, id));
+  pushReplayEvent(id, type, payload);
+  for (const [clientId, res] of sseClients) {
+    if (!sseSend(res, type, payload, id)) {
+      sseClients.delete(clientId);
+    }
+  }
 };
 
-export const sseConnect = (req, res, getStateFn) => {
+export const sseConnect = (req, res, getStateFn, url) => {
   res.writeHead(200, {
     'Content-Type': 'text/event-stream',
     'Cache-Control': 'no-cache',
-    'Connection': 'keep-alive'
+    'Connection': 'keep-alive',
+    'X-Accel-Buffering': 'no'
   });
-  const clientId = Date.now();
+  res.write(`retry: ${SSE_RETRY_MS}\n\n`);
+
+  const clientId = `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
   sseClients.set(clientId, res);
-  sseSend(res, 'full', getStateFn(), nextEventId());
-  const keepalive = setInterval(() => res.write(':keepalive\n\n'), SSE_KEEPALIVE_MS);
-  req.on('close', () => {
+
+  const lastEventId = parseLastEventId(req, url);
+  const replay = lastEventId === null
+    ? []
+    : sseEventRing.filter(event => event.id > lastEventId);
+
+  if (replay.length > 0) {
+    replay.forEach(event => sseSend(res, event.type, event.payload, event.id));
+  } else {
+    const full = getStateFn();
+    const fullId = nextEventId();
+    pushReplayEvent(fullId, 'full', full);
+    sseSend(res, 'full', full, fullId);
+  }
+
+  const disconnect = () => {
     clearInterval(keepalive);
     sseClients.delete(clientId);
-  });
+  };
+
+  const keepalive = setInterval(() => {
+    try {
+      res.write(':keepalive\n\n');
+    } catch {
+      disconnect();
+    }
+  }, SSE_KEEPALIVE_MS);
+
+  req.on('close', disconnect);
+  req.on('error', disconnect);
 };
 
 // 6. HTTP ROUTER
@@ -377,26 +558,101 @@ export function resolveAgentDetailsPath(agentId, agentsDir = AGENTS_DIR) {
   }
   const baseDir = resolve(agentsDir);
   const agentPath = resolve(baseDir, `${agentId}.md`);
-  const inBase = agentPath === baseDir || agentPath.startsWith(`${baseDir}${sep}`);
+  // Robust path traversal protection: check if resolved path is within baseDir
+  const relativePath = relative(baseDir, agentPath);
+  const inBase = relativePath && !relativePath.startsWith('..') && !relativePath.startsWith(sep);
   if (!inBase) {
     throw new Error('Invalid agent path');
   }
   return agentPath;
 }
 
-export const createRouter = (buildHtmlFn, token) => async (req, res) => {
+function contentTypeForPath(pathname) {
+  if (pathname.endsWith('.html')) return 'text/html; charset=utf-8';
+  if (pathname.endsWith('.js')) return 'application/javascript; charset=utf-8';
+  if (pathname.endsWith('.css')) return 'text/css; charset=utf-8';
+  if (pathname.endsWith('.json') || pathname.endsWith('.webmanifest')) return 'application/json; charset=utf-8';
+  if (pathname.endsWith('.svg')) return 'image/svg+xml';
+  if (pathname.endsWith('.png')) return 'image/png';
+  if (pathname.endsWith('.jpg') || pathname.endsWith('.jpeg')) return 'image/jpeg';
+  if (pathname.endsWith('.ico')) return 'image/x-icon';
+  return 'application/octet-stream';
+}
+
+function safeResolveStaticFile(staticDir, pathname) {
+  const baseDir = resolve(staticDir);
+  const normalized = pathname.replace(/^\/+/, '') || 'index.html';
+  const candidate = resolve(baseDir, normalized);
+  const relPath = relative(baseDir, candidate);
+  if (relPath.startsWith('..') || relPath.startsWith(sep)) return null;
+  return candidate;
+}
+
+export const createRouter = (buildHtmlFn, token, options = {}) => async (req, res) => {
+  const staticDir = options.staticDir ? resolve(options.staticDir) : null;
   const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
-  const serve = (status, type, data) => {
-    res.writeHead(status, { 'Content-Type': type });
+  const serve = (status, type, data, extraHeaders = {}) => {
+    const headers = {
+      ...SECURE_HEADERS,
+      'Content-Type': type,
+      ...extraHeaders
+    };
+    if (type.startsWith('text/html')) {
+      headers['Content-Security-Policy'] = APP_CSP;
+    }
+    res.writeHead(status, headers);
+    if (Buffer.isBuffer(data)) {
+      res.end(data);
+      return;
+    }
     res.end(typeof data === 'string' ? data : JSON.stringify(data));
   };
+
+  const isApiPath = url.pathname.startsWith('/api/');
+  const isProtectedGetPath = (
+    url.pathname === '/state' ||
+    url.pathname === '/api/state' ||
+    url.pathname === '/events' ||
+    url.pathname === '/storage-health' ||
+    url.pathname.startsWith('/api/kb/')
+  );
+
+  if (req.method === 'GET' && (isApiPath || isProtectedGetPath)) {
+    if (!isAuthorized(req, url, token)) {
+      return serve(401, 'application/json', {
+        error: 'Unauthorized. Provide Authorization: Bearer <token> or ?token=<token>'
+      });
+    }
+  }
+
+  const isInternalPath = (
+    isApiPath ||
+    url.pathname === '/events' ||
+    url.pathname === '/state' ||
+    url.pathname === '/storage-health' ||
+    url.pathname === '/health'
+  );
+
+  if (req.method === 'GET' && staticDir && !isInternalPath) {
+    const filePath = safeResolveStaticFile(staticDir, url.pathname);
+    if (filePath && existsSync(filePath)) {
+      const asBuffer = !filePath.endsWith('.html');
+      const data = asBuffer ? readFileSync(filePath) : readFileSync(filePath, 'utf8');
+      return serve(200, contentTypeForPath(filePath), data);
+    }
+    const indexPath = resolve(staticDir, 'index.html');
+    if (existsSync(indexPath)) {
+      return serve(200, 'text/html; charset=utf-8', readFileSync(indexPath, 'utf8'));
+    }
+  }
 
   if (req.method === 'POST') {
     // Auth: require Bearer token for POST /api/*
     if (url.pathname.startsWith('/api/')) {
-      const authHeader = req.headers['authorization'] || '';
-      if (authHeader !== `Bearer ${token || authToken}`) {
-        return serve(401, 'application/json', { error: 'Unauthorized. Provide Authorization: Bearer <token>' });
+      if (!isAuthorized(req, url, token)) {
+        return serve(401, 'application/json', {
+          error: 'Unauthorized. Provide Authorization: Bearer <token> or ?token=<token>'
+        });
       }
       // Origin check: allow only localhost
       const origin = req.headers['origin'] || '';
@@ -404,7 +660,7 @@ export const createRouter = (buildHtmlFn, token) => async (req, res) => {
         return serve(403, 'application/json', { error: 'Forbidden origin' });
       }
       // Rate limit
-      const clientIp = req.socket.remoteAddress || '0.0.0.0';
+      const clientIp = getClientIp(req);
       if (!checkRateLimit(clientIp)) {
         return serve(429, 'application/json', { error: 'Too many requests. Max 30 per minute.' });
       }
@@ -458,6 +714,54 @@ export const createRouter = (buildHtmlFn, token) => async (req, res) => {
           actions.setPlanSelected(body?.selected);
           refreshAllData();
           return serve(200, 'application/json', { ok: true });
+        case '/api/kb/save': {
+          const runtime = await getKnowledgeRuntime();
+          if (!runtime?.store) {
+            return serve(503, 'application/json', {
+              error: runtime?.error || 'Knowledge store unavailable',
+              mode: runtime?.mode || 'disabled'
+            });
+          }
+
+          const entry = normalizeKbEntry(body);
+          const result = runtime.store.saveEntry(entry);
+          if (result.saved) {
+            broadcast('kb-update', {
+              project: entry.project,
+              category: entry.category,
+              title: entry.title,
+              hash: result.hash
+            });
+          }
+
+          return serve(200, 'application/json', {
+            ok: true,
+            mode: runtime.mode,
+            result
+          });
+        }
+        case '/api/kb/sync': {
+          const sync = getKbSyncClient();
+          const action = String(body?.action || 'pull').toLowerCase();
+          const ensure = await sync.ensureRepo();
+          let result;
+
+          if (action === 'push') {
+            result = await sync.push(String(body?.message || 'kb: update'));
+          } else if (action === 'pull') {
+            result = await sync.pull();
+          } else if (action === 'status') {
+            result = { status: (await sync.isClean()) ? 'clean' : 'dirty' };
+          } else {
+            throw new Error('action must be one of: pull, push, status');
+          }
+
+          return serve(200, 'application/json', {
+            ok: true,
+            ensure,
+            result
+          });
+        }
         default:
           return serve(404, 'application/json', { error: 'Not Found' });
       }
@@ -467,11 +771,61 @@ export const createRouter = (buildHtmlFn, token) => async (req, res) => {
   }
 
   switch (url.pathname) {
-    case '/': return serve(200, 'text/html', buildHtmlFn(token));
-    case '/events': return sseConnect(req, res, getStateSnapshot);
+    case '/': return serve(200, 'text/html', buildHtmlFn(getExpectedToken(token)));
+    case '/events': return sseConnect(req, res, getStateSnapshot, url);
+    case '/api/state':
     case '/state': return serve(200, 'application/json', getStateSnapshot());
+    case '/storage-health': return serve(200, 'application/json', state.storageHealth || {});
     case '/health': return serve(200, 'text/plain', 'OK');
     default:
+      if (url.pathname === '/api/kb/search') {
+        const runtime = await getKnowledgeRuntime();
+        if (!runtime?.store) {
+          return serve(503, 'application/json', {
+            error: runtime?.error || 'Knowledge store unavailable',
+            mode: runtime?.mode || 'disabled'
+          });
+        }
+
+        const q = String(url.searchParams.get('q') || '').trim();
+        if (!q) return serve(400, 'application/json', { error: 'q is required' });
+        const limit = parsePositiveInt(url.searchParams.get('limit'), 10, 1, 50);
+        const project = String(url.searchParams.get('project') || '').trim() || null;
+        const entries = runtime.store.searchEntries(q, { limit, project });
+        return serve(200, 'application/json', { ok: true, mode: runtime.mode, entries });
+      }
+
+      if (url.pathname.startsWith('/api/kb/context/')) {
+        const runtime = await getKnowledgeRuntime();
+        if (!runtime?.store) {
+          return serve(503, 'application/json', {
+            error: runtime?.error || 'Knowledge store unavailable',
+            mode: runtime?.mode || 'disabled'
+          });
+        }
+
+        const project = decodeURIComponent(url.pathname.slice('/api/kb/context/'.length)).trim();
+        if (!project) return serve(400, 'application/json', { error: 'project is required' });
+        const limit = parsePositiveInt(url.searchParams.get('limit'), 5, 1, 50);
+        const context = runtime.store.getContextForProject(project, limit);
+        return serve(200, 'application/json', { ok: true, mode: runtime.mode, project, ...context });
+      }
+
+      if (url.pathname === '/api/kb/stats') {
+        const runtime = await getKnowledgeRuntime();
+        if (!runtime?.store) {
+          return serve(503, 'application/json', {
+            error: runtime?.error || 'Knowledge store unavailable',
+            mode: runtime?.mode || 'disabled'
+          });
+        }
+        return serve(200, 'application/json', {
+          ok: true,
+          mode: runtime.mode,
+          stats: runtime.store.getStats()
+        });
+      }
+
       res.writeHead(404);
       res.end('Not Found');
   }

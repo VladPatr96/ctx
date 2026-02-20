@@ -24,6 +24,26 @@ const CIRCUIT_RESET_MS = 5 * 60 * 1000; // 5 minutes
 
 const providers = { claude, gemini, opencode, codex };
 
+function toNonNegativeInt(value, fallback = 0) {
+  const parsed = Number.parseInt(String(value ?? ''), 10);
+  if (!Number.isFinite(parsed) || parsed < 0) return fallback;
+  return parsed;
+}
+
+function toLatencyMs(value) {
+  const parsed = Number.parseFloat(String(value ?? ''));
+  if (!Number.isFinite(parsed) || parsed < 0) return 0;
+  return Math.round(parsed);
+}
+
+function applyLatencyStats(entry, latencyMs) {
+  const calls = toNonNegativeInt(entry.calls, 0);
+  const lastLatencyMs = toLatencyMs(latencyMs);
+  const totalLatencyMs = toNonNegativeInt(entry.totalLatencyMs, 0) + lastLatencyMs;
+  const avgLatencyMs = calls > 0 ? Math.round(totalLatencyMs / calls) : 0;
+  return { ...entry, lastLatencyMs, totalLatencyMs, avgLatencyMs };
+}
+
 function loadHealth() {
   try {
     return JSON.parse(readFileSync(HEALTH_FILE, 'utf-8'));
@@ -42,7 +62,7 @@ function isCircuitOpen(providerName) {
   const health = loadHealth();
   const entry = health[providerName];
   if (!entry) return false;
-  if (entry.failures < CIRCUIT_THRESHOLD) return false;
+  if (toNonNegativeInt(entry.failures, 0) < CIRCUIT_THRESHOLD) return false;
 
   // Check if reset timeout passed
   const elapsed = Date.now() - new Date(entry.lastFailure).getTime();
@@ -55,18 +75,46 @@ function isCircuitOpen(providerName) {
   return true;
 }
 
-function recordSuccess(providerName) {
+function recordSuccess(providerName, latencyMs) {
   const health = loadHealth();
-  health[providerName] = { failures: 0, lastSuccess: new Date().toISOString() };
+  const now = new Date().toISOString();
+  const entry = health[providerName] || {};
+  const calls = toNonNegativeInt(entry.calls, 0) + 1;
+  const successes = toNonNegativeInt(entry.successes, 0) + 1;
+  const totalFailures = toNonNegativeInt(entry.totalFailures, 0);
+  const next = {
+    ...entry,
+    calls,
+    successes,
+    totalFailures,
+    failures: 0,
+    lastSuccess: now,
+    updatedAt: now,
+    successRate: calls > 0 ? Number(((successes / calls) * 100).toFixed(1)) : 0
+  };
+  health[providerName] = applyLatencyStats(next, latencyMs);
   saveHealth(health);
 }
 
-function recordFailure(providerName) {
+function recordFailure(providerName, latencyMs) {
   const health = loadHealth();
-  const entry = health[providerName] || { failures: 0 };
-  entry.failures = (entry.failures || 0) + 1;
-  entry.lastFailure = new Date().toISOString();
-  health[providerName] = entry;
+  const now = new Date().toISOString();
+  const entry = health[providerName] || {};
+  const calls = toNonNegativeInt(entry.calls, 0) + 1;
+  const successes = toNonNegativeInt(entry.successes, 0);
+  const totalFailures = toNonNegativeInt(entry.totalFailures, 0) + 1;
+  const consecutiveFailures = toNonNegativeInt(entry.failures, 0) + 1;
+  const next = {
+    ...entry,
+    calls,
+    successes,
+    totalFailures,
+    failures: consecutiveFailures,
+    lastFailure: now,
+    updatedAt: now,
+    successRate: calls > 0 ? Number(((successes / calls) * 100).toFixed(1)) : 0
+  };
+  health[providerName] = applyLatencyStats(next, latencyMs);
   saveHealth(health);
 }
 
@@ -103,15 +151,26 @@ export async function invoke(providerName, prompt, opts = {}) {
     };
   }
 
-  const result = await provider.invoke(prompt, opts);
+  const startedAt = Date.now();
+  try {
+    const result = await provider.invoke(prompt, opts);
+    const latencyMs = Date.now() - startedAt;
 
-  if (result.status === 'success') {
-    recordSuccess(providerName);
-  } else {
-    recordFailure(providerName);
+    if (result.status === 'success') {
+      recordSuccess(providerName, latencyMs);
+    } else {
+      recordFailure(providerName, latencyMs);
+    }
+
+    return result;
+  } catch (err) {
+    const latencyMs = Date.now() - startedAt;
+    recordFailure(providerName, latencyMs);
+    return {
+      status: 'error',
+      error: err instanceof Error ? err.message : String(err)
+    };
   }
-
-  return result;
 }
 
 /**

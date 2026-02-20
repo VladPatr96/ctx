@@ -1,6 +1,6 @@
 {
   "hooks": {
-    "PreCompact": [
+    "PreCompress": [
       {
         "hooks": [
           {
@@ -10,7 +10,7 @@
         ]
       }
     ],
-    "Stop": [
+    "SessionEnd": [
       {
         "hooks": [
           {

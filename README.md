@@ -135,6 +135,53 @@ Sessions and lessons are stored as GitHub Issues with labels:
 
 Hybrid storage: session logs go to the project repo, lessons go to the central repo for cross-project search.
 
+## SQLite Rollback Runbook
+
+Use this when running with `CTX_STORAGE=sqlite`.
+
+1. Runtime-safe mode (recommended during incidents):
+`CTX_SQLITE_FALLBACK_JSON=1`
+This keeps SQLite as primary but automatically serves/writes through JSON backup on SQLite failures.
+2. Auto rollback policy (Day 11):
+`CTX_SQLITE_AUTO_ROLLBACK=1`
+This enables policy states `sqlite_primary -> json_rollback -> recovery_probe`.
+Optional tuning knobs:
+- `CTX_SQLITE_POLICY_OVERRIDE=auto|sqlite_primary|json_rollback`
+- `CTX_SQLITE_POLICY_TRIGGER_RATIO` (default: warning ratio)
+- `CTX_SQLITE_POLICY_TRIGGER_MIN_FAILURES` (default: warning min failures)
+- `CTX_SQLITE_POLICY_TRIGGER_MIN_OPERATIONS` (default: `max(min_failures*2, 6)`)
+- `CTX_SQLITE_POLICY_PROBE_SUCCESSES` (default: `2`)
+- `CTX_SQLITE_POLICY_ROLLBACK_MIN_MS` (default: `30000`)
+- `CTX_SQLITE_POLICY_PROBE_INTERVAL_MS` (default: `15000`)
+3. Hard rollback:
+Set `CTX_STORAGE=json` and restart the process.
+4. Validate health:
+Open `GET /storage-health` in the dashboard server and check:
+- `warningActive` should be `false`
+- `policyState` should eventually return to `sqlite_primary`
+- `inRollbackMode` should be `false` after recovery
+- `totals.failureRatio` should trend down after recovery
+5. Recovery back to SQLite primary:
+Set `CTX_STORAGE=sqlite`, keep `CTX_SQLITE_FALLBACK_JSON=1` for a canary window, then disable fallback when stable.
+
+## Dashboard API (Web-first slice)
+
+Dashboard backend is still single-runtime (`scripts/dashboard-backend.js`) and now exposes:
+
+- `GET /api/state` (alias of `/state`)
+- `GET /api/kb/search?q=...&limit=10&project=...`
+- `GET /api/kb/context/:project?limit=5`
+- `GET /api/kb/stats`
+- `POST /api/kb/save`
+- `POST /api/kb/sync` (`action: pull|push|status`)
+- `GET /events` (SSE with `retry` + `Last-Event-Id` replay)
+
+Auth model:
+
+- All `/api/*`, `/state`, `/events`, `/storage-health` require token.
+- Pass token as `Authorization: Bearer <token>` or `?token=<token>`.
+- Token is printed by `node scripts/ctx-dashboard.js` and saved in `.data/.dashboard-token`.
+
 ## Requirements
 
 - [Claude Code](https://claude.com/claude-code) v1.0.33+
