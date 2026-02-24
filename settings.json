@@ -6,5 +6,33 @@
   },
   "enabledPlugins": {
     "superpowers@superpowers-dev": true
+  },
+  "mcpServers": {
+    "ctx-hub": {
+      "command": "node",
+      "args": [
+        "D:/projects/Projects/github/my_claude_code/scripts/ctx-mcp-hub.js"
+      ],
+      "env": {
+        "CTX_DATA_DIR": "D:/projects/Projects/github/my_claude_code/.data",
+        "GITHUB_OWNER": "VladPatr96",
+        "CLAUDE_PROJECT_DIR": "D:/projects/Projects/github/my_claude_code",
+        "CLAUDE_PLUGIN_ROOT": "D:/projects/Projects/github/my_claude_code"
+      }
+    }
+  },
+  "hooks": {
+    "PreCompress": [
+      {
+        "type": "command",
+        "command": "node \"D:/projects/Projects/github/my_claude_code/scripts/ctx-session-save.js\" --event compact"
+      }
+    ],
+    "SessionEnd": [
+      {
+        "type": "command",
+        "command": "node \"D:/projects/Projects/github/my_claude_code/scripts/ctx-session-save.js\" --event stop"
+      }
+    ]
   }
 }
