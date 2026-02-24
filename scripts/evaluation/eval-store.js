@@ -119,6 +119,22 @@ export function createEvalStore(dataDir = '.data') {
     ORDER BY wins DESC
   `);
 
+  const providerMetricsRawStmt = db.prepare(`
+    SELECT provider, COUNT(*) as total_responses,
+      SUM(CASE WHEN was_chosen = 1 THEN 1 ELSE 0 END) as wins,
+      AVG(response_ms) as avg_response_ms, AVG(confidence) as avg_confidence
+    FROM provider_responses WHERE status = 'completed' GROUP BY provider
+  `);
+
+  const globalWinRateStmt = db.prepare(`
+    SELECT COALESCE(SUM(CASE WHEN was_chosen = 1 THEN 1 ELSE 0 END), 0) as total_wins,
+      COALESCE(COUNT(*), 0) as total_responses
+    FROM provider_responses WHERE status = 'completed'
+  `);
+
+  let _metricsCache = null;
+  let _metricsCacheTime = 0;
+
   const ciStatsStmt = db.prepare(`
     SELECT ci_status, COUNT(*) as cnt
     FROM consilium_runs
@@ -281,6 +297,41 @@ export function createEvalStore(dataDir = '.data') {
       } catch (err) {
         console.error('[eval-store] getLastRuns failed:', err.message);
         return [];
+      }
+    },
+
+    /**
+     * Get raw provider metrics for adaptive routing.
+     * Cached for 60 seconds. Fail-safe: returns empty on error.
+     * @returns {{ providers: Map<string, object>, globalWinRate: number }}
+     */
+    getProviderMetrics() {
+      const now = Date.now();
+      if (_metricsCache && (now - _metricsCacheTime) < 60_000) {
+        return _metricsCache;
+      }
+      try {
+        const rows = providerMetricsRawStmt.all();
+        const providers = new Map();
+        for (const row of rows) {
+          providers.set(row.provider, {
+            total_responses: row.total_responses,
+            wins: row.wins,
+            avg_response_ms: row.avg_response_ms,
+            avg_confidence: row.avg_confidence
+          });
+        }
+        const global = globalWinRateStmt.get();
+        const globalWinRate = global.total_responses > 0
+          ? global.total_wins / global.total_responses
+          : 0.25;
+
+        _metricsCache = { providers, globalWinRate };
+        _metricsCacheTime = now;
+        return _metricsCache;
+      } catch (err) {
+        console.error('[eval-store] getProviderMetrics failed:', err.message);
+        return { providers: new Map(), globalWinRate: 0.25 };
       }
     },
 

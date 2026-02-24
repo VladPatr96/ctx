@@ -12,6 +12,8 @@ import { existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readJsonFile, withLockSync, writeJsonAtomic } from '../utils/state-io.js';
+import { rankCandidates } from '../evaluation/adaptive-weight.js';
+import { createEvalStore as _createEvalStoreFn } from '../evaluation/eval-store.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PIPELINE_FILE = join(__dirname, '..', '..', '.data', 'pipeline.json');
@@ -25,6 +27,22 @@ function shellEscape(str) {
   // Basic escaping for Windows shell interpolation
   return str.replace(/[&|()^<>=!%]/g, '^$&').replace(/"/g, '""');
 }
+
+// ---- Adaptive routing (feature-flagged) ----
+let _evalStore = undefined;
+function getEvalStore() {
+  if (_evalStore !== undefined) return _evalStore;
+  if (process.env.CTX_ADAPTIVE_ROUTING !== '1') { _evalStore = null; return null; }
+  try {
+    _evalStore = _createEvalStoreFn(process.env.CTX_DATA_DIR || join(__dirname, '..', '..', '.data'));
+  } catch (err) {
+    console.error('[router] adaptive disabled:', err.message);
+    _evalStore = null;
+  }
+  return _evalStore;
+}
+
+process.on('exit', () => { _evalStore?.close(); });
 
 // \b не работает с кириллицей — используем (?:^|[\s,;.!?]) как границу слова
 const B = '(?:^|[\\s,;.!?:()\\[\\]"\'«»])'; // before
@@ -92,7 +110,27 @@ export function route(task) {
 
   if (matches.length === 0) return null;
 
-  // Сортируем по весу, берём лучший
+  // Adaptive scoring (feature-flagged)
+  const evalStore = getEvalStore();
+  if (evalStore) {
+    try {
+      const { providers: metricsMap, globalWinRate } = evalStore.getProviderMetrics();
+      const ranked = rankCandidates(matches, metricsMap, { globalWinRate });
+      if (ranked.length > 0) {
+        const best = ranked[0];
+        return {
+          provider: best.provider,
+          strength: best.strength,
+          reason: best.reason,
+          confidence: best.confidence
+        };
+      }
+    } catch (err) {
+      // Fallthrough to static routing
+    }
+  }
+
+  // Статический routing (default)
   matches.sort((a, b) => b.weight - a.weight);
   const best = matches[0];
 
@@ -123,8 +161,21 @@ export function routeMulti(task) {
         provider: rule.provider,
         strength: rule.strength,
         reason: provider.bestFor?.[rule.strength] || rule.strength,
+        weight: rule.weight,
         confidence: Math.min(rule.weight / 10, 1)
       });
+    }
+  }
+
+  // Adaptive scoring (feature-flagged)
+  const evalStore = getEvalStore();
+  if (evalStore) {
+    try {
+      const { providers: metricsMap, globalWinRate } = evalStore.getProviderMetrics();
+      const ranked = rankCandidates(matches, metricsMap, { globalWinRate });
+      if (ranked.length > 0) return ranked;
+    } catch (err) {
+      // Fallthrough to static sorting
     }
   }
 
