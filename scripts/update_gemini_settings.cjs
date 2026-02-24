@@ -9,7 +9,7 @@ if (!fs.existsSync(settingsPath)) {
 }
 
 const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
-const projectRoot = 'C:/Users/Патраваев/projects/claude_ctx'.replace(/\\/g, '/');
+const projectRoot = 'D:/projects/Projects/github/my_claude_code'.replace(/\\/g, '/');
 
 // 1. Configure MCP Server
 if (!settings.mcpServers) settings.mcpServers = {};

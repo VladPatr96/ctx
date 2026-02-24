@@ -8,7 +8,7 @@ import { runCommand } from '../utils/shell.js';
 export default {
   name: 'gemini',
   transport: 'mcp',
-  models: ['gemini-3-pro-preview', 'gemini-3-flash-preview'],
+  models: ['gemini-3.1-pro-preview', 'gemini-3-flash-preview'],
   capabilities: ['mcp', 'skills', 'extensions'],
   strengths: ['large_context', 'codebase_analysis', 'documentation', 'translation'],
   bestFor: {
