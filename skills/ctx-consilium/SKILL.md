@@ -43,6 +43,7 @@ description: >
 1. Получи карту проекта (запусти `node "${CLAUDE_PLUGIN_ROOT}/scripts/ctx-indexer.js"` если нет `.data/index.json`)
 2. Сформулируй задачу чётко и однозначно
 3. Подготовь общий контекст: стек, структура, ограничения
+4. **Evaluation:** вызови `ctx_eval_start({ project, topic, mode, providers })` — сохрани `run_id`
 
 Создай промпт-шаблон:
 ```
@@ -87,6 +88,7 @@ codex exec --ephemeral --skip-git-repo-check "<промпт-шаблон>" 2>&1 
 - Каждый провайдер НЕ ВИДИТ ответы других
 - Таймаут: 60 секунд на провайдера
 - Если провайдер не отвечает — пропусти его
+- **Evaluation:** после каждого ответа вызови `ctx_eval_provider(run_id, { provider, model, status, response_ms, confidence, key_idea })`. Для timeout/error — укажи `status: "timeout"/"error"` и `error_message`
 
 ### Режим: Agent Consilium (--agents)
 
@@ -157,7 +159,7 @@ codex exec --ephemeral --skip-git-repo-check "<промпт-шаблон>" 2>&1 
 
 ### Шаг 5: LOG
 
-Сохрани решение:
+1. Сохрани решение в GitHub:
 
 ```bash
 gh issue create -R VladPatr96/my_claude_code \
@@ -165,6 +167,8 @@ gh issue create -R VladPatr96/my_claude_code \
   --label "consilium,project:$PROJECT_NAME" \
   --body "[тело решения из шага 4]"
 ```
+
+2. **Evaluation:** вызови `ctx_eval_complete(run_id, { proposed_by, consensus: 1/0, decision_summary, github_issue_url, rounds })` — записать итог консилиума. Если известен CI статус — вызови `ctx_eval_ci_update(run_id, "passed"/"failed")`
 
 ---
 
