@@ -176,20 +176,26 @@ export function registerConsiliumTools(server, { getResults, saveResults, DATA_D
         rounds: z.number().min(1).max(4).default(2).describe('Количество раундов (1-4)'),
         projectContext: z.string().optional().describe('Контекст проекта'),
         timeout: z.number().optional().default(60000).describe('Таймаут на провайдера (мс)'),
-        preset: z.string().optional().describe('Пресет из consilium.presets.json (debate-full, debate-fast)')
+        preset: z.string().optional().describe('Пресет из consilium.presets.json (debate-full, debate-fast, debate-claims)'),
+        enableClaimExtraction: z.boolean().optional().default(false).describe('Включить claim extraction между раундами (CBDP)'),
+        claimProvider: z.string().optional().default('claude').describe('Провайдер для claim extraction')
       }).shape,
     },
-    async ({ topic, providers: providersList, rounds, projectContext, timeout, preset }) => {
+    async ({ topic, providers: providersList, rounds, projectContext, timeout, preset, enableClaimExtraction, claimProvider }) => {
       try {
         // Resolve preset if provided
         let resolvedProviders = providersList;
         let resolvedRounds = rounds;
+        let resolvedClaimExtraction = enableClaimExtraction;
         if (preset && existsSync(PRESETS_FILE)) {
           const presets = JSON.parse(readFileSync(PRESETS_FILE, 'utf-8'));
           const presetConfig = presets[preset];
           if (presetConfig) {
             if (presetConfig.providers) resolvedProviders = presetConfig.providers;
             if (presetConfig.rounds) resolvedRounds = presetConfig.rounds;
+            if (presetConfig.enableClaimExtraction !== undefined && !enableClaimExtraction) {
+              resolvedClaimExtraction = presetConfig.enableClaimExtraction;
+            }
           }
         }
 
@@ -209,7 +215,9 @@ export function registerConsiliumTools(server, { getResults, saveResults, DATA_D
           rounds: resolvedRounds,
           projectContext: projectContext || '',
           timeout: timeout || 60000,
-          evalStore
+          evalStore,
+          enableClaimExtraction: resolvedClaimExtraction,
+          claimProvider: claimProvider || 'claude'
         });
 
         const result = await orchestrator.execute();

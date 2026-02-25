@@ -9,8 +9,14 @@ import {
   buildR1Prompt,
   buildFollowUpPrompt,
   buildSynthesisPrompt,
-  formatAnonymizedResponses
+  formatAnonymizedResponses,
+  formatClaimsBlock
 } from '../scripts/consilium/prompts.js';
+import {
+  buildClaimExtractionPrompt,
+  parseClaimExtractionResponse,
+  extractClaimsFromResponses
+} from '../scripts/consilium/claim-extractor.js';
 
 // ---- createAliasMap ----
 
@@ -293,4 +299,225 @@ test('orchestrator: returns totalDurationMs', async () => {
   const result = await orch.execute();
   assert.ok(typeof result.totalDurationMs === 'number');
   assert.ok(result.totalDurationMs >= 0);
+});
+
+// ---- claim-extractor ----
+
+test('parseClaimExtractionResponse: valid JSON array', () => {
+  const json = JSON.stringify([
+    { text: 'Нужно использовать микросервисы', type: 'opinion' },
+    { text: 'Текущая нагрузка 1000 rps', type: 'fact' },
+    { text: 'Возможна потеря данных', type: 'risk' }
+  ]);
+  const result = parseClaimExtractionResponse(json, 'A');
+  assert.equal(result.length, 3);
+  assert.equal(result[0].id, 'A1');
+  assert.equal(result[0].type, 'opinion');
+  assert.equal(result[1].id, 'A2');
+  assert.equal(result[1].type, 'fact');
+  assert.equal(result[2].id, 'A3');
+  assert.equal(result[2].type, 'risk');
+});
+
+test('parseClaimExtractionResponse: invalid type defaults to opinion', () => {
+  const json = JSON.stringify([
+    { text: 'some claim', type: 'unknown_type' }
+  ]);
+  const result = parseClaimExtractionResponse(json, 'B');
+  assert.equal(result.length, 1);
+  assert.equal(result[0].type, 'opinion');
+  assert.equal(result[0].id, 'B1');
+});
+
+test('parseClaimExtractionResponse: max 7 claims', () => {
+  const items = Array.from({ length: 10 }, (_, i) => ({ text: `claim ${i}`, type: 'fact' }));
+  const result = parseClaimExtractionResponse(JSON.stringify(items), 'C');
+  assert.equal(result.length, 7);
+  assert.equal(result[6].id, 'C7');
+});
+
+test('parseClaimExtractionResponse: invalid JSON returns empty array', () => {
+  assert.deepEqual(parseClaimExtractionResponse('not json at all', 'A'), []);
+  assert.deepEqual(parseClaimExtractionResponse('', 'A'), []);
+  assert.deepEqual(parseClaimExtractionResponse(null, 'A'), []);
+  assert.deepEqual(parseClaimExtractionResponse(undefined, 'A'), []);
+});
+
+test('parseClaimExtractionResponse: JSON in markdown code block', () => {
+  const input = '```json\n[{"text": "extracted claim", "type": "requirement"}]\n```';
+  const result = parseClaimExtractionResponse(input, 'D');
+  assert.equal(result.length, 1);
+  assert.equal(result[0].id, 'D1');
+  assert.equal(result[0].type, 'requirement');
+  assert.equal(result[0].text, 'extracted claim');
+});
+
+test('extractClaimsFromResponses: mock invokeFn', async () => {
+  const mockInvoke = async (provider, prompt) => ({
+    status: 'success',
+    response: JSON.stringify([
+      { text: 'claim from extraction', type: 'fact' }
+    ])
+  });
+
+  const result = await extractClaimsFromResponses({
+    responses: [
+      { provider: 'claude', alias: 'Participant A', response: 'some R1 text' },
+      { provider: 'gemini', alias: 'Participant B', response: 'other R1 text' }
+    ],
+    invokeFn: mockInvoke,
+    extractionProvider: 'claude'
+  });
+
+  assert.ok(result instanceof Map);
+  assert.equal(result.size, 2);
+  assert.ok(result.has('Participant A'));
+  assert.ok(result.has('Participant B'));
+  assert.equal(result.get('Participant A')[0].id, 'A1');
+  assert.equal(result.get('Participant B')[0].id, 'B1');
+});
+
+// ---- formatClaimsBlock ----
+
+test('formatClaimsBlock: formats claims correctly', () => {
+  const block = formatClaimsBlock([
+    { alias: 'Participant A', claims: [
+      { id: 'A1', text: 'first claim', type: 'fact' },
+      { id: 'A2', text: 'second claim', type: 'risk' }
+    ]},
+    { alias: 'Participant C', claims: [
+      { id: 'C1', text: 'third claim', type: 'opinion' }
+    ]}
+  ]);
+  assert.ok(block.includes('--- Participant A ---'));
+  assert.ok(block.includes('[A1] (fact) first claim'));
+  assert.ok(block.includes('[A2] (risk) second claim'));
+  assert.ok(block.includes('--- Participant C ---'));
+  assert.ok(block.includes('[C1] (opinion) third claim'));
+});
+
+test('buildFollowUpPrompt: with claimsBlock uses claims label', () => {
+  const claimsBlock = '--- Participant A ---\n  [A1] (fact) some claim';
+  const prompt = buildFollowUpPrompt({
+    topic: 'test',
+    ownAlias: 'Participant B',
+    ownPreviousResponse: 'my response',
+    othersResponses: [{ alias: 'Participant A', response: 'full text' }],
+    roundNumber: 2,
+    totalRounds: 3,
+    claimsBlock
+  });
+  assert.ok(prompt.includes('claims'), 'should contain claims label');
+  assert.ok(prompt.includes('[A1] (fact) some claim'), 'should contain claims block');
+  assert.ok(!prompt.includes('full text'), 'should NOT contain full text of others');
+  assert.ok(prompt.includes('my response'), 'should still include own response');
+  assert.ok(prompt.includes('A1, B2'), 'should include claim ID reference rule');
+});
+
+// ---- orchestrator with claim extraction ----
+
+test('orchestrator: enableClaimExtraction=true, 2 rounds', async () => {
+  const invokeCalls = [];
+  const mockInvoke = async (provider, prompt) => {
+    invokeCalls.push({ provider, prompt });
+    // Extraction calls contain "извлеки" in prompt
+    if (prompt.includes('извлеки')) {
+      return {
+        status: 'success',
+        response: JSON.stringify([
+          { text: 'extracted claim', type: 'opinion' }
+        ])
+      };
+    }
+    // R1 responses
+    if (!prompt.includes('раунд')) {
+      return { status: 'success', response: `R1 from ${provider}` };
+    }
+    // R2 responses
+    return { status: 'success', response: JSON.stringify({ current_position: 'pos', evaluations: [], agreements: [], disagreements: [], confidence: 0.8 }) };
+  };
+
+  const orch = createRoundOrchestrator({
+    topic: 'test',
+    providers: ['alpha', 'beta'],
+    rounds: 2,
+    invokeFn: mockInvoke,
+    enableClaimExtraction: true,
+    claimProvider: 'alpha'
+  });
+
+  const result = await orch.execute();
+  assert.equal(result.rounds.length, 2);
+
+  // R1: no claims
+  assert.equal(result.rounds[0].claims, null);
+
+  // R2: should have claims from extraction
+  assert.ok(result.rounds[1].claims !== null, 'R2 should have extracted claims');
+
+  // R2 prompts should contain claims-based content
+  const r2Prompts = invokeCalls.filter(c => c.prompt.includes('раунд'));
+  for (const p of r2Prompts) {
+    assert.ok(p.prompt.includes('claims'), 'R2 prompt should use claims label');
+  }
+});
+
+test('orchestrator: claim extraction fallback on failure', async () => {
+  let extractionCalled = false;
+  const mockInvoke = async (provider, prompt) => {
+    if (prompt.includes('извлеки')) {
+      extractionCalled = true;
+      return { status: 'error', error: 'extraction failed' };
+    }
+    if (!prompt.includes('раунд')) {
+      return { status: 'success', response: `R1 from ${provider}` };
+    }
+    return { status: 'success', response: JSON.stringify({ current_position: 'pos', evaluations: [], agreements: [], disagreements: [], confidence: 0.7 }) };
+  };
+
+  const orch = createRoundOrchestrator({
+    topic: 'test',
+    providers: ['a', 'b'],
+    rounds: 2,
+    invokeFn: mockInvoke,
+    enableClaimExtraction: true
+  });
+
+  const result = await orch.execute();
+  assert.ok(extractionCalled, 'extraction should have been attempted');
+  assert.equal(result.rounds.length, 2);
+  // R2 claims should be null (fallback)
+  assert.equal(result.rounds[1].claims, null);
+
+  // R2 should still work with full text fallback
+  assert.equal(result.rounds[1].responses.length, 2);
+  for (const r of result.rounds[1].responses) {
+    assert.equal(r.status, 'success');
+  }
+});
+
+test('orchestrator: enableClaimExtraction=false (default), no extraction calls', async () => {
+  const invokeCalls = [];
+  const mockInvoke = async (provider, prompt) => {
+    invokeCalls.push({ provider, prompt });
+    if (!prompt.includes('раунд')) {
+      return { status: 'success', response: `R1 from ${provider}` };
+    }
+    return { status: 'success', response: JSON.stringify({ current_position: 'pos', evaluations: [], agreements: [], disagreements: [], confidence: 0.8 }) };
+  };
+
+  const orch = createRoundOrchestrator({
+    topic: 'test',
+    providers: ['a', 'b'],
+    rounds: 2,
+    invokeFn: mockInvoke
+    // enableClaimExtraction defaults to false
+  });
+
+  const result = await orch.execute();
+  // Should be exactly 4 calls: 2 R1 + 2 R2 (no extraction)
+  assert.equal(invokeCalls.length, 4, 'should not have extraction calls');
+  // No extraction prompts
+  const extractionCalls = invokeCalls.filter(c => c.prompt.includes('извлеки'));
+  assert.equal(extractionCalls.length, 0, 'no extraction should happen');
 });

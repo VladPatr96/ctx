@@ -28,5 +28,11 @@
     "description": "Быстрый дебат — 2 раунда",
     "providers": ["claude", "gemini"],
     "rounds": 2
+  },
+  "debate-claims": {
+    "description": "Дебат с claim extraction (CBDP)",
+    "providers": ["claude", "gemini", "codex"],
+    "rounds": 3,
+    "enableClaimExtraction": true
   }
 }

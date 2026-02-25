@@ -37,6 +37,22 @@ export function formatAnonymizedResponses(responses) {
 }
 
 /**
+ * Format extracted claims for embedding in a follow-up prompt.
+ * @param {Array<{alias: string, claims: Array<{id: string, text: string, type: string}>}>} participantClaims
+ * @returns {string}
+ */
+export function formatClaimsBlock(participantClaims) {
+  return participantClaims
+    .map(({ alias, claims }) => {
+      const claimLines = claims
+        .map(c => `  [${c.id}] (${c.type}) ${c.text}`)
+        .join('\n');
+      return `--- ${alias} ---\n${claimLines}`;
+    })
+    .join('\n\n');
+}
+
+/**
  * Build a Round 2+ prompt for a specific provider.
  * @param {object} params
  * @param {string} params.topic
@@ -47,8 +63,15 @@ export function formatAnonymizedResponses(responses) {
  * @param {number} params.totalRounds
  * @returns {string}
  */
-export function buildFollowUpPrompt({ topic, ownAlias, ownPreviousResponse, othersResponses, roundNumber, totalRounds }) {
-  const othersBlock = formatAnonymizedResponses(othersResponses);
+export function buildFollowUpPrompt({ topic, ownAlias, ownPreviousResponse, othersResponses, roundNumber, totalRounds, claimsBlock }) {
+  // If claims provided, use claims-based format; otherwise use full text (backward compat)
+  const othersBlock = claimsBlock || formatAnonymizedResponses(othersResponses);
+  const othersLabel = claimsBlock
+    ? 'Ключевые утверждения (claims) других участников из предыдущего раунда:'
+    : 'Ответы других участников из предыдущего раунда:';
+  const claimsRule = claimsBlock
+    ? '\n- Ссылайся на конкретные claims по ID (например A1, B2)'
+    : '';
 
   return `Ты ${ownAlias} в многораундовой экспертной дискуссии.
 Задача: ${topic}
@@ -56,7 +79,7 @@ export function buildFollowUpPrompt({ topic, ownAlias, ownPreviousResponse, othe
 Твой ответ в предыдущем раунде:
 ${ownPreviousResponse}
 
-Ответы других участников из предыдущего раунда:
+${othersLabel}
 
 ${othersBlock}
 
@@ -77,7 +100,7 @@ ${othersBlock}
 Правила:
 - Защити или скорректируй свою позицию на основе аргументов других
 - Честно оцени подход каждого участника
-- Явно укажи согласия и несогласия
+- Явно укажи согласия и несогласия${claimsRule}
 - Скорректируй confidence на основе силы аргументов
 - Ответь ТОЛЬКО JSON-объектом, без markdown`;
 }

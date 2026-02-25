@@ -5,7 +5,8 @@
  * Dependency injection for invoke and evalStore enables testing.
  */
 
-import { buildR1Prompt, buildFollowUpPrompt } from './prompts.js';
+import { buildR1Prompt, buildFollowUpPrompt, formatClaimsBlock } from './prompts.js';
+import { extractClaimsFromResponses } from './claim-extractor.js';
 
 const ALIAS_LETTERS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
 
@@ -102,7 +103,10 @@ export function createRoundOrchestrator(options) {
     timeout = 60000,
     evalStore = null,
     runId: existingRunId = null,
-    invokeFn = null
+    invokeFn = null,
+    enableClaimExtraction = false,
+    claimProvider = 'claude',
+    claimTimeout = 30000
   } = options;
 
   const clampedRounds = Math.max(1, Math.min(4, maxRounds));
@@ -130,6 +134,28 @@ export function createRoundOrchestrator(options) {
       for (let roundNum = 1; roundNum <= clampedRounds; roundNum++) {
         const prevRound = roundHistory[roundHistory.length - 1] || null;
 
+        // Claim extraction between R1 → R2 (CBDP Phase 1)
+        let roundClaims = null;
+        if (enableClaimExtraction && roundNum === 2 && prevRound) {
+          const successfulResponses = prevRound.responses
+            .filter(r => r.status === 'success')
+            .map(r => ({ provider: r.provider, alias: r.alias, response: r.response }));
+
+          if (successfulResponses.length > 0) {
+            try {
+              roundClaims = await extractClaimsFromResponses({
+                responses: successfulResponses,
+                invokeFn: doInvoke,
+                extractionProvider: claimProvider,
+                timeout: claimTimeout
+              });
+              if (roundClaims.size === 0) roundClaims = null;
+            } catch {
+              roundClaims = null;
+            }
+          }
+        }
+
         // Build prompts for this round
         const providerPrompts = new Map();
         for (const provider of providers) {
@@ -155,13 +181,29 @@ export function createRoundOrchestrator(options) {
               continue;
             }
 
+            // Build claims block for others if extraction succeeded
+            let claimsBlockStr = null;
+            if (roundClaims) {
+              const othersClaims = othersResponses
+                .map(r => ({
+                  alias: r.alias,
+                  claims: roundClaims.get(r.alias) || []
+                }))
+                .filter(c => c.claims.length > 0);
+
+              if (othersClaims.length > 0) {
+                claimsBlockStr = formatClaimsBlock(othersClaims);
+              }
+            }
+
             providerPrompts.set(provider, buildFollowUpPrompt({
               topic,
               ownAlias: aliasMap.get(provider),
               ownPreviousResponse: ownPrev.response,
               othersResponses,
               roundNumber: roundNum,
-              totalRounds: clampedRounds
+              totalRounds: clampedRounds,
+              claimsBlock: claimsBlockStr
             }));
           }
         }
@@ -180,7 +222,8 @@ export function createRoundOrchestrator(options) {
         // Collect round responses
         const roundEntry = {
           round: roundNum,
-          responses: []
+          responses: [],
+          claims: roundClaims ? Object.fromEntries(roundClaims) : null
         };
 
         for (const settled of results) {
