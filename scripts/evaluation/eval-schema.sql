@@ -59,3 +59,19 @@ CREATE TABLE IF NOT EXISTS routing_decisions (
 );
 CREATE INDEX IF NOT EXISTS idx_routing_decisions_ts ON routing_decisions(timestamp);
 CREATE INDEX IF NOT EXISTS idx_routing_decisions_provider ON routing_decisions(selected_provider);
+
+-- Round-level responses for multi-round consilium
+CREATE TABLE IF NOT EXISTS round_responses (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  run_id TEXT NOT NULL REFERENCES consilium_runs(run_id),
+  round INTEGER NOT NULL,
+  provider TEXT NOT NULL,
+  alias TEXT,
+  status TEXT DEFAULT 'completed',
+  response_ms INTEGER,
+  response_text TEXT,
+  confidence REAL,
+  position_changed INTEGER DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_round_responses_run ON round_responses(run_id);
+CREATE INDEX IF NOT EXISTS idx_round_responses_round ON round_responses(run_id, round);

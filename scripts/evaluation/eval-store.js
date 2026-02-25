@@ -185,6 +185,26 @@ export function createEvalStore(dataDir = '.data') {
     DELETE FROM routing_decisions WHERE timestamp < ?
   `);
 
+  // ---- Round responses prepared statements ----
+
+  const insertRoundResponseStmt = db.prepare(`
+    INSERT INTO round_responses(run_id, round, provider, alias, status, response_ms, response_text, confidence, position_changed)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+
+  const getRoundResponsesStmt = db.prepare(`
+    SELECT * FROM round_responses WHERE run_id = ? ORDER BY round, provider
+  `);
+
+  const getRoundSummaryStmt = db.prepare(`
+    SELECT round, COUNT(*) as total,
+      SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed,
+      AVG(response_ms) as avg_ms,
+      AVG(confidence) as avg_confidence,
+      SUM(position_changed) as positions_changed
+    FROM round_responses WHERE run_id = ? GROUP BY round ORDER BY round
+  `);
+
   // ---- Store API ----
 
   const store = {
@@ -443,6 +463,44 @@ export function createEvalStore(dataDir = '.data') {
         deleteOldRoutingStmt.run(cutoff);
       } catch (err) {
         console.error('[eval-store] cleanupOldRoutingDecisions failed:', err.message);
+      }
+    },
+
+    /**
+     * Record a provider's response for a specific round.
+     */
+    addRoundResponse(runId, { round, provider, alias, status = 'completed', response_ms = null, response_text = null, confidence = null, position_changed = 0 }) {
+      try {
+        insertRoundResponseStmt.run(
+          runId, round, provider, alias ?? null, status,
+          response_ms, response_text, confidence, position_changed
+        );
+      } catch (err) {
+        console.error('[eval-store] addRoundResponse failed:', err.message);
+      }
+    },
+
+    /**
+     * Get all round responses for a run.
+     */
+    getRoundResponses(runId) {
+      try {
+        return getRoundResponsesStmt.all(runId);
+      } catch (err) {
+        console.error('[eval-store] getRoundResponses failed:', err.message);
+        return [];
+      }
+    },
+
+    /**
+     * Get round-by-round summary for a run.
+     */
+    getRoundSummary(runId) {
+      try {
+        return getRoundSummaryStmt.all(runId);
+      } catch (err) {
+        console.error('[eval-store] getRoundSummary failed:', err.message);
+        return [];
       }
     },
 

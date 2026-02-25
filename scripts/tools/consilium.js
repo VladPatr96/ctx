@@ -16,7 +16,7 @@ const PLUGIN_ROOT = process.env.CLAUDE_PLUGIN_ROOT || join(__dirname, '..', '..'
 const PRESETS_FILE = join(PLUGIN_ROOT, 'consilium.presets.json');
 const AGENTS_DIR = join(PLUGIN_ROOT, 'agents');
 
-export function registerConsiliumTools(server, { getResults, saveResults }) {
+export function registerConsiliumTools(server, { getResults, saveResults, DATA_DIR }) {
 
   server.registerTool(
     'ctx_share_result',
@@ -162,6 +162,100 @@ export function registerConsiliumTools(server, { getResults, saveResults }) {
       return {
         content: [{ type: 'text', text: JSON.stringify(presets, null, 2) }]
       };
+    }
+  );
+
+  // --- ctx_consilium_multi_round ---
+  server.registerTool(
+    'ctx_consilium_multi_round',
+    {
+      description: 'Многораундовый анонимный консилиум. Провайдеры обсуждают тему в нескольких раундах, видя анонимизированные ответы друг друга. R1 — свободный ответ, R2+ — структурированная дискуссия с оценками.',
+      inputSchema: z.object({
+        topic: z.string().describe('Тема для обсуждения'),
+        providers: z.array(z.string()).default(['claude', 'gemini', 'codex']).describe('Список провайдеров'),
+        rounds: z.number().min(1).max(4).default(2).describe('Количество раундов (1-4)'),
+        projectContext: z.string().optional().describe('Контекст проекта'),
+        timeout: z.number().optional().default(60000).describe('Таймаут на провайдера (мс)'),
+        preset: z.string().optional().describe('Пресет из consilium.presets.json (debate-full, debate-fast)')
+      }).shape,
+    },
+    async ({ topic, providers: providersList, rounds, projectContext, timeout, preset }) => {
+      try {
+        // Resolve preset if provided
+        let resolvedProviders = providersList;
+        let resolvedRounds = rounds;
+        if (preset && existsSync(PRESETS_FILE)) {
+          const presets = JSON.parse(readFileSync(PRESETS_FILE, 'utf-8'));
+          const presetConfig = presets[preset];
+          if (presetConfig) {
+            if (presetConfig.providers) resolvedProviders = presetConfig.providers;
+            if (presetConfig.rounds) resolvedRounds = presetConfig.rounds;
+          }
+        }
+
+        // Create eval store (optional)
+        let evalStore = null;
+        if (DATA_DIR) {
+          try {
+            const { createEvalStore } = await import('../evaluation/eval-store.js');
+            evalStore = createEvalStore(DATA_DIR);
+          } catch { /* eval store optional */ }
+        }
+
+        const { createRoundOrchestrator } = await import('../consilium/round-orchestrator.js');
+        const orchestrator = createRoundOrchestrator({
+          topic,
+          providers: resolvedProviders,
+          rounds: resolvedRounds,
+          projectContext: projectContext || '',
+          timeout: timeout || 60000,
+          evalStore
+        });
+
+        const result = await orchestrator.execute();
+
+        // Complete eval run
+        if (evalStore && result.runId) {
+          evalStore.completeRun(result.runId, {
+            rounds: result.rounds.length,
+            decision_summary: `Multi-round consilium: ${result.rounds.length} rounds, ${resolvedProviders.length} providers`
+          });
+        }
+
+        // Format result for MCP response
+        const aliasMapObj = Object.fromEntries(result.aliasMap);
+        const output = {
+          topic: result.topic,
+          providers: result.providers,
+          rounds_completed: result.rounds.length,
+          alias_map: aliasMapObj,
+          total_duration_ms: result.totalDurationMs,
+          run_id: result.runId,
+          rounds: result.rounds.map(r => ({
+            round: r.round,
+            responses: r.responses.map(resp => ({
+              alias: resp.alias,
+              provider: resp.provider,
+              status: resp.status,
+              response: resp.response?.slice(0, 5000),
+              response_ms: resp.response_ms
+            }))
+          }))
+        };
+
+        // Close eval store
+        if (evalStore) {
+          try { evalStore.close(); } catch { /* ignore */ }
+        }
+
+        return {
+          content: [{ type: 'text', text: JSON.stringify(output, null, 2) }]
+        };
+      } catch (err) {
+        return {
+          content: [{ type: 'text', text: `Error: ${err.message}` }]
+        };
+      }
     }
   );
 

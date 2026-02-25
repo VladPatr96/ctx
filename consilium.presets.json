@@ -18,5 +18,15 @@
   "agents-full": {
     "description": "Все агенты",
     "agents": ["architect", "researcher", "reviewer", "tester", "implementer"]
+  },
+  "debate-full": {
+    "description": "Полный дебат — 3 раунда",
+    "providers": ["claude", "gemini", "codex"],
+    "rounds": 3
+  },
+  "debate-fast": {
+    "description": "Быстрый дебат — 2 раунда",
+    "providers": ["claude", "gemini"],
+    "rounds": 2
   }
 }

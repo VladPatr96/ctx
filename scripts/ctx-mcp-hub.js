@@ -95,7 +95,7 @@ const server = new McpServer({ name: 'ctx-hub', version: '0.3.0' });
 // Register domain tools
 registerSessionTools(server, { getSession, saveSession });
 registerKnowledgeTools(server, { runCommand, readJson, DATA_DIR, GITHUB_OWNER, knowledgeStore, kbSync });
-registerConsiliumTools(server, { getResults, saveResults });
+registerConsiliumTools(server, { getResults, saveResults, DATA_DIR });
 registerPipelineTools(server);
 registerAgentTools(server);
 registerEvaluationTools(server, { DATA_DIR });
