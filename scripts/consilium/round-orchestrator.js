@@ -5,7 +5,7 @@
  * Dependency injection for invoke and evalStore enables testing.
  */
 
-import { buildR1Prompt, buildFollowUpPrompt, formatClaimsBlock } from './prompts.js';
+import { buildR1Prompt, buildFollowUpPrompt, buildStructuredFollowUpPrompt, formatClaimsBlock } from './prompts.js';
 import { extractClaimsFromResponses } from './claim-extractor.js';
 
 const ALIAS_LETTERS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
@@ -81,6 +81,79 @@ export function parseStructuredResponse(rawResponse) {
   }
 }
 
+const VALID_STANCES = ['agree', 'partial_agree', 'disagree', 'new_proposal'];
+const VALID_CHALLENGE_TYPES = ['weaken', 'contradict'];
+const VALID_CLAIM_TYPES = ['fact', 'opinion', 'risk', 'requirement'];
+
+/**
+ * Parse structured R2+ response (CBDP Phase 2).
+ * @param {string} rawResponse
+ * @param {string} ownAliasPrefix — e.g. 'B' (letter only)
+ * @param {number} [roundNumber=2]
+ * @returns {object}
+ */
+export function parseStructuredResponseV2(rawResponse, ownAliasPrefix, roundNumber = 2) {
+  const fallback = {
+    stance: 'partial_agree',
+    confidence: 0.5,
+    accepts: [],
+    challenges: [],
+    new_claims: [],
+    trust_scores: {}
+  };
+
+  if (!rawResponse || typeof rawResponse !== 'string') return fallback;
+
+  let jsonStr = rawResponse.trim();
+  const jsonMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (jsonMatch) jsonStr = jsonMatch[1].trim();
+
+  const firstBrace = jsonStr.indexOf('{');
+  const lastBrace = jsonStr.lastIndexOf('}');
+  if (firstBrace !== -1 && lastBrace > firstBrace) {
+    jsonStr = jsonStr.slice(firstBrace, lastBrace + 1);
+  }
+
+  try {
+    const parsed = JSON.parse(jsonStr);
+
+    const stance = VALID_STANCES.includes(parsed.stance) ? parsed.stance : 'partial_agree';
+    const confidence = typeof parsed.confidence === 'number'
+      ? Math.max(0, Math.min(1, parsed.confidence))
+      : 0.5;
+    const accepts = Array.isArray(parsed.accepts)
+      ? parsed.accepts.filter(a => typeof a === 'string')
+      : [];
+
+    const challenges = Array.isArray(parsed.challenges)
+      ? parsed.challenges.map(c => ({
+          target: c?.target || '',
+          type: VALID_CHALLENGE_TYPES.includes(c?.type) ? c.type : 'weaken',
+          argument: c?.argument || ''
+        }))
+      : [];
+
+    const rawNewClaims = Array.isArray(parsed.new_claims) ? parsed.new_claims : [];
+    const new_claims = rawNewClaims.map((c, idx) => ({
+      id: `${ownAliasPrefix}${roundNumber}-${idx + 1}`,
+      text: c?.text || '',
+      type: VALID_CLAIM_TYPES.includes(c?.type) ? c.type : 'opinion'
+    }));
+
+    const trust_scores = (parsed.trust_scores && typeof parsed.trust_scores === 'object' && !Array.isArray(parsed.trust_scores))
+      ? Object.fromEntries(
+          Object.entries(parsed.trust_scores)
+            .filter(([, v]) => typeof v === 'number')
+            .map(([k, v]) => [k, Math.max(0, Math.min(1, v))])
+        )
+      : {};
+
+    return { stance, confidence, accepts, challenges, new_claims, trust_scores };
+  } catch {
+    return fallback;
+  }
+}
+
 /**
  * Create a multi-round consilium orchestrator.
  * @param {object} options
@@ -106,7 +179,8 @@ export function createRoundOrchestrator(options) {
     invokeFn = null,
     enableClaimExtraction = false,
     claimProvider = 'claude',
-    claimTimeout = 30000
+    claimTimeout = 30000,
+    enableStructuredResponse = false
   } = options;
 
   const clampedRounds = Math.max(1, Math.min(4, maxRounds));
@@ -120,6 +194,10 @@ export function createRoundOrchestrator(options) {
       const aliasMap = createAliasMap(providers);
       const roundHistory = [];
       let runId = existingRunId;
+
+      // Phase 2: accumulated claims and trust scores
+      const accumulatedClaims = new Map(); // alias → [...claims]
+      const trustScoreHistory = new Map(); // alias → [{round, scores}]
 
       // Start eval run if store provided and no existing runId
       if (evalStore && !runId) {
@@ -196,15 +274,47 @@ export function createRoundOrchestrator(options) {
               }
             }
 
-            providerPrompts.set(provider, buildFollowUpPrompt({
-              topic,
-              ownAlias: aliasMap.get(provider),
-              ownPreviousResponse: ownPrev.response,
-              othersResponses,
-              roundNumber: roundNum,
-              totalRounds: clampedRounds,
-              claimsBlock: claimsBlockStr
-            }));
+            // Seed accumulatedClaims from R1 extraction (once)
+            if (roundClaims && accumulatedClaims.size === 0) {
+              for (const [alias, claims] of roundClaims) {
+                accumulatedClaims.set(alias, [...claims]);
+              }
+            }
+
+            if (enableStructuredResponse) {
+              // Build allClaims block from accumulated claims
+              let allClaimsStr = null;
+              if (accumulatedClaims.size > 0) {
+                const allClaimsArr = [...accumulatedClaims.entries()]
+                  .filter(([alias]) => alias !== aliasMap.get(provider))
+                  .map(([alias, claims]) => ({ alias, claims }))
+                  .filter(c => c.claims.length > 0);
+                if (allClaimsArr.length > 0) {
+                  allClaimsStr = formatClaimsBlock(allClaimsArr);
+                }
+              }
+
+              providerPrompts.set(provider, buildStructuredFollowUpPrompt({
+                topic,
+                ownAlias: aliasMap.get(provider),
+                ownPreviousResponse: ownPrev.response,
+                othersResponses,
+                roundNumber: roundNum,
+                totalRounds: clampedRounds,
+                claimsBlock: claimsBlockStr,
+                allClaims: allClaimsStr
+              }));
+            } else {
+              providerPrompts.set(provider, buildFollowUpPrompt({
+                topic,
+                ownAlias: aliasMap.get(provider),
+                ownPreviousResponse: ownPrev.response,
+                othersResponses,
+                roundNumber: roundNum,
+                totalRounds: clampedRounds,
+                claimsBlock: claimsBlockStr
+              }));
+            }
           }
         }
 
@@ -223,24 +333,52 @@ export function createRoundOrchestrator(options) {
         const roundEntry = {
           round: roundNum,
           responses: [],
-          claims: roundClaims ? Object.fromEntries(roundClaims) : null
+          claims: roundClaims ? Object.fromEntries(roundClaims) : null,
+          new_claims: null
         };
+
+        const roundNewClaims = new Map(); // alias → new_claims from this round
 
         for (const settled of results) {
           if (settled.status === 'fulfilled') {
             const { provider, result, elapsed } = settled.value;
             const alias = aliasMap.get(provider);
             const isSuccess = result.status === 'success';
+            const aliasLetter = alias.replace('Participant ', '');
 
             // Detect position change for R2+
             let positionChanged = 0;
+            let parsedV2 = null;
             if (roundNum > 1 && isSuccess && prevRound) {
               const prevResponse = prevRound.responses.find(r => r.provider === provider);
               if (prevResponse?.status === 'success') {
-                const parsed = parseStructuredResponse(result.response);
-                const prevText = prevResponse.response || '';
-                // Simple heuristic: if current_position differs from previous response
-                positionChanged = parsed.current_position !== prevText ? 1 : 0;
+                if (enableStructuredResponse) {
+                  parsedV2 = parseStructuredResponseV2(result.response, aliasLetter, roundNum);
+                  positionChanged = parsedV2.stance !== 'agree' ? 1 : 0;
+                } else {
+                  const parsed = parseStructuredResponse(result.response);
+                  const prevText = prevResponse.response || '';
+                  positionChanged = parsed.current_position !== prevText ? 1 : 0;
+                }
+              }
+            }
+
+            // Accumulate new_claims and trust_scores for Phase 2
+            if (enableStructuredResponse && roundNum > 1 && isSuccess) {
+              if (!parsedV2) parsedV2 = parseStructuredResponseV2(result.response, aliasLetter, roundNum);
+
+              // Accumulate new_claims
+              if (parsedV2.new_claims.length > 0) {
+                roundNewClaims.set(alias, parsedV2.new_claims);
+                const existing = accumulatedClaims.get(alias) || [];
+                accumulatedClaims.set(alias, [...existing, ...parsedV2.new_claims]);
+              }
+
+              // Accumulate trust_scores
+              if (Object.keys(parsedV2.trust_scores).length > 0) {
+                const history = trustScoreHistory.get(alias) || [];
+                history.push({ round: roundNum, scores: parsedV2.trust_scores });
+                trustScoreHistory.set(alias, history);
               }
             }
 
@@ -257,6 +395,11 @@ export function createRoundOrchestrator(options) {
             // Record in eval store
             if (evalStore) {
               try {
+                const confidence = isSuccess && roundNum > 1
+                  ? (enableStructuredResponse
+                      ? (parsedV2 || parseStructuredResponseV2(result.response, aliasLetter, roundNum)).confidence
+                      : (parseStructuredResponse(result.response).confidence ?? null))
+                  : null;
                 evalStore.addRoundResponse(runId, {
                   round: roundNum,
                   provider,
@@ -264,9 +407,7 @@ export function createRoundOrchestrator(options) {
                   status: entry.status === 'success' ? 'completed' : entry.status,
                   response_ms: elapsed,
                   response_text: entry.response?.slice(0, 10000) || null,
-                  confidence: isSuccess && roundNum > 1
-                    ? (parseStructuredResponse(result.response).confidence ?? null)
-                    : null,
+                  confidence,
                   position_changed: positionChanged
                 });
               } catch {
@@ -287,12 +428,16 @@ export function createRoundOrchestrator(options) {
           }
         }
 
+        if (roundNewClaims.size > 0) {
+          roundEntry.new_claims = Object.fromEntries(roundNewClaims);
+        }
+
         roundHistory.push(roundEntry);
       }
 
       const totalDurationMs = Date.now() - startTime;
 
-      return {
+      const result = {
         topic,
         providers,
         rounds: roundHistory,
@@ -300,6 +445,35 @@ export function createRoundOrchestrator(options) {
         totalDurationMs,
         runId
       };
+
+      // Phase 2: add structured data
+      if (enableStructuredResponse) {
+        result.structured = true;
+        result.allClaims = Object.fromEntries(
+          [...accumulatedClaims.entries()].map(([alias, claims]) => [alias, claims])
+        );
+
+        // Aggregate trust scores: average per alias pair across rounds
+        const aggregated = {};
+        for (const [fromAlias, history] of trustScoreHistory) {
+          aggregated[fromAlias] = {};
+          const allTargets = new Set();
+          for (const { scores } of history) {
+            for (const target of Object.keys(scores)) allTargets.add(target);
+          }
+          for (const target of allTargets) {
+            const values = history
+              .map(h => h.scores[target])
+              .filter(v => typeof v === 'number');
+            if (values.length > 0) {
+              aggregated[fromAlias][target] = +(values.reduce((a, b) => a + b, 0) / values.length).toFixed(2);
+            }
+          }
+        }
+        result.aggregatedTrustScores = aggregated;
+      }
+
+      return result;
     }
   };
 }

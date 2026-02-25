@@ -3,11 +3,13 @@ import assert from 'node:assert/strict';
 import {
   createAliasMap,
   parseStructuredResponse,
+  parseStructuredResponseV2,
   createRoundOrchestrator
 } from '../scripts/consilium/round-orchestrator.js';
 import {
   buildR1Prompt,
   buildFollowUpPrompt,
+  buildStructuredFollowUpPrompt,
   buildSynthesisPrompt,
   formatAnonymizedResponses,
   formatClaimsBlock
@@ -520,4 +522,447 @@ test('orchestrator: enableClaimExtraction=false (default), no extraction calls',
   // No extraction prompts
   const extractionCalls = invokeCalls.filter(c => c.prompt.includes('извлеки'));
   assert.equal(extractionCalls.length, 0, 'no extraction should happen');
+});
+
+// ==== CBDP Phase 2: parseStructuredResponseV2 ====
+
+test('parseStructuredResponseV2: valid JSON → correct parsing', () => {
+  const json = JSON.stringify({
+    stance: 'disagree',
+    confidence: 0.85,
+    accepts: ['A1', 'C2'],
+    challenges: [{ target: 'A3', type: 'contradict', argument: 'not valid' }],
+    new_claims: [{ text: 'new idea', type: 'opinion' }],
+    trust_scores: { A: 0.9, C: 0.6 }
+  });
+  const result = parseStructuredResponseV2(json, 'B', 2);
+  assert.equal(result.stance, 'disagree');
+  assert.equal(result.confidence, 0.85);
+  assert.deepEqual(result.accepts, ['A1', 'C2']);
+  assert.equal(result.challenges.length, 1);
+  assert.equal(result.challenges[0].target, 'A3');
+  assert.equal(result.challenges[0].type, 'contradict');
+  assert.equal(result.new_claims.length, 1);
+  assert.equal(result.new_claims[0].id, 'B2-1');
+  assert.equal(result.new_claims[0].text, 'new idea');
+  assert.equal(result.new_claims[0].type, 'opinion');
+  assert.equal(result.trust_scores.A, 0.9);
+  assert.equal(result.trust_scores.C, 0.6);
+});
+
+test('parseStructuredResponseV2: invalid stance → default partial_agree', () => {
+  const json = JSON.stringify({ stance: 'maybe', confidence: 0.7, accepts: [], challenges: [], new_claims: [], trust_scores: {} });
+  const result = parseStructuredResponseV2(json, 'A', 2);
+  assert.equal(result.stance, 'partial_agree');
+});
+
+test('parseStructuredResponseV2: invalid challenge type → default weaken', () => {
+  const json = JSON.stringify({
+    stance: 'disagree',
+    confidence: 0.7,
+    accepts: [],
+    challenges: [{ target: 'A1', type: 'invalid_type', argument: 'test' }],
+    new_claims: [],
+    trust_scores: {}
+  });
+  const result = parseStructuredResponseV2(json, 'B', 2);
+  assert.equal(result.challenges[0].type, 'weaken');
+});
+
+test('parseStructuredResponseV2: new_claims get correct IDs (prefix + round)', () => {
+  const json = JSON.stringify({
+    stance: 'new_proposal',
+    confidence: 0.9,
+    accepts: [],
+    challenges: [],
+    new_claims: [
+      { text: 'first', type: 'fact' },
+      { text: 'second', type: 'risk' },
+      { text: 'third', type: 'requirement' }
+    ],
+    trust_scores: {}
+  });
+  const result = parseStructuredResponseV2(json, 'C', 3);
+  assert.equal(result.new_claims[0].id, 'C3-1');
+  assert.equal(result.new_claims[1].id, 'C3-2');
+  assert.equal(result.new_claims[2].id, 'C3-3');
+  assert.equal(result.new_claims[0].type, 'fact');
+  assert.equal(result.new_claims[1].type, 'risk');
+  assert.equal(result.new_claims[2].type, 'requirement');
+});
+
+test('parseStructuredResponseV2: invalid JSON → graceful fallback', () => {
+  const result = parseStructuredResponseV2('not json at all', 'A', 2);
+  assert.equal(result.stance, 'partial_agree');
+  assert.equal(result.confidence, 0.5);
+  assert.deepEqual(result.accepts, []);
+  assert.deepEqual(result.challenges, []);
+  assert.deepEqual(result.new_claims, []);
+  assert.deepEqual(result.trust_scores, {});
+});
+
+test('parseStructuredResponseV2: JSON in markdown code block', () => {
+  const input = '```json\n{"stance": "agree", "confidence": 0.95, "accepts": ["A1"], "challenges": [], "new_claims": [], "trust_scores": {"A": 0.8}}\n```';
+  const result = parseStructuredResponseV2(input, 'B', 2);
+  assert.equal(result.stance, 'agree');
+  assert.equal(result.confidence, 0.95);
+  assert.deepEqual(result.accepts, ['A1']);
+  assert.equal(result.trust_scores.A, 0.8);
+});
+
+test('parseStructuredResponseV2: null/undefined → defaults', () => {
+  const r1 = parseStructuredResponseV2(null, 'A', 2);
+  assert.equal(r1.stance, 'partial_agree');
+  assert.equal(r1.confidence, 0.5);
+  const r2 = parseStructuredResponseV2(undefined, 'A', 2);
+  assert.equal(r2.stance, 'partial_agree');
+});
+
+test('parseStructuredResponseV2: confidence clamped to 0-1', () => {
+  const json = JSON.stringify({ stance: 'agree', confidence: 1.5, accepts: [], challenges: [], new_claims: [], trust_scores: {} });
+  const result = parseStructuredResponseV2(json, 'A', 2);
+  assert.equal(result.confidence, 1.0);
+  const json2 = JSON.stringify({ stance: 'agree', confidence: -0.5, accepts: [], challenges: [], new_claims: [], trust_scores: {} });
+  const result2 = parseStructuredResponseV2(json2, 'A', 2);
+  assert.equal(result2.confidence, 0);
+});
+
+test('parseStructuredResponseV2: invalid new_claims type → default opinion', () => {
+  const json = JSON.stringify({
+    stance: 'agree',
+    confidence: 0.8,
+    accepts: [],
+    challenges: [],
+    new_claims: [{ text: 'claim', type: 'bogus' }],
+    trust_scores: {}
+  });
+  const result = parseStructuredResponseV2(json, 'A', 2);
+  assert.equal(result.new_claims[0].type, 'opinion');
+});
+
+// ==== buildStructuredFollowUpPrompt ====
+
+test('buildStructuredFollowUpPrompt: includes topic and ownAlias', () => {
+  const prompt = buildStructuredFollowUpPrompt({
+    topic: 'test topic',
+    ownAlias: 'Participant B',
+    ownPreviousResponse: 'my prev response',
+    othersResponses: [{ alias: 'Participant A', response: 'resp A' }],
+    roundNumber: 2,
+    totalRounds: 3,
+    claimsBlock: null,
+    allClaims: null
+  });
+  assert.ok(prompt.includes('test topic'));
+  assert.ok(prompt.includes('Participant B'));
+  assert.ok(prompt.includes('my prev response'));
+  assert.ok(prompt.includes('раунд 2 из 3'));
+});
+
+test('buildStructuredFollowUpPrompt: includes stance/accepts/challenges format', () => {
+  const prompt = buildStructuredFollowUpPrompt({
+    topic: 'test',
+    ownAlias: 'Participant B',
+    ownPreviousResponse: 'prev',
+    othersResponses: [{ alias: 'Participant A', response: 'resp A' }],
+    roundNumber: 2,
+    totalRounds: 3,
+    claimsBlock: null,
+    allClaims: null
+  });
+  assert.ok(prompt.includes('"stance"'));
+  assert.ok(prompt.includes('"accepts"'));
+  assert.ok(prompt.includes('"challenges"'));
+  assert.ok(prompt.includes('"new_claims"'));
+  assert.ok(prompt.includes('"trust_scores"'));
+  assert.ok(prompt.includes('weaken|contradict'));
+});
+
+test('buildStructuredFollowUpPrompt: uses allClaims when provided', () => {
+  const allClaims = '--- Participant A ---\n  [A1] (fact) some claim\n  [A2-1] (opinion) new claim from R2';
+  const prompt = buildStructuredFollowUpPrompt({
+    topic: 'test',
+    ownAlias: 'Participant B',
+    ownPreviousResponse: 'prev',
+    othersResponses: [{ alias: 'Participant A', response: 'resp A' }],
+    roundNumber: 3,
+    totalRounds: 3,
+    claimsBlock: null,
+    allClaims
+  });
+  assert.ok(prompt.includes('[A1] (fact) some claim'));
+  assert.ok(prompt.includes('[A2-1] (opinion) new claim from R2'));
+  assert.ok(prompt.includes('Все claims'));
+});
+
+test('buildStructuredFollowUpPrompt: does not include real provider names', () => {
+  const prompt = buildStructuredFollowUpPrompt({
+    topic: 'test',
+    ownAlias: 'Participant B',
+    ownPreviousResponse: 'prev',
+    othersResponses: [
+      { alias: 'Participant A', response: 'resp A' },
+      { alias: 'Participant C', response: 'resp C' }
+    ],
+    roundNumber: 2,
+    totalRounds: 3,
+    claimsBlock: null,
+    allClaims: null
+  });
+  assert.ok(!prompt.includes('claude'));
+  assert.ok(!prompt.includes('gemini'));
+  assert.ok(!prompt.includes('codex'));
+});
+
+// ==== Orchestrator with enableStructuredResponse=true ====
+
+test('orchestrator: enableStructuredResponse=true, 2 rounds — R2 uses structured prompt', async () => {
+  const invokeCalls = [];
+  const mockInvoke = async (provider, prompt) => {
+    invokeCalls.push({ provider, prompt });
+    if (prompt.includes('извлеки')) {
+      return { status: 'success', response: JSON.stringify([{ text: 'claim', type: 'fact' }]) };
+    }
+    if (!prompt.includes('раунд')) {
+      return { status: 'success', response: `R1 from ${provider}` };
+    }
+    return {
+      status: 'success',
+      response: JSON.stringify({
+        stance: 'partial_agree',
+        confidence: 0.7,
+        accepts: ['A1'],
+        challenges: [{ target: 'B1', type: 'weaken', argument: 'weak point' }],
+        new_claims: [{ text: 'new insight', type: 'opinion' }],
+        trust_scores: { A: 0.8, B: 0.6 }
+      })
+    };
+  };
+
+  const orch = createRoundOrchestrator({
+    topic: 'test structured',
+    providers: ['alpha', 'beta'],
+    rounds: 2,
+    invokeFn: mockInvoke,
+    enableClaimExtraction: true,
+    enableStructuredResponse: true,
+    claimProvider: 'alpha'
+  });
+
+  const result = await orch.execute();
+  assert.equal(result.rounds.length, 2);
+  assert.equal(result.structured, true);
+
+  // R2 prompts should contain structured format markers
+  const r2Prompts = invokeCalls.filter(c => c.prompt.includes('раунд'));
+  for (const p of r2Prompts) {
+    assert.ok(p.prompt.includes('"stance"'), 'R2 prompt should contain stance format');
+    assert.ok(p.prompt.includes('"trust_scores"'), 'R2 prompt should contain trust_scores format');
+  }
+});
+
+test('orchestrator: enableStructuredResponse=true, 3 rounds — new_claims accumulate', async () => {
+  let roundCounter = 0;
+  const mockInvoke = async (provider, prompt) => {
+    if (prompt.includes('извлеки')) {
+      return { status: 'success', response: JSON.stringify([{ text: 'R1 claim', type: 'fact' }]) };
+    }
+    if (!prompt.includes('раунд')) {
+      roundCounter++;
+      return { status: 'success', response: `R1 from ${provider}` };
+    }
+    // R2 and R3 responses with new_claims
+    return {
+      status: 'success',
+      response: JSON.stringify({
+        stance: 'partial_agree',
+        confidence: 0.75,
+        accepts: [],
+        challenges: [],
+        new_claims: [{ text: `new from ${provider}`, type: 'opinion' }],
+        trust_scores: { A: 0.7, B: 0.8 }
+      })
+    };
+  };
+
+  const orch = createRoundOrchestrator({
+    topic: 'test accumulation',
+    providers: ['x', 'y'],
+    rounds: 3,
+    invokeFn: mockInvoke,
+    enableClaimExtraction: true,
+    enableStructuredResponse: true,
+    claimProvider: 'x'
+  });
+
+  const result = await orch.execute();
+  assert.equal(result.rounds.length, 3);
+  assert.ok(result.allClaims, 'should have allClaims');
+
+  // allClaims should contain R1 claims + accumulated new_claims
+  const allClaimsValues = Object.values(result.allClaims);
+  assert.ok(allClaimsValues.length > 0, 'should have claims for at least one participant');
+
+  // R3 prompt should contain accumulated claims from R2
+  // (allClaims block is only in R3+ structured prompts)
+  assert.ok(result.rounds[2].responses.every(r => r.status === 'success'));
+});
+
+test('orchestrator: enableStructuredResponse=true — trust_scores aggregated', async () => {
+  const mockInvoke = async (provider, prompt) => {
+    if (prompt.includes('извлеки')) {
+      return { status: 'success', response: JSON.stringify([{ text: 'claim', type: 'fact' }]) };
+    }
+    if (!prompt.includes('раунд')) {
+      return { status: 'success', response: `R1 from ${provider}` };
+    }
+    // Different trust scores per round
+    const scores = provider === 'x' ? { B: 0.8 } : { A: 0.6 };
+    return {
+      status: 'success',
+      response: JSON.stringify({
+        stance: 'agree',
+        confidence: 0.9,
+        accepts: [],
+        challenges: [],
+        new_claims: [],
+        trust_scores: scores
+      })
+    };
+  };
+
+  const orch = createRoundOrchestrator({
+    topic: 'test trust',
+    providers: ['x', 'y'],
+    rounds: 3,
+    invokeFn: mockInvoke,
+    enableClaimExtraction: true,
+    enableStructuredResponse: true,
+    claimProvider: 'x'
+  });
+
+  const result = await orch.execute();
+  assert.ok(result.aggregatedTrustScores, 'should have aggregatedTrustScores');
+  // Each provider should have trust entries
+  const aliases = [...result.aliasMap.values()];
+  assert.ok(typeof result.aggregatedTrustScores === 'object');
+});
+
+test('orchestrator: enableStructuredResponse=true — fallback on invalid JSON', async () => {
+  const mockInvoke = async (provider, prompt) => {
+    if (prompt.includes('извлеки')) {
+      return { status: 'success', response: JSON.stringify([{ text: 'claim', type: 'fact' }]) };
+    }
+    if (!prompt.includes('раунд')) {
+      return { status: 'success', response: `R1 from ${provider}` };
+    }
+    // Return invalid JSON for R2
+    return { status: 'success', response: 'This is not JSON at all' };
+  };
+
+  const orch = createRoundOrchestrator({
+    topic: 'test fallback',
+    providers: ['a', 'b'],
+    rounds: 2,
+    invokeFn: mockInvoke,
+    enableClaimExtraction: true,
+    enableStructuredResponse: true,
+    claimProvider: 'a'
+  });
+
+  // Should not throw
+  const result = await orch.execute();
+  assert.equal(result.rounds.length, 2);
+  assert.equal(result.structured, true);
+  // All responses should still be success (invalid JSON is handled gracefully)
+  for (const r of result.rounds[1].responses) {
+    assert.equal(r.status, 'success');
+  }
+});
+
+test('orchestrator: enableStructuredResponse=false → old behavior (no regression)', async () => {
+  const invokeCalls = [];
+  const mockInvoke = async (provider, prompt) => {
+    invokeCalls.push({ provider, prompt });
+    if (!prompt.includes('раунд')) {
+      return { status: 'success', response: `R1 from ${provider}` };
+    }
+    return { status: 'success', response: JSON.stringify({ current_position: 'pos', evaluations: [], agreements: [], disagreements: [], confidence: 0.8 }) };
+  };
+
+  const orch = createRoundOrchestrator({
+    topic: 'test old behavior',
+    providers: ['a', 'b'],
+    rounds: 2,
+    invokeFn: mockInvoke,
+    enableStructuredResponse: false
+  });
+
+  const result = await orch.execute();
+  assert.equal(result.rounds.length, 2);
+  assert.equal(result.structured, undefined, 'should not have structured flag');
+  assert.equal(result.aggregatedTrustScores, undefined, 'should not have trust scores');
+  assert.equal(result.allClaims, undefined, 'should not have allClaims');
+
+  // R2 prompts should use old format (current_position)
+  const r2Prompts = invokeCalls.filter(c => c.prompt.includes('раунд'));
+  for (const p of r2Prompts) {
+    assert.ok(p.prompt.includes('current_position'), 'R2 prompt should use old format');
+    assert.ok(!p.prompt.includes('"stance"'), 'R2 prompt should NOT contain structured format');
+  }
+});
+
+test('orchestrator: enableStructuredResponse=true + enableClaimExtraction=true — both work together', async () => {
+  const invokeCalls = [];
+  const mockInvoke = async (provider, prompt) => {
+    invokeCalls.push({ provider, prompt });
+    if (prompt.includes('извлеки')) {
+      return { status: 'success', response: JSON.stringify([{ text: 'extracted claim', type: 'fact' }]) };
+    }
+    if (!prompt.includes('раунд')) {
+      return { status: 'success', response: `R1 from ${provider}` };
+    }
+    return {
+      status: 'success',
+      response: JSON.stringify({
+        stance: 'disagree',
+        confidence: 0.65,
+        accepts: ['A1'],
+        challenges: [{ target: 'B1', type: 'contradict', argument: 'wrong' }],
+        new_claims: [{ text: 'better approach', type: 'opinion' }],
+        trust_scores: { A: 0.7 }
+      })
+    };
+  };
+
+  const orch = createRoundOrchestrator({
+    topic: 'test both',
+    providers: ['p1', 'p2'],
+    rounds: 2,
+    invokeFn: mockInvoke,
+    enableClaimExtraction: true,
+    enableStructuredResponse: true,
+    claimProvider: 'p1'
+  });
+
+  const result = await orch.execute();
+  assert.equal(result.rounds.length, 2);
+  assert.equal(result.structured, true);
+
+  // R2 should have claims from extraction (Phase 1)
+  assert.ok(result.rounds[1].claims !== null, 'R2 should have extracted claims');
+
+  // Result should have Phase 2 data
+  assert.ok(result.aggregatedTrustScores, 'should have aggregated trust scores');
+  assert.ok(result.allClaims, 'should have allClaims');
+
+  // R2 prompts should contain structured format
+  const r2Prompts = invokeCalls.filter(c => c.prompt.includes('раунд'));
+  for (const p of r2Prompts) {
+    assert.ok(p.prompt.includes('"stance"'), 'should use structured prompt');
+  }
+
+  // Extraction should have been called
+  const extractionCalls = invokeCalls.filter(c => c.prompt.includes('извлеки'));
+  assert.ok(extractionCalls.length > 0, 'extraction should have been called');
 });

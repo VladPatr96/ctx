@@ -106,6 +106,71 @@ ${othersBlock}
 }
 
 /**
+ * Build a structured R2+ prompt (CBDP Phase 2).
+ * Requests stance/accepts/challenges/new_claims/trust_scores format.
+ * @param {object} params
+ * @param {string} params.topic
+ * @param {string} params.ownAlias
+ * @param {string} params.ownPreviousResponse
+ * @param {Array<{alias: string, response: string}>} params.othersResponses
+ * @param {number} params.roundNumber
+ * @param {number} params.totalRounds
+ * @param {string} [params.claimsBlock] — formatted claims from R1 extraction
+ * @param {string} [params.allClaims] — all accumulated claims (R1 + new_claims from prior rounds)
+ * @returns {string}
+ */
+export function buildStructuredFollowUpPrompt({
+  topic, ownAlias, ownPreviousResponse, othersResponses,
+  roundNumber, totalRounds, claimsBlock, allClaims
+}) {
+  const claimsSection = allClaims || claimsBlock || formatAnonymizedResponses(othersResponses);
+  const claimsLabel = (allClaims || claimsBlock)
+    ? 'Все claims участников (R1 + накопленные из предыдущих раундов):'
+    : 'Ответы других участников из предыдущего раунда:';
+
+  const participantAliases = othersResponses.map(r => {
+    const letter = r.alias.replace('Participant ', '');
+    return `"${letter}": 0.0-1.0`;
+  }).join(', ');
+
+  return `Ты ${ownAlias} в многораундовой экспертной дискуссии.
+Задача: ${topic}
+
+Твой ответ в предыдущем раунде:
+${ownPreviousResponse}
+
+${claimsLabel}
+
+${claimsSection}
+
+---
+Это раунд ${roundNumber} из ${totalRounds}.
+Проанализируй позиции и claims коллег. Ответь СТРОГО JSON-объектом:
+
+{
+  "stance": "agree|partial_agree|disagree|new_proposal",
+  "confidence": 0.0-1.0,
+  "accepts": ["A1", "C2"],
+  "challenges": [
+    {"target": "A3", "type": "weaken|contradict", "argument": "Почему этот claim слаб или неверен"}
+  ],
+  "new_claims": [
+    {"text": "Новое утверждение на основе дискуссии", "type": "fact|opinion|risk|requirement"}
+  ],
+  "trust_scores": {${participantAliases}}
+}
+
+Правила:
+- stance: твоя общая позиция по итогам раунда
+- accepts: список ID claims, с которыми ты согласен
+- challenges: ОБЯЗАТЕЛЬНО укажи хотя бы один challenge если stance != "agree". type: "weaken" (аргумент ослабляет claim) или "contradict" (прямое противоречие)
+- new_claims: новые утверждения, которые ты вводишь в дискуссию (type: fact/opinion/risk/requirement)
+- trust_scores: оценка компетентности каждого коллеги (0.0-1.0) по качеству их аргументов
+- Ссылайся на конкретные claims по ID (например A1, B2)
+- Ответь ТОЛЬКО JSON-объектом, без markdown`;
+}
+
+/**
  * Build the final synthesis prompt for the lead synthesizer.
  * @param {object} params
  * @param {string} params.topic

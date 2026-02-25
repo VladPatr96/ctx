@@ -178,15 +178,17 @@ export function registerConsiliumTools(server, { getResults, saveResults, DATA_D
         timeout: z.number().optional().default(60000).describe('Таймаут на провайдера (мс)'),
         preset: z.string().optional().describe('Пресет из consilium.presets.json (debate-full, debate-fast, debate-claims)'),
         enableClaimExtraction: z.boolean().optional().default(false).describe('Включить claim extraction между раундами (CBDP)'),
-        claimProvider: z.string().optional().default('claude').describe('Провайдер для claim extraction')
+        claimProvider: z.string().optional().default('claude').describe('Провайдер для claim extraction'),
+        enableStructuredResponse: z.boolean().optional().default(false).describe('Включить structured response format (CBDP Phase 2)')
       }).shape,
     },
-    async ({ topic, providers: providersList, rounds, projectContext, timeout, preset, enableClaimExtraction, claimProvider }) => {
+    async ({ topic, providers: providersList, rounds, projectContext, timeout, preset, enableClaimExtraction, claimProvider, enableStructuredResponse }) => {
       try {
         // Resolve preset if provided
         let resolvedProviders = providersList;
         let resolvedRounds = rounds;
         let resolvedClaimExtraction = enableClaimExtraction;
+        let resolvedStructuredResponse = enableStructuredResponse;
         if (preset && existsSync(PRESETS_FILE)) {
           const presets = JSON.parse(readFileSync(PRESETS_FILE, 'utf-8'));
           const presetConfig = presets[preset];
@@ -195,6 +197,9 @@ export function registerConsiliumTools(server, { getResults, saveResults, DATA_D
             if (presetConfig.rounds) resolvedRounds = presetConfig.rounds;
             if (presetConfig.enableClaimExtraction !== undefined && !enableClaimExtraction) {
               resolvedClaimExtraction = presetConfig.enableClaimExtraction;
+            }
+            if (presetConfig.enableStructuredResponse !== undefined && !enableStructuredResponse) {
+              resolvedStructuredResponse = presetConfig.enableStructuredResponse;
             }
           }
         }
@@ -217,7 +222,8 @@ export function registerConsiliumTools(server, { getResults, saveResults, DATA_D
           timeout: timeout || 60000,
           evalStore,
           enableClaimExtraction: resolvedClaimExtraction,
-          claimProvider: claimProvider || 'claude'
+          claimProvider: claimProvider || 'claude',
+          enableStructuredResponse: resolvedStructuredResponse
         });
 
         const result = await orchestrator.execute();

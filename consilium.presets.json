@@ -30,9 +30,16 @@
     "rounds": 2
   },
   "debate-claims": {
-    "description": "Дебат с claim extraction (CBDP)",
+    "description": "Дебат с claim extraction (CBDP Phase 1)",
     "providers": ["claude", "gemini", "codex"],
     "rounds": 3,
     "enableClaimExtraction": true
+  },
+  "debate-structured": {
+    "description": "Полный CBDP — claims + structured responses (Phase 2)",
+    "providers": ["claude", "gemini", "codex"],
+    "rounds": 3,
+    "enableClaimExtraction": true,
+    "enableStructuredResponse": true
   }
 }
