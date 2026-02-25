@@ -137,6 +137,45 @@ export function registerEvaluationTools(server, { DATA_DIR }) {
     }
   );
 
+  // --- ctx_routing_health ---
+  server.registerTool(
+    'ctx_routing_health',
+    {
+      description: 'Получить health-данные adaptive routing: решения, распределение, аномалии.',
+      inputSchema: z.object({
+        last: z.number().default(20).describe('Количество последних решений'),
+        since_days: z.number().default(1).describe('Период в днях для статистики')
+      }).shape,
+    },
+    async ({ last, since_days }) => {
+      if (!store) {
+        return { content: [{ type: 'text', text: 'Eval store unavailable' }] };
+      }
+      try {
+        const health = store.getRoutingHealth({ last, sinceDays: since_days });
+        const { detectAnomalies } = await import('../evaluation/routing-anomaly.js');
+        const anomalies = detectAnomalies(
+          health.anomalyStats, health.distribution, health.total
+        );
+        const result = {
+          total_decisions: health.total,
+          sample_count_sufficient: health.total >= 20,
+          recent_decisions: health.decisions,
+          distribution: health.distribution,
+          anomalies,
+          stats: health.anomalyStats
+        };
+        return {
+          content: [{ type: 'text', text: JSON.stringify(result, null, 2) }]
+        };
+      } catch (err) {
+        return {
+          content: [{ type: 'text', text: `Error: ${err.message}` }]
+        };
+      }
+    }
+  );
+
   // Cleanup on process exit
   process.on('exit', () => {
     if (store) store.close();

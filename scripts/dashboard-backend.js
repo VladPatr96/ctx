@@ -81,6 +81,16 @@ setInterval(() => {
 
 let kbRuntimePromise = null;
 let kbSyncClient = null;
+let _dashboardEvalStorePromise = null;
+
+async function getDashboardEvalStore() {
+  if (!_dashboardEvalStorePromise) {
+    _dashboardEvalStorePromise = import('./evaluation/eval-store.js').then(({ createEvalStore }) => {
+      try { return createEvalStore(DATA_DIR); } catch { return null; }
+    }).catch(() => null);
+  }
+  return _dashboardEvalStorePromise;
+}
 
 async function getKnowledgeRuntime() {
   if (!kbRuntimePromise) {
@@ -614,7 +624,8 @@ export const createRouter = (buildHtmlFn, token, options = {}) => async (req, re
     url.pathname === '/api/state' ||
     url.pathname === '/events' ||
     url.pathname === '/storage-health' ||
-    url.pathname.startsWith('/api/kb/')
+    url.pathname.startsWith('/api/kb/') ||
+    url.pathname.startsWith('/api/routing/')
   );
 
   if (req.method === 'GET' && (isApiPath || isProtectedGetPath)) {
@@ -809,6 +820,26 @@ export const createRouter = (buildHtmlFn, token, options = {}) => async (req, re
         const limit = parsePositiveInt(url.searchParams.get('limit'), 5, 1, 50);
         const context = runtime.store.getContextForProject(project, limit);
         return serve(200, 'application/json', { ok: true, mode: runtime.mode, project, ...context });
+      }
+
+      if (url.pathname === '/api/routing/health') {
+        const evalStore = await getDashboardEvalStore();
+        if (!evalStore) {
+          return serve(503, 'application/json', { error: 'Eval store unavailable' });
+        }
+        const last = parsePositiveInt(url.searchParams.get('last'), 50, 1, 200);
+        const sinceDays = parsePositiveInt(url.searchParams.get('since_days'), 1, 1, 30);
+        const health = evalStore.getRoutingHealth({ last, sinceDays });
+        const { detectAnomalies } = await import('./evaluation/routing-anomaly.js');
+        const anomalies = detectAnomalies(health.anomalyStats, health.distribution, health.total);
+        return serve(200, 'application/json', {
+          ok: true,
+          total_decisions: health.total,
+          recent_decisions: health.decisions,
+          distribution: health.distribution,
+          anomalies,
+          stats: health.anomalyStats
+        });
       }
 
       if (url.pathname === '/api/kb/stats') {

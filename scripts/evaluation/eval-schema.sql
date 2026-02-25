@@ -39,3 +39,23 @@ CREATE TABLE IF NOT EXISTS provider_responses (
 );
 
 CREATE INDEX IF NOT EXISTS idx_provider_responses_run ON provider_responses(run_id);
+
+-- Routing decisions log (observability for adaptive routing)
+CREATE TABLE IF NOT EXISTS routing_decisions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  timestamp TEXT NOT NULL,
+  task_snippet TEXT NOT NULL,
+  task_type TEXT NOT NULL,
+  selected_provider TEXT NOT NULL,
+  runner_up TEXT,
+  final_score REAL NOT NULL,
+  static_component REAL NOT NULL,
+  eval_component REAL NOT NULL,
+  explore_component REAL NOT NULL,
+  alpha REAL NOT NULL,
+  delta REAL,
+  is_diverged INTEGER DEFAULT 0,
+  routing_mode TEXT NOT NULL DEFAULT 'static'
+);
+CREATE INDEX IF NOT EXISTS idx_routing_decisions_ts ON routing_decisions(timestamp);
+CREATE INDEX IF NOT EXISTS idx_routing_decisions_provider ON routing_decisions(selected_provider);

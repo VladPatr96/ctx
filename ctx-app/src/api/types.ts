@@ -68,6 +68,47 @@ export const KBStatsSchema = z.object({
   byProject: z.record(z.number()).default({})
 });
 
+export const RoutingDecisionSchema = z.object({
+  id: z.number().optional(),
+  timestamp: z.string(),
+  task_snippet: z.string(),
+  task_type: z.string(),
+  selected_provider: z.string(),
+  runner_up: z.string().nullable().optional(),
+  final_score: z.number(),
+  static_component: z.number(),
+  eval_component: z.number(),
+  explore_component: z.number(),
+  alpha: z.number(),
+  delta: z.number().nullable().optional(),
+  is_diverged: z.number().default(0),
+  routing_mode: z.string()
+});
+
+export const RoutingAnomalySchema = z.object({
+  type: z.string(),
+  severity: z.string(),
+  message: z.string()
+});
+
+export interface RoutingHealthData {
+  ok: boolean;
+  total_decisions: number;
+  recent_decisions: z.infer<typeof RoutingDecisionSchema>[];
+  distribution: Array<{ selected_provider: string; cnt: number }>;
+  anomalies: z.infer<typeof RoutingAnomalySchema>[];
+  stats: {
+    avg_score?: number;
+    min_score?: number;
+    max_score?: number;
+    avg_alpha?: number;
+    min_alpha?: number;
+    max_alpha?: number;
+    avg_explore?: number;
+    diverged_count?: number;
+  };
+}
+
 export const ProviderHealthEntrySchema = z.object({
   failures: z.number().default(0),
   calls: z.number().default(0),
@@ -101,3 +142,5 @@ export type Agent = z.infer<typeof AgentSchema>;
 export type ConsiliumPreset = z.infer<typeof ConsiliumPresetSchema>;
 export type ConsiliumResult = z.infer<typeof ConsiliumResultSchema>;
 export type ProviderHealthEntry = z.infer<typeof ProviderHealthEntrySchema>;
+export type RoutingDecision = z.infer<typeof RoutingDecisionSchema>;
+export type RoutingAnomaly = z.infer<typeof RoutingAnomalySchema>;

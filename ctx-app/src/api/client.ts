@@ -1,4 +1,4 @@
-import { KBEntrySchema, KBStatsSchema, StateSchema, type AppState, type KBEntry, type KBStats } from './types';
+import { KBEntrySchema, KBStatsSchema, StateSchema, type AppState, type KBEntry, type KBStats, type RoutingHealthData } from './types';
 
 export interface ApiClient {
   getState(): Promise<AppState>;
@@ -9,6 +9,7 @@ export interface ApiClient {
   getAgentDetails(agentId: string): Promise<string>;
   getTerminalAllowlist(): Promise<string[]>;
   runTerminalCommand(command: string): Promise<TerminalCommandResult>;
+  getRoutingHealth(last?: number, sinceDays?: number): Promise<RoutingHealthData>;
 }
 
 export interface TerminalCommandResult {
@@ -161,6 +162,14 @@ function createHttpApiClient(tokenInput?: string): ApiClient {
 
     async runTerminalCommand() {
       throw new Error('Terminal is available only in Electron mode');
+    },
+
+    async getRoutingHealth(last = 50, sinceDays = 1) {
+      const params = new URLSearchParams({ last: String(last), since_days: String(sinceDays) });
+      const response = await fetch(withToken(`/api/routing/health?${params.toString()}`, token), {
+        headers: authHeaders
+      });
+      return readJson<RoutingHealthData>(response);
     }
   };
 }
@@ -203,6 +212,10 @@ function createElectronApiClient(bridge: CtxApiBridge): ApiClient {
 
     async runTerminalCommand(command: string) {
       return toTerminalResult(await bridge.runTerminalCommand(command));
+    },
+
+    async getRoutingHealth() {
+      return { ok: false, total_decisions: 0, recent_decisions: [], distribution: [], anomalies: [], stats: {} };
     }
   };
 }

@@ -14,6 +14,7 @@ import { fileURLToPath } from 'node:url';
 import { readJsonFile, withLockSync, writeJsonAtomic } from '../utils/state-io.js';
 import { rankCandidates } from '../evaluation/adaptive-weight.js';
 import { createEvalStore as _createEvalStoreFn } from '../evaluation/eval-store.js';
+import { initRoutingLogger, logDecision, shutdownRoutingLogger } from '../evaluation/routing-logger.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PIPELINE_FILE = join(__dirname, '..', '..', '.data', 'pipeline.json');
@@ -35,6 +36,7 @@ function getEvalStore() {
   if (process.env.CTX_ADAPTIVE_ROUTING !== '1') { _evalStore = null; return null; }
   try {
     _evalStore = _createEvalStoreFn(process.env.CTX_DATA_DIR || join(__dirname, '..', '..', '.data'));
+    initRoutingLogger(_evalStore);
   } catch (err) {
     console.error('[router] adaptive disabled:', err.message);
     _evalStore = null;
@@ -42,7 +44,7 @@ function getEvalStore() {
   return _evalStore;
 }
 
-process.on('exit', () => { _evalStore?.close(); });
+process.on('exit', () => { shutdownRoutingLogger(); _evalStore?.close(); });
 
 // \b не работает с кириллицей — используем (?:^|[\s,;.!?]) как границу слова
 const B = '(?:^|[\\s,;.!?:()\\[\\]"\'«»])'; // before
@@ -118,6 +120,20 @@ export function route(task) {
       const ranked = rankCandidates(matches, metricsMap, { globalWinRate });
       if (ranked.length > 0) {
         const best = ranked[0];
+        const staticSorted = [...matches].sort((a, b) => b.weight - a.weight);
+        logDecision({
+          task, taskType: best.strength,
+          selectedProvider: best.provider,
+          runnerUp: ranked[1]?.provider,
+          finalScore: best.confidence,
+          staticComponent: best.adaptive?.staticComponent ?? 0,
+          evalComponent: best.adaptive?.evalComponent ?? 0,
+          exploreComponent: best.adaptive?.exploreComponent ?? 0,
+          alpha: best.adaptive?.alpha ?? 0,
+          runnerUpScore: ranked[1]?.confidence,
+          staticBest: staticSorted[0]?.provider,
+          routingMode: 'adaptive'
+        });
         return {
           provider: best.provider,
           strength: best.strength,
@@ -133,6 +149,16 @@ export function route(task) {
   // Статический routing (default)
   matches.sort((a, b) => b.weight - a.weight);
   const best = matches[0];
+
+  logDecision({
+    task, taskType: best.strength,
+    selectedProvider: best.provider,
+    runnerUp: matches[1]?.provider,
+    finalScore: Math.min(best.weight / 10, 1),
+    staticComponent: Math.min(best.weight / 10, 1),
+    evalComponent: 0, exploreComponent: 0, alpha: 0,
+    routingMode: 'static'
+  });
 
   return {
     provider: best.provider,
@@ -173,13 +199,41 @@ export function routeMulti(task) {
     try {
       const { providers: metricsMap, globalWinRate } = evalStore.getProviderMetrics();
       const ranked = rankCandidates(matches, metricsMap, { globalWinRate });
-      if (ranked.length > 0) return ranked;
+      if (ranked.length > 0) {
+        const staticSorted = [...matches].sort((a, b) => (b.weight ?? 0) - (a.weight ?? 0));
+        logDecision({
+          task, taskType: ranked[0].strength || 'multi',
+          selectedProvider: ranked[0].provider,
+          runnerUp: ranked[1]?.provider,
+          finalScore: ranked[0].confidence,
+          staticComponent: ranked[0].adaptive?.staticComponent ?? 0,
+          evalComponent: ranked[0].adaptive?.evalComponent ?? 0,
+          exploreComponent: ranked[0].adaptive?.exploreComponent ?? 0,
+          alpha: ranked[0].adaptive?.alpha ?? 0,
+          runnerUpScore: ranked[1]?.confidence,
+          staticBest: staticSorted[0]?.provider,
+          routingMode: 'adaptive'
+        });
+        return ranked;
+      }
     } catch (err) {
       // Fallthrough to static sorting
     }
   }
 
-  return matches.sort((a, b) => b.confidence - a.confidence);
+  const sorted = matches.sort((a, b) => b.confidence - a.confidence);
+  if (sorted.length > 0) {
+    logDecision({
+      task, taskType: sorted[0].strength || 'multi',
+      selectedProvider: sorted[0].provider,
+      runnerUp: sorted[1]?.provider,
+      finalScore: sorted[0].confidence,
+      staticComponent: sorted[0].confidence,
+      evalComponent: 0, exploreComponent: 0, alpha: 0,
+      routingMode: 'static'
+    });
+  }
+  return sorted;
 }
 
 /**

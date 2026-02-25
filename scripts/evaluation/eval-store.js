@@ -146,6 +146,45 @@ export function createEvalStore(dataDir = '.data') {
     SELECT DISTINCT provider FROM provider_responses WHERE run_id = ?
   `);
 
+  // ---- Routing decisions prepared statements ----
+
+  const insertRoutingDecisionStmt = db.prepare(`
+    INSERT INTO routing_decisions(timestamp, task_snippet, task_type, selected_provider, runner_up,
+      final_score, static_component, eval_component, explore_component, alpha, delta, is_diverged, routing_mode)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+
+  const getLastRoutingDecisionsStmt = db.prepare(`
+    SELECT * FROM routing_decisions ORDER BY timestamp DESC LIMIT ?
+  `);
+
+  const countRoutingDecisionsStmt = db.prepare(`
+    SELECT COUNT(*) as total FROM routing_decisions
+  `);
+
+  const routingProviderDistStmt = db.prepare(`
+    SELECT selected_provider, COUNT(*) as cnt
+    FROM routing_decisions WHERE timestamp > ?
+    GROUP BY selected_provider
+  `);
+
+  const routingAnomalyStatsStmt = db.prepare(`
+    SELECT
+      AVG(final_score) as avg_score,
+      MIN(final_score) as min_score,
+      MAX(final_score) as max_score,
+      AVG(alpha) as avg_alpha,
+      MIN(alpha) as min_alpha,
+      MAX(alpha) as max_alpha,
+      AVG(explore_component) as avg_explore,
+      SUM(is_diverged) as diverged_count
+    FROM routing_decisions WHERE timestamp > ?
+  `);
+
+  const deleteOldRoutingStmt = db.prepare(`
+    DELETE FROM routing_decisions WHERE timestamp < ?
+  `);
+
   // ---- Store API ----
 
   const store = {
@@ -336,6 +375,78 @@ export function createEvalStore(dataDir = '.data') {
     },
 
     /**
+     * Insert a single routing decision.
+     */
+    insertRoutingDecision(record) {
+      try {
+        insertRoutingDecisionStmt.run(
+          record.timestamp, record.task_snippet, record.task_type,
+          record.selected_provider, record.runner_up ?? null,
+          record.final_score, record.static_component, record.eval_component,
+          record.explore_component, record.alpha, record.delta ?? null,
+          record.is_diverged ?? 0, record.routing_mode
+        );
+      } catch (err) {
+        console.error('[eval-store] insertRoutingDecision failed:', err.message);
+      }
+    },
+
+    /**
+     * Insert a batch of routing decisions in a transaction.
+     */
+    insertRoutingDecisionBatch(records) {
+      if (!records || records.length === 0) return;
+      try {
+        db.exec('BEGIN');
+        for (const r of records) {
+          insertRoutingDecisionStmt.run(
+            r.timestamp, r.task_snippet, r.task_type,
+            r.selected_provider, r.runner_up ?? null,
+            r.final_score, r.static_component, r.eval_component,
+            r.explore_component, r.alpha, r.delta ?? null,
+            r.is_diverged ?? 0, r.routing_mode
+          );
+        }
+        db.exec('COMMIT');
+      } catch (err) {
+        try { db.exec('ROLLBACK'); } catch { /* ignore */ }
+        console.error('[eval-store] insertRoutingDecisionBatch failed:', err.message);
+      }
+    },
+
+    /**
+     * Get routing health data for observability.
+     * @param {{ last?: number, sinceDays?: number }} opts
+     * @returns {{ total: number, decisions: Array, distribution: Array, anomalyStats: object }}
+     */
+    getRoutingHealth({ last = 20, sinceDays = 1 } = {}) {
+      try {
+        const total = countRoutingDecisionsStmt.get()?.total || 0;
+        const decisions = getLastRoutingDecisionsStmt.all(last);
+        const since = new Date(Date.now() - sinceDays * 86400000).toISOString();
+        const distribution = routingProviderDistStmt.all(since);
+        const anomalyStats = routingAnomalyStatsStmt.get(since) || {};
+        return { total, decisions, distribution, anomalyStats };
+      } catch (err) {
+        console.error('[eval-store] getRoutingHealth failed:', err.message);
+        return { total: 0, decisions: [], distribution: [], anomalyStats: {} };
+      }
+    },
+
+    /**
+     * Delete routing decisions older than N days.
+     * @param {number} olderThanDays
+     */
+    cleanupOldRoutingDecisions(olderThanDays = 7) {
+      try {
+        const cutoff = new Date(Date.now() - olderThanDays * 86400000).toISOString();
+        deleteOldRoutingStmt.run(cutoff);
+      } catch (err) {
+        console.error('[eval-store] cleanupOldRoutingDecisions failed:', err.message);
+      }
+    },
+
+    /**
      * Close database connection.
      */
     close() {
@@ -344,6 +455,9 @@ export function createEvalStore(dataDir = '.data') {
       }
     }
   };
+
+  // Non-critical cleanup on init
+  try { store.cleanupOldRoutingDecisions(7); } catch { /* ignore */ }
 
   return store;
 }

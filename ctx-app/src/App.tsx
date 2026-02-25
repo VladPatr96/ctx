@@ -7,6 +7,7 @@ import { KnowledgePage } from './pages/Knowledge';
 import { AgentsPage } from './pages/Agents';
 import { SettingsPage } from './pages/Settings';
 import { TerminalPage } from './pages/Terminal';
+import { RoutingPage } from './pages/Routing';
 
 function App() {
   const client = useMemo(() => createApiClient(), []);
@@ -82,6 +83,7 @@ function App() {
             <KnowledgePage client={client} />
           ) : null}
           {activeTab === 'agents' ? <AgentsPage client={client} state={state} /> : null}
+          {activeTab === 'routing' ? <RoutingPage client={client} /> : null}
           {activeTab === 'settings' ? (
             <SettingsPage client={client} state={state} onRefresh={refresh} />
           ) : null}

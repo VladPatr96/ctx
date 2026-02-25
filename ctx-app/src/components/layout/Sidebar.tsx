@@ -1,4 +1,4 @@
-export type AppTab = 'dashboard' | 'knowledge' | 'agents' | 'settings' | 'terminal';
+export type AppTab = 'dashboard' | 'knowledge' | 'agents' | 'routing' | 'settings' | 'terminal';
 
 interface SidebarProps {
   activeTab: AppTab;
@@ -9,6 +9,7 @@ const TABS: Array<{ id: AppTab; label: string }> = [
   { id: 'dashboard', label: 'Pipeline' },
   { id: 'knowledge', label: 'Knowledge' },
   { id: 'agents', label: 'Agents' },
+  { id: 'routing', label: 'Routing' },
   { id: 'settings', label: 'Settings' },
   { id: 'terminal', label: 'Terminal' }
 ];
