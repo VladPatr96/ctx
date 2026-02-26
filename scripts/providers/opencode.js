@@ -5,6 +5,7 @@
  */
 
 import { runCommand, runCliWithFallback, buildDetail } from '../utils/shell.js';
+import { discoverModels, getModelIds } from './model-discovery.js';
 
 const PRIMARY_GLM_MODEL = 'opencode/glm-4.7';
 const FALLBACK_GLM_MODEL = 'zai-coding-plan/glm-4.7';
@@ -13,7 +14,8 @@ const KIMI_MODEL = 'opencode/kimi-k2.5';
 export default {
   name: 'opencode',
   transport: 'mcp',
-  models: ['zai-coding-plan/glm-4.7', 'glm-4.7', 'opencode/kimi-k2.5', 'kimi-k2.5', 'kimi-k2-5'],
+  get models() { return getModelIds('opencode'); },
+  get modelInfo() { return discoverModels('opencode'); },
   capabilities: ['mcp', 'skills', 'agents'],
   strengths: ['multi_model', 'custom_providers', 'json_output', 'agents'],
   bestFor: {
@@ -56,9 +58,24 @@ export default {
         cwd: opts.cwd || process.cwd()
       });
       if (direct.success) {
+        const response = pickOutput(direct);
+        if (!response) {
+          return {
+            status: 'error',
+            error: 'empty_response',
+            detail: 'OpenCode returned success with empty stdout/stderr (direct mode)'
+          };
+        }
+        if (looksLikeCliError(response)) {
+          return {
+            status: 'error',
+            error: 'opencode_cli_error',
+            detail: response.slice(0, 2000)
+          };
+        }
         return {
           status: 'success',
-          response: direct.stdout,
+          response,
           model: modelUsed || null
         };
       }
@@ -69,9 +86,24 @@ export default {
         detail: [buildDetail(result), buildDetail(direct)].filter(Boolean).join('\n--- direct mode retry ---\n') || null
       };
     }
+    const response = pickOutput(result);
+    if (!response) {
+      return {
+        status: 'error',
+        error: 'empty_response',
+        detail: 'OpenCode returned success with empty stdout/stderr'
+      };
+    }
+    if (looksLikeCliError(response)) {
+      return {
+        status: 'error',
+        error: 'opencode_cli_error',
+        detail: response.slice(0, 2000)
+      };
+    }
     return {
       status: 'success',
-      response: result.stdout,
+      response,
       model: modelUsed || null
     };
   },
@@ -105,4 +137,15 @@ async function tryDirectMode(prompt, model, opts) {
   }
   args.push(String(prompt));
   return runCliWithFallback('opencode', args, opts);
+}
+
+function pickOutput(result) {
+  const stdout = typeof result?.stdout === 'string' ? result.stdout.trim() : '';
+  const stderr = typeof result?.stderr === 'string' ? result.stderr.trim() : '';
+  return stdout || stderr || '';
+}
+
+function looksLikeCliError(text) {
+  const stripped = String(text || '').replace(/\u001b\[[0-9;]*m/g, '').trim();
+  return /^Error:\s+/i.test(stripped) || /\bFailed to change directory\b/i.test(stripped);
 }

@@ -16,6 +16,7 @@ import claude from './claude.js';
 import gemini from './gemini.js';
 import opencode from './opencode.js';
 import codex from './codex.js';
+import { discoverModels, discoverAllModels, discoverAllModelsAsync, validateModel } from './model-discovery.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const HEALTH_FILE = join(__dirname, '..', '..', '.data', 'provider-health.json');
@@ -126,8 +127,30 @@ export function listProviders() {
     name: p.name,
     transport: p.transport,
     capabilities: p.capabilities,
+    models: p.models,
     circuitOpen: isCircuitOpen(p.name)
   }));
+}
+
+/**
+ * Получить модели для конкретного или всех провайдеров.
+ * @param {string} [providerName] — если не указан, возвращает все
+ * @returns {{ models: Array<{id, alias, tier}>, defaultModel: string } | Record<string, ...>}
+ */
+export function listModels(providerName) {
+  if (providerName) return discoverModels(providerName);
+  return discoverAllModels();
+}
+
+/**
+ * Async version — включает CLI discovery (opencode models).
+ */
+export async function listModelsAsync(providerName) {
+  if (providerName) {
+    const { discoverModelsAsync } = await import('./model-discovery.js');
+    return discoverModelsAsync(providerName);
+  }
+  return discoverAllModelsAsync();
 }
 
 /**
@@ -210,5 +233,6 @@ export async function healthCheckAll() {
 }
 
 export { route, routeMulti, delegate, setLead } from './router.js';
+export { discoverModels, validateModel } from './model-discovery.js';
 
-export default { listProviders, getProvider, invoke, invokeAll, healthCheckAll };
+export default { listProviders, listModels, listModelsAsync, getProvider, invoke, invokeAll, healthCheckAll, validateModel };

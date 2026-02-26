@@ -4,11 +4,13 @@
  */
 
 import { runCommand, runCliWithFallback, buildDetail } from '../utils/shell.js';
+import { discoverModels, getModelIds } from './model-discovery.js';
 
 export default {
   name: 'codex',
   transport: 'bash',
-  models: ['gpt-5.3-codex'],
+  get models() { return getModelIds('codex'); },
+  get modelInfo() { return discoverModels('codex'); },
   capabilities: ['bash', 'exec'],
   strengths: ['code_review', 'sandbox_exec', 'refactoring', 'diff_apply'],
   bestFor: {

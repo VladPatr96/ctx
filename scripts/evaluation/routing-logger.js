@@ -19,7 +19,7 @@ let _enabled = false;
  * @param {object} store — eval store with insertRoutingDecisionBatch method
  */
 export function initRoutingLogger(store) {
-  if (!store || process.env.CTX_ADAPTIVE_ROUTING !== '1') {
+  if (!store || process.env.CTX_ADAPTIVE_ROUTING === '0') {
     _enabled = false;
     return;
   }

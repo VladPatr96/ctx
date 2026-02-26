@@ -1339,3 +1339,196 @@ test('orchestrator: enableSmartSynthesis=false → no synthesis (no regression)'
   assert.equal(result.claimGraph, undefined, 'should not have claimGraph');
   assert.equal(result.autoStop, undefined, 'should not have autoStop');
 });
+
+// ==== Feedback Loop: provider_responses for adaptive routing ====
+
+test('Feedback loop: consilium records provider_responses for adaptive routing', () => {
+  // Mock evalStore
+  const recorded = [];
+  let completedWith = null;
+  const mockEvalStore = {
+    startRun: () => 'test-run-id',
+    addProviderResponse: (runId, data) => recorded.push({ runId, ...data }),
+    addRoundResponse: () => {},
+    completeRun: (runId, data) => { completedWith = { runId, ...data }; },
+    close: () => {}
+  };
+
+  // Simulate consilium result with trust scores
+  const result = {
+    runId: 'test-run-id',
+    rounds: [
+      { round: 1, responses: [
+        { provider: 'claude', alias: 'Participant A', status: 'success', response: 'r1', response_ms: 1000 },
+        { provider: 'gemini', alias: 'Participant B', status: 'success', response: 'r2', response_ms: 2000 }
+      ]}
+    ],
+    aliasMap: new Map([['claude', 'Participant A'], ['gemini', 'Participant B']]),
+    aggregatedTrustScores: {
+      'Participant A': { 'Participant B': 0.8 },
+      'Participant B': { 'Participant A': 0.6 }
+    },
+    synthesis: {
+      provider: 'claude',
+      status: 'success',
+      parsed: { recommendation: 'Use approach A', confidence: 0.85 }
+    }
+  };
+
+  const resolvedProviders = ['claude', 'gemini'];
+  const evalStore = mockEvalStore;
+
+  // --- Replicate the feedback loop logic from consilium.js ---
+  // 1. Record each provider's aggregate response
+  for (const provider of resolvedProviders) {
+    const alias = result.aliasMap.get(provider);
+    const providerResponses = result.rounds.flatMap(r =>
+      r.responses.filter(resp => resp.provider === provider && resp.status === 'success')
+    );
+
+    if (providerResponses.length > 0) {
+      const totalMs = providerResponses.reduce((s, r) => s + (r.response_ms || 0), 0);
+      const avgMs = Math.round(totalMs / providerResponses.length);
+
+      let confidence = null;
+      if (result.aggregatedTrustScores && alias) {
+        const shortKey = alias.split(' ').pop();
+        const trustValues = Object.values(result.aggregatedTrustScores)
+          .map(scores => scores[alias] ?? scores[shortKey])
+          .filter(v => typeof v === 'number');
+        if (trustValues.length > 0) {
+          confidence = +(trustValues.reduce((a, b) => a + b, 0) / trustValues.length).toFixed(2);
+        }
+      }
+
+      evalStore.addProviderResponse(result.runId, {
+        provider,
+        status: 'completed',
+        response_ms: avgMs,
+        confidence,
+        key_idea: `${providerResponses.length} rounds completed`
+      });
+    }
+  }
+
+  // 2. Determine winner
+  let proposedBy = null;
+  if (result.aggregatedTrustScores) {
+    const trustTotals = {};
+    for (const [, scores] of Object.entries(result.aggregatedTrustScores)) {
+      for (const [toAlias, score] of Object.entries(scores)) {
+        trustTotals[toAlias] = (trustTotals[toAlias] || 0) + score;
+      }
+    }
+    let bestAlias = null;
+    let bestTrust = -1;
+    for (const [alias, total] of Object.entries(trustTotals)) {
+      if (total > bestTrust) { bestTrust = total; bestAlias = alias; }
+    }
+    if (bestAlias) {
+      for (const [prov, al] of result.aliasMap) {
+        const letter = al.split(' ').pop();
+        if (al === bestAlias || letter === bestAlias) { proposedBy = prov; break; }
+      }
+    }
+  }
+
+  // 3. Complete run
+  const synthConfidence = result.synthesis?.parsed?.confidence;
+  evalStore.completeRun(result.runId, {
+    proposed_by: proposedBy,
+    consensus: synthConfidence >= 0.7 ? 1 : 0,
+    rounds: result.rounds.length,
+    decision_summary: result.synthesis?.parsed?.recommendation
+  });
+
+  // --- Assertions ---
+  // Both providers should have recorded responses
+  assert.equal(recorded.length, 2, 'should record 2 provider responses');
+
+  // Claude: trust from B → A = 0.6 → confidence = 0.6
+  const claudeRec = recorded.find(r => r.provider === 'claude');
+  assert.ok(claudeRec, 'claude response recorded');
+  assert.equal(claudeRec.confidence, 0.6, 'claude confidence from trust scores');
+  assert.equal(claudeRec.response_ms, 1000, 'claude avg response_ms');
+  assert.equal(claudeRec.status, 'completed');
+
+  // Gemini: trust from A → B = 0.8 → confidence = 0.8
+  const geminiRec = recorded.find(r => r.provider === 'gemini');
+  assert.ok(geminiRec, 'gemini response recorded');
+  assert.equal(geminiRec.confidence, 0.8, 'gemini confidence from trust scores');
+  assert.equal(geminiRec.response_ms, 2000, 'gemini avg response_ms');
+
+  // Winner: gemini (trust total 0.8) > claude (trust total 0.6)
+  assert.ok(completedWith, 'completeRun should be called');
+  assert.equal(completedWith.proposed_by, 'gemini', 'gemini should be the winner (highest trust)');
+  assert.equal(completedWith.consensus, 1, 'consensus=1 because confidence 0.85 >= 0.7');
+  assert.equal(completedWith.decision_summary, 'Use approach A');
+});
+
+test('Feedback loop: no trust scores → no winner, no confidence', () => {
+  const recorded = [];
+  let completedWith = null;
+  const mockEvalStore = {
+    addProviderResponse: (runId, data) => recorded.push({ runId, ...data }),
+    completeRun: (runId, data) => { completedWith = { runId, ...data }; },
+  };
+
+  const result = {
+    runId: 'run-no-trust',
+    rounds: [
+      { round: 1, responses: [
+        { provider: 'claude', status: 'success', response: 'r1', response_ms: 500 },
+        { provider: 'gemini', status: 'success', response: 'r2', response_ms: 800 }
+      ]}
+    ],
+    aliasMap: new Map([['claude', 'Participant A'], ['gemini', 'Participant B']]),
+    // No aggregatedTrustScores, no synthesis
+  };
+
+  const resolvedProviders = ['claude', 'gemini'];
+  const evalStore = mockEvalStore;
+
+  for (const provider of resolvedProviders) {
+    const alias = result.aliasMap.get(provider);
+    const providerResponses = result.rounds.flatMap(r =>
+      r.responses.filter(resp => resp.provider === provider && resp.status === 'success')
+    );
+    if (providerResponses.length > 0) {
+      const totalMs = providerResponses.reduce((s, r) => s + (r.response_ms || 0), 0);
+      const avgMs = Math.round(totalMs / providerResponses.length);
+      let confidence = null;
+      if (result.aggregatedTrustScores && alias) {
+        const trustValues = Object.values(result.aggregatedTrustScores)
+          .map(scores => scores[alias])
+          .filter(v => typeof v === 'number');
+        if (trustValues.length > 0) {
+          confidence = +(trustValues.reduce((a, b) => a + b, 0) / trustValues.length).toFixed(2);
+        }
+      }
+      evalStore.addProviderResponse(result.runId, {
+        provider, status: 'completed', response_ms: avgMs, confidence,
+        key_idea: `${providerResponses.length} rounds completed`
+      });
+    }
+  }
+
+  let proposedBy = null;
+  if (result.aggregatedTrustScores) {
+    // Won't enter — no trust scores
+  }
+
+  const synthConfidence = result.synthesis?.parsed?.confidence;
+  evalStore.completeRun(result.runId, {
+    proposed_by: proposedBy,
+    consensus: synthConfidence >= 0.7 ? 1 : 0,
+    rounds: result.rounds.length,
+    decision_summary: `Multi-round consilium: ${result.rounds.length} rounds, 2 providers`
+  });
+
+  assert.equal(recorded.length, 2);
+  assert.equal(recorded[0].confidence, null, 'no trust scores → null confidence');
+  assert.equal(recorded[1].confidence, null);
+  assert.equal(completedWith.proposed_by, null, 'no trust scores → no winner');
+  assert.equal(completedWith.consensus, 0, 'no synthesis confidence → consensus=0');
+});

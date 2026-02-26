@@ -9,6 +9,68 @@ import { z } from 'zod';
 import { join } from 'node:path';
 
 const LABEL_RE = /^[a-z0-9:_-]{1,64}$/i;
+const CENTRAL_KB_REPO_NAME = 'my_claude_code';
+
+function mapCategoryToGitHubLabel(category) {
+  if (category === 'error') return 'lesson';
+  if (category === 'session-summary') return 'session';
+  return category;
+}
+
+function parseIssueUrl(text) {
+  if (typeof text !== 'string') return null;
+  const match = text.match(/https:\/\/github\.com\/[^\s]+\/issues\/\d+/);
+  return match ? match[0] : null;
+}
+
+async function getRepoLabels(runCommand, repo) {
+  const res = await runCommand('gh', ['label', 'list', '-R', repo, '--limit', '200', '--json', 'name']);
+  if (!res.success) return null;
+  try {
+    const labels = JSON.parse(res.stdout || '[]');
+    return new Set(labels.map(l => l?.name).filter(Boolean));
+  } catch {
+    return null;
+  }
+}
+
+async function createIssueWithLabelFallback(runCommand, { repo, title, body, labels }) {
+  const requested = [...new Set((labels || []).filter(Boolean))];
+  let labelsUsed = requested;
+  const availableLabels = await getRepoLabels(runCommand, repo);
+
+  if (availableLabels) {
+    labelsUsed = requested.filter(label => availableLabels.has(label));
+  }
+
+  const baseArgs = ['issue', 'create', '-R', repo, '--title', title, '--body', body];
+  const buildArgs = (labelsList) => {
+    const args = [...baseArgs];
+    for (const label of labelsList) args.push('-l', label);
+    return args;
+  };
+
+  let ghRes = await runCommand('gh', buildArgs(labelsUsed));
+  let retriedWithoutLabels = false;
+
+  if (!ghRes.success && labelsUsed.length > 0 && /label/i.test(String(ghRes.error || ''))) {
+    retriedWithoutLabels = true;
+    ghRes = await runCommand('gh', buildArgs([]));
+    if (ghRes.success) labelsUsed = [];
+  }
+
+  return {
+    attempted: true,
+    repo,
+    success: ghRes.success,
+    url: ghRes.success ? parseIssueUrl(ghRes.stdout) : null,
+    labels_requested: requested,
+    labels_used: labelsUsed,
+    dropped_labels: requested.filter(label => !labelsUsed.includes(label)),
+    retried_without_labels: retriedWithoutLabels,
+    error: ghRes.success ? null : (ghRes.error || 'gh_issue_create_failed')
+  };
+}
 
 export function registerKnowledgeTools(server, { runCommand, readJson, DATA_DIR, GITHUB_OWNER, knowledgeStore, kbSync }) {
 
@@ -160,19 +222,20 @@ export function registerKnowledgeTools(server, { runCommand, readJson, DATA_DIR,
         source: 'manual'
       });
 
+      const output = { ...result };
       if (sync_github && result.saved) {
-        const ghLabel = category === 'error' ? 'lesson' : category;
-        await runCommand('gh', [
-          'issue', 'create',
-          '-R', `${GITHUB_OWNER}/my_claude_code`,
-          '--title', `${category}: ${title}`,
-          '-l', ghLabel, '-l', `project:${project}`,
-          '--body', body
-        ]);
+        const repo = `${GITHUB_OWNER}/${CENTRAL_KB_REPO_NAME}`;
+        const ghLabel = mapCategoryToGitHubLabel(category);
+        output.github_sync = await createIssueWithLabelFallback(runCommand, {
+          repo,
+          title: `${category}: ${title}`,
+          body,
+          labels: [ghLabel, `project:${project}`]
+        });
       }
 
       return {
-        content: [{ type: 'text', text: JSON.stringify(result) }]
+        content: [{ type: 'text', text: JSON.stringify(output) }]
       };
     }
   );

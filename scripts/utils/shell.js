@@ -26,10 +26,11 @@ function getEnv(opts) {
   delete env.CLAUDECODE;
   delete env.CLAUDE_CODE_ENTRYPOINT;
   if (isWin) {
-    // Force specific user paths for CLI tools
-    const userNpm = "C:\\Users\\\u041F\u0430\u0442\u0440\u0430\u0432\u0430\u0435\u0432\\AppData\\Roaming\\npm";
-    const userLocal = "C:\\Users\\\u041F\u0430\u0442\u0440\u0430\u0432\u0430\u0435\u0432\\.local\\bin";
-    
+    // Ensure common user-level install dirs are visible for npm/pip-installed CLIs.
+    const userHome = env.USERPROFILE || env.HOME || '';
+    const userNpm = userHome ? `${userHome}\\AppData\\Roaming\\npm` : '';
+    const userLocal = userHome ? `${userHome}\\.local\\bin` : '';
+
     let pathKey = "PATH";
     for (const key in env) {
       if (key.toUpperCase() === "PATH") {
@@ -37,11 +38,11 @@ function getEnv(opts) {
         break;
       }
     }
-    
+
     const paths = (env[pathKey] || "").split(";").filter(Boolean);
-    if (!paths.includes(userNpm)) paths.unshift(userNpm);
-    if (!paths.includes(userLocal)) paths.unshift(userLocal);
-    
+    if (userNpm && !paths.includes(userNpm)) paths.unshift(userNpm);
+    if (userLocal && !paths.includes(userLocal)) paths.unshift(userLocal);
+
     env[pathKey] = paths.join(";");
   }
   return env;
@@ -129,7 +130,7 @@ export function runCommandShell(commandString, opts = {}) {
 export async function runCliWithFallback(command, args, opts = {}) {
   const first = await runCommand(command, args, { ...opts, shell: false });
   if (!first.success && String(first.error || '').includes('ENOENT')) {
-    return runCommand(command, args, { ...opts, shell: true });
+    return runCommandShell(buildShellCommand(command, args), opts);
   }
   return first;
 }
@@ -174,4 +175,24 @@ export function runCommandSync(command, args = [], opts = {}) {
       rawError: err
     };
   }
+}
+
+function buildShellCommand(command, args = []) {
+  return [command, ...normalizeArgs(args)].map(shellQuoteToken).join(' ');
+}
+
+function shellQuoteToken(value) {
+  const str = String(value ?? '');
+  if (str.length === 0) return isWin ? '""' : "''";
+
+  // Keep simple tokens unquoted for readability and compatibility.
+  if (/^[\w./:@+=,-]+$/.test(str)) return str;
+
+  if (isWin) {
+    // cmd.exe-safe quoted token.
+    return `"${str.replace(/%/g, '%%').replace(/"/g, '""')}"`;
+  }
+
+  // POSIX sh-safe quoted token.
+  return `'${str.replace(/'/g, `'\"'\"'`)}'`;
 }

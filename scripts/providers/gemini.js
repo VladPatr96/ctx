@@ -4,11 +4,13 @@
  */
 
 import { runCommand, runCommandShell, shellEscape, buildDetail } from '../utils/shell.js';
+import { discoverModels, getModelIds } from './model-discovery.js';
 
 export default {
   name: 'gemini',
   transport: 'mcp',
-  models: ['gemini-3.1-pro-preview', 'gemini-3-flash-preview'],
+  get models() { return getModelIds('gemini'); },
+  get modelInfo() { return discoverModels('gemini'); },
   capabilities: ['mcp', 'skills', 'extensions'],
   strengths: ['large_context', 'codebase_analysis', 'documentation', 'translation'],
   bestFor: {

@@ -14,6 +14,7 @@
 import { existsSync, copyFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { spawnSync } from 'node:child_process';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -37,7 +38,7 @@ const providers = {
   },
   opencode: {
     name: 'OpenCode',
-    description: 'Copy skill files to OpenCode skills directory',
+    description: 'Auto-setup with auto-update on startup',
     setup: setupOpenCode
   }
 };
@@ -127,17 +128,30 @@ function setupGemini() {
 }
 
 function setupOpenCode() {
-  console.log('\nTo setup CTX for OpenCode:');
-  console.log('1. Copy skills/ctx-opencode/ to OpenCode skills directory');
-  console.log('2. Restart OpenCode');
-  console.log('3. Use /ctx-opencode command');
+  const autoSetupScript = join(ROOT_DIR, 'scripts', 'opencode-auto-setup.js');
   
-  const srcDir = join(ROOT_DIR, 'skills', 'ctx-opencode');
-  if (!existsSync(srcDir)) {
-    error(`Source directory not found: ${srcDir}`);
+  if (!existsSync(autoSetupScript)) {
+    error(`Auto-setup script not found: ${autoSetupScript}`);
   }
   
-  console.log(`\nSource directory: ${srcDir}`);
+  console.log('\nRunning OpenCode auto-setup...');
+  console.log('This will:');
+  console.log('  1. Find OpenCode skills directory');
+  console.log('  2. Copy universal CTX skill');
+  console.log('  3. Create auto-update scripts');
+  console.log('  4. Provide integration instructions');
+  console.log();
+  
+  // Run the auto-setup script
+  const result = spawnSync('node', [autoSetupScript], {
+    cwd: ROOT_DIR,
+    stdio: 'inherit',
+    shell: false
+  });
+  
+  if (result.status !== 0) {
+    error('OpenCode auto-setup failed');
+  }
 }
 
 function main() {
@@ -150,11 +164,11 @@ CTX Setup Tool
 Usage:
   node ctx-setup.js <provider>
 
-Providers:
+ Providers:
   claude   - Claude Code (MCP native)
   codex    - Codex CLI (CLI wrapper)
   gemini   - Gemini CLI (copy skill files)
-  opencode - OpenCode (manual copy)
+  opencode - OpenCode (auto-setup with auto-update)
   all      - Setup for all providers
 
 Example:

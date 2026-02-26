@@ -5,11 +5,13 @@
  */
 
 import { runCommand, runCliWithFallback, buildDetail } from '../utils/shell.js';
+import { discoverModels, getModelIds } from './model-discovery.js';
 
 export default {
   name: 'claude',
   transport: 'native',
-  models: ['opus-4.6', 'sonnet-4.6'],
+  get models() { return getModelIds('claude'); },
+  get modelInfo() { return discoverModels('claude'); },
   capabilities: ['mcp', 'skills', 'hooks', 'agents'],
   strengths: ['orchestration', 'planning', 'workflow', 'multi_step', 'agents'],
   bestFor: {

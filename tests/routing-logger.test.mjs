@@ -11,10 +11,10 @@ import { detectAnomalies } from '../scripts/evaluation/routing-anomaly.js';
 
 // ---- routing-logger ----
 
-test('routing-logger: disabled when CTX_ADAPTIVE_ROUTING != 1', () => {
+test('routing-logger: disabled when CTX_ADAPTIVE_ROUTING = 0', () => {
   _resetForTest();
   const originalEnv = process.env.CTX_ADAPTIVE_ROUTING;
-  delete process.env.CTX_ADAPTIVE_ROUTING;
+  process.env.CTX_ADAPTIVE_ROUTING = '0';
 
   const mockStore = { insertRoutingDecisionBatch: () => {} };
   initRoutingLogger(mockStore);

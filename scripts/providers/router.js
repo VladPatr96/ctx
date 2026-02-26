@@ -25,7 +25,7 @@ const PIPELINE_LOCK_FILE = join(__dirname, '..', '..', '.data', '.pipeline.lock'
 let _evalStore = undefined;
 function getEvalStore() {
   if (_evalStore !== undefined) return _evalStore;
-  if (process.env.CTX_ADAPTIVE_ROUTING !== '1') { _evalStore = null; return null; }
+  if (process.env.CTX_ADAPTIVE_ROUTING === '0') { _evalStore = null; return null; }
   try {
     _evalStore = _createEvalStoreFn(process.env.CTX_DATA_DIR || join(__dirname, '..', '..', '.data'));
     initRoutingLogger(_evalStore);

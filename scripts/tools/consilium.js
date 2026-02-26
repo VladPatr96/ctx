@@ -236,11 +236,81 @@ export function registerConsiliumTools(server, { getResults, saveResults, DATA_D
 
         const result = await orchestrator.execute();
 
-        // Complete eval run
+        // --- Feedback loop: record provider responses for adaptive routing ---
         if (evalStore && result.runId) {
+          // 1. Record each provider's aggregate response
+          for (const provider of resolvedProviders) {
+            const alias = result.aliasMap.get(provider);
+            // Collect stats across all rounds for this provider
+            const providerResponses = result.rounds.flatMap(r =>
+              r.responses.filter(resp => resp.provider === provider && resp.status === 'success')
+            );
+
+            if (providerResponses.length > 0) {
+              const totalMs = providerResponses.reduce((s, r) => s + (r.response_ms || 0), 0);
+              const avgMs = Math.round(totalMs / providerResponses.length);
+
+              // Derive confidence from trust scores (how much others trust this provider)
+              // Trust keys may be short ("A") or full ("Participant A") — check both
+              let confidence = null;
+              if (result.aggregatedTrustScores && alias) {
+                const shortKey = alias.split(' ').pop(); // "Participant A" → "A"
+                const trustValues = Object.values(result.aggregatedTrustScores)
+                  .map(scores => scores[alias] ?? scores[shortKey])
+                  .filter(v => typeof v === 'number');
+                if (trustValues.length > 0) {
+                  confidence = +(trustValues.reduce((a, b) => a + b, 0) / trustValues.length).toFixed(2);
+                }
+              }
+
+              evalStore.addProviderResponse(result.runId, {
+                provider,
+                status: 'completed',
+                response_ms: avgMs,
+                confidence,
+                key_idea: `${providerResponses.length} rounds completed`
+              });
+            } else {
+              evalStore.addProviderResponse(result.runId, {
+                provider,
+                status: 'error',
+                error_message: 'No successful responses'
+              });
+            }
+          }
+
+          // 2. Determine winner (proposed_by) — most trusted provider
+          let proposedBy = null;
+          if (result.aggregatedTrustScores) {
+            const trustTotals = {};
+            for (const [, scores] of Object.entries(result.aggregatedTrustScores)) {
+              for (const [toAlias, score] of Object.entries(scores)) {
+                trustTotals[toAlias] = (trustTotals[toAlias] || 0) + score;
+              }
+            }
+            // Find provider with highest aggregate trust
+            let bestAlias = null;
+            let bestTrust = -1;
+            for (const [alias, total] of Object.entries(trustTotals)) {
+              if (total > bestTrust) { bestTrust = total; bestAlias = alias; }
+            }
+            if (bestAlias) {
+              // Reverse lookup: alias or short key → provider
+              for (const [prov, al] of result.aliasMap) {
+                const letter = al.split(' ').pop(); // "Participant B" → "B"
+                if (al === bestAlias || letter === bestAlias) { proposedBy = prov; break; }
+              }
+            }
+          }
+
+          // 3. Complete run with proposed_by
+          const synthConfidence = result.synthesis?.parsed?.confidence;
           evalStore.completeRun(result.runId, {
+            proposed_by: proposedBy,
+            consensus: synthConfidence >= 0.7 ? 1 : 0,
             rounds: result.rounds.length,
-            decision_summary: `Multi-round consilium: ${result.rounds.length} rounds, ${resolvedProviders.length} providers`
+            decision_summary: result.synthesis?.parsed?.recommendation
+              || `Multi-round consilium: ${result.rounds.length} rounds, ${resolvedProviders.length} providers`
           });
         }
 
