@@ -3,8 +3,7 @@
  * gemini -p "prompt" -o text
  */
 
-import { spawn } from 'node:child_process';
-import { runCommand } from '../utils/shell.js';
+import { runCommand, runCommandShell, shellEscape } from '../utils/shell.js';
 
 export default {
   name: 'gemini',
@@ -27,7 +26,7 @@ export default {
     const modelFlag = opts.model ? ` --model ${normalizeModel(opts.model)}` : '';
     const cmd = `gemini -p "${escaped}" -o text${modelFlag}`;
 
-    const result = await spawnShell(cmd, { timeout, cwd: opts.cwd || process.cwd() });
+    const result = await runCommandShell(cmd, { timeout, cwd: opts.cwd || process.cwd() });
 
     if (!result.success) {
       const msg = result.error || '';
@@ -57,45 +56,6 @@ function normalizeModel(model) {
   return raw;
 }
 
-function spawnShell(cmd, opts = {}) {
-  return new Promise((resolve) => {
-    const env = Object.assign({}, process.env);
-    delete env.CLAUDECODE;
-    delete env.CLAUDE_CODE_ENTRYPOINT;
-
-    const child = spawn(cmd, [], {
-      shell: true,
-      cwd: opts.cwd || process.cwd(),
-      env,
-      stdio: ['pipe', 'pipe', 'pipe']
-    });
-
-    let stdout = '', stderr = '', settled = false;
-    const done = (r) => { if (!settled) { settled = true; resolve(r); } };
-
-    const timer = setTimeout(() => {
-      child.kill();
-      done(stdout.trim()
-        ? { success: true, stdout: stdout.trim(), stderr: stderr.trim() }
-        : { success: false, error: 'timeout' });
-    }, opts.timeout || 60000);
-
-    child.stdout.on('data', (d) => { stdout += d; });
-    child.stderr.on('data', (d) => { stderr += d; });
-    child.on('close', (code) => {
-      clearTimeout(timer);
-      done(code === 0 || code === null
-        ? { success: true, stdout: stdout.trim(), stderr: stderr.trim() }
-        : { success: false, error: (stderr || stdout || '').trim() || `Exit code ${code}` });
-    });
-    child.on('error', (err) => { clearTimeout(timer); done({ success: false, error: err.message }); });
-  });
-}
-
-function shellEscape(str) {
-  // Escape double quotes and backslashes for shell embedding in "..."
-  return str.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/`/g, '\\`').replace(/\$/g, '\\$');
-}
 
 function buildDetail(result) {
   const raw = result.rawError || {};

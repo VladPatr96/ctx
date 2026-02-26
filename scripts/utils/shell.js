@@ -121,6 +121,13 @@ export function runCommandShell(commandString, opts = {}) {
   });
 }
 
+/**
+ * Escape a string for safe embedding inside double quotes in a shell command.
+ */
+export function shellEscape(str) {
+  return str.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/`/g, '\\`').replace(/\$/g, '\\$');
+}
+
 export function runCommandSync(command, args = [], opts = {}) {
   try {
     const stdout = execFileSync(command, normalizeArgs(args), {
