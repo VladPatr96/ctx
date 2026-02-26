@@ -214,3 +214,109 @@ test(`KnowledgeStore (${storeMode}): meta get/set`, () => {
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test(`KnowledgeStore (${storeMode}): saveEntry upsert — same key, different body`, () => {
+  const { store, dir } = createTempStore();
+  try {
+    const r1 = store.saveEntry({
+      project: 'proj-u',
+      category: 'solution',
+      title: 'Fix WAL mode',
+      body: 'Original body text v1.'
+    });
+    assert.equal(r1.saved, true);
+    assert.ok(!r1.updated);
+
+    // Same (project, category, title) but different body → upsert
+    const r2 = store.saveEntry({
+      project: 'proj-u',
+      category: 'solution',
+      title: 'Fix WAL mode',
+      body: 'Updated body text v2 with more detail.'
+    });
+    assert.equal(r2.saved, true);
+    assert.equal(r2.updated, true);
+    assert.equal(r2.version, 2);
+    assert.ok(r2.previous_hash);
+    assert.notEqual(r2.hash, r2.previous_hash);
+
+    // Third update → version 3
+    const r3 = store.saveEntry({
+      project: 'proj-u',
+      category: 'solution',
+      title: 'Fix WAL mode',
+      body: 'Final body text v3 with even more detail.'
+    });
+    assert.equal(r3.saved, true);
+    assert.equal(r3.updated, true);
+    assert.equal(r3.version, 3);
+
+    // Exact duplicate of v3 → not saved
+    const r4 = store.saveEntry({
+      project: 'proj-u',
+      category: 'solution',
+      title: 'Fix WAL mode',
+      body: 'Final body text v3 with even more detail.'
+    });
+    assert.equal(r4.saved, false);
+    assert.equal(r4.reason, 'duplicate');
+  } finally {
+    store.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test(`KnowledgeStore (${storeMode}): searchEntries with category filter`, () => {
+  const { store, dir } = createTempStore();
+  try {
+    store.saveEntry({ project: 'proj-f', category: 'solution', title: 'SQLite fix', body: 'WAL mode solution for SQLite.' });
+    store.saveEntry({ project: 'proj-f', category: 'error', title: 'SQLite error', body: 'SQLite error on concurrent access.' });
+    store.saveEntry({ project: 'proj-f', category: 'decision', title: 'Use SQLite', body: 'Decision to use SQLite over Postgres.' });
+
+    const solutions = store.searchEntries('SQLite', { category: 'solution' });
+    assert.ok(solutions.length >= 1);
+    assert.ok(solutions.every(r => r.category === 'solution'));
+
+    const errors = store.searchEntries('SQLite', { category: 'error' });
+    assert.ok(errors.length >= 1);
+    assert.ok(errors.every(r => r.category === 'error'));
+  } finally {
+    store.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test(`KnowledgeStore (${storeMode}): searchEntries with dateFrom filter`, () => {
+  const { store, dir } = createTempStore();
+  try {
+    store.saveEntry({ project: 'proj-d', category: 'solution', title: 'Old fix', body: 'Old solution body.' });
+    store.saveEntry({ project: 'proj-d', category: 'solution', title: 'New fix', body: 'New solution body.' });
+
+    // Both entries created "now", so dateFrom in the past → both returned
+    const all = store.searchEntries('solution', { dateFrom: '2020-01-01' });
+    assert.ok(all.length >= 1);
+
+    // dateFrom in the future → nothing
+    const none = store.searchEntries('solution', { dateFrom: '2099-01-01' });
+    assert.equal(none.length, 0);
+  } finally {
+    store.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test(`KnowledgeStore (${storeMode}): searchEntries with combined filters`, () => {
+  const { store, dir } = createTempStore();
+  try {
+    store.saveEntry({ project: 'proj-c', category: 'solution', title: 'Combined fix A', body: 'Fix with combined approach.' });
+    store.saveEntry({ project: 'proj-c', category: 'error', title: 'Combined error B', body: 'Error with combined approach.' });
+    store.saveEntry({ project: 'other-proj', category: 'solution', title: 'Combined fix C', body: 'Fix in other project combined.' });
+
+    const results = store.searchEntries('combined', { project: 'proj-c', category: 'solution' });
+    assert.ok(results.length >= 1);
+    assert.ok(results.every(r => r.project === 'proj-c' && r.category === 'solution'));
+  } finally {
+    store.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

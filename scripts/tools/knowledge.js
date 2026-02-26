@@ -47,15 +47,17 @@ export function registerKnowledgeTools(server, { runCommand, readJson, DATA_DIR,
         query: z.string().min(1).max(300).describe('Поисковый запрос'),
         labels: z.array(z.string().regex(LABEL_RE)).max(10).optional().describe('Фильтр по меткам (для gh CLI fallback)'),
         limit: z.number().int().min(1).max(50).optional().describe('Максимум результатов (по умолчанию 10)'),
-        project: z.string().optional().describe('Фильтр по проекту')
+        project: z.string().optional().describe('Фильтр по проекту'),
+        category: z.enum(['solution', 'decision', 'pattern', 'error', 'session-summary']).optional().describe('Фильтр по категории'),
+        dateFrom: z.string().optional().describe('Фильтр по дате создания (ISO 8601, например 2026-01-01)')
       }).shape,
     },
-    async ({ query, labels, limit, project }) => {
+    async ({ query, labels, limit, project, category, dateFrom }) => {
       const maxResults = limit || 10;
 
       // 1. Try local KB first
       if (knowledgeStore) {
-        const results = knowledgeStore.searchEntries(query, { limit: maxResults, project });
+        const results = knowledgeStore.searchEntries(query, { limit: maxResults, project, category, dateFrom });
         if (results.length > 0) {
           return {
             content: [{ type: 'text', text: JSON.stringify({
@@ -137,7 +139,7 @@ export function registerKnowledgeTools(server, { runCommand, readJson, DATA_DIR,
   server.registerTool(
     'ctx_save_lesson',
     {
-      description: 'Сохранить урок/решение в KB с автодедупликацией по hash.',
+      description: 'Сохранить урок/решение в KB с upsert-дедупликацией (обновление при изменении содержимого).',
       inputSchema: z.object({
         project: z.string().min(1).describe('Имя проекта'),
         category: z.enum(['solution', 'decision', 'pattern', 'error', 'session-summary']).describe('Категория'),

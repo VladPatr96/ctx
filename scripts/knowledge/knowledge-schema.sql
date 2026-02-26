@@ -18,6 +18,8 @@ CREATE TABLE IF NOT EXISTS kb_entries (
 CREATE INDEX IF NOT EXISTS idx_kb_entries_project ON kb_entries(project);
 CREATE INDEX IF NOT EXISTS idx_kb_entries_category ON kb_entries(category);
 CREATE INDEX IF NOT EXISTS idx_kb_entries_hash ON kb_entries(hash);
+CREATE INDEX IF NOT EXISTS idx_kb_entries_project_category_date ON kb_entries(project, category, created_at);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_kb_entries_upsert_key ON kb_entries(project, category, title);
 
 CREATE VIRTUAL TABLE IF NOT EXISTS kb_fts USING fts5(
   title,

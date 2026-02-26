@@ -49,20 +49,37 @@ export class JsonKnowledgeStore {
 
   saveEntry({ project, category, title, body, tags = '', source = '', github_url = '' }) {
     const hash = computeHash(project, category, title, body);
-    if (this.hasEntry(hash)) {
-      return { saved: false, reason: 'duplicate', hash };
+    const existing = this.data.entries.find(
+      e => e.project === project && e.category === category && e.title === title
+    );
+
+    if (existing) {
+      if (existing.hash === hash) {
+        return { saved: false, reason: 'duplicate', hash };
+      }
+      const previousHash = existing.hash;
+      existing.hash = hash;
+      existing.body = body;
+      existing.tags = tags;
+      existing.source = source;
+      existing.github_url = github_url;
+      existing.updated_at = new Date().toISOString();
+      existing.version_count = (existing.version_count || 1) + 1;
+      this._save();
+      return { saved: true, updated: true, hash, previous_hash: previousHash, version: existing.version_count };
     }
+
     const now = new Date().toISOString();
     this.data.entries.push({
       id: this.data.entries.length + 1,
       hash, project, category, title, body, tags, source, github_url,
-      created_at: now, updated_at: now, access_count: 0
+      created_at: now, updated_at: now, access_count: 0, version_count: 1
     });
     this._save();
     return { saved: true, hash };
   }
 
-  searchEntries(query, { limit = 10, project = null } = {}) {
+  searchEntries(query, { limit = 10, project = null, category = null, dateFrom = null } = {}) {
     const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
     if (!terms.length) return [];
 
@@ -74,9 +91,9 @@ export class JsonKnowledgeStore {
       })
       .filter(e => e.score > 0);
 
-    if (project) {
-      results = results.filter(r => r.project === project);
-    }
+    if (project) results = results.filter(r => r.project === project);
+    if (category) results = results.filter(r => r.category === category);
+    if (dateFrom) results = results.filter(r => r.created_at >= dateFrom);
 
     results.sort((a, b) => b.score - a.score);
     results = results.slice(0, limit);

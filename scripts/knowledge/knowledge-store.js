@@ -57,6 +57,9 @@ export class KnowledgeStore {
     this.db.exec('PRAGMA busy_timeout = 2000;');
     this.db.exec(readFileSync(SCHEMA_FILE, 'utf8'));
 
+    // Migration: add version_count column (safe for existing DBs)
+    try { this.db.exec('ALTER TABLE kb_entries ADD COLUMN version_count INTEGER DEFAULT 1'); } catch {}
+
     this.prepareStatements();
   }
 
@@ -67,6 +70,17 @@ export class KnowledgeStore {
     `);
 
     this.hasEntryStmt = this.db.prepare('SELECT 1 FROM kb_entries WHERE hash = ?');
+
+    this.findByKeyStmt = this.db.prepare(
+      'SELECT hash, version_count FROM kb_entries WHERE project = ? AND category = ? AND title = ?'
+    );
+
+    this.updateEntryStmt = this.db.prepare(`
+      UPDATE kb_entries
+      SET hash = ?, body = ?, tags = ?, source = ?, github_url = ?, updated_at = ?,
+          version_count = version_count + 1
+      WHERE project = ? AND category = ? AND title = ?
+    `);
 
     this.searchStmt = this.db.prepare(`
       SELECT e.id, e.project, e.category, e.title, e.body, e.tags, e.source, e.github_url,
@@ -125,15 +139,22 @@ export class KnowledgeStore {
 
   saveEntry({ project, category, title, body, tags = '', source = '', github_url = '' }) {
     const hash = computeHash(project, category, title, body);
-    if (this.hasEntry(hash)) {
-      return { saved: false, reason: 'duplicate', hash };
-    }
     const now = new Date().toISOString();
+
+    const existing = this.findByKeyStmt.get(project, category, title);
+    if (existing) {
+      if (existing.hash === hash) {
+        return { saved: false, reason: 'duplicate', hash };
+      }
+      this.updateEntryStmt.run(hash, body, tags, source, github_url, now, project, category, title);
+      return { saved: true, updated: true, hash, previous_hash: existing.hash, version: existing.version_count + 1 };
+    }
+
     this.insertEntryStmt.run(hash, project, category, title, body, tags, source, github_url, now, now);
     return { saved: true, hash };
   }
 
-  searchEntries(query, { limit = 10, project = null } = {}) {
+  searchEntries(query, { limit = 10, project = null, category = null, dateFrom = null } = {}) {
     // Sanitize FTS5 query — wrap each word in double quotes for safety
     const safeQuery = query
       .replace(/[^\w\s-]/g, ' ')
@@ -146,10 +167,10 @@ export class KnowledgeStore {
     if (!safeQuery) return [];
 
     try {
-      let results = this.searchStmt.all(safeQuery, limit * 2);
-      if (project) {
-        results = results.filter(r => r.project === project);
-      }
+      let results = this.searchStmt.all(safeQuery, limit * 3);
+      if (project) results = results.filter(r => r.project === project);
+      if (category) results = results.filter(r => r.category === category);
+      if (dateFrom) results = results.filter(r => r.created_at >= dateFrom);
       results = results.slice(0, limit);
 
       for (const r of results) {
