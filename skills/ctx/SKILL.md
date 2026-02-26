@@ -36,10 +36,25 @@ description: >
 DETECT → CONTEXT → TASK → BRAINSTORM → PLAN → EXECUTE → DONE
 ```
 
-Состояние хранится в `.data/pipeline.json`. Используй MCP tools:
+Состояние хранится в `.data/pipeline.json`.
+
+### Для Claude Code (MCP native)
+
+Используй MCP tools:
 - `ctx_get_pipeline()` — текущее состояние
 - `ctx_set_stage(stage, data?)` — переход
 - `ctx_update_pipeline(patch)` — обновить поля
+
+### Для других провайдеров (CLI wrapper)
+
+Используй `scripts/ctx-cli.js`:
+```bash
+node "${CLAUDE_PLUGIN_ROOT}/scripts/ctx-cli.js" get_pipeline
+node "${CLAUDE_PLUGIN_ROOT}/scripts/ctx-cli.js" set_stage --stage context
+node "${CLAUDE_PLUGIN_ROOT}/scripts/ctx-cli.js" update_pipeline --patch '{"lead":"gemini"}'
+```
+
+Все операции возвращают JSON stdout. Парсь результаты перед использованием.
 
 ---
 

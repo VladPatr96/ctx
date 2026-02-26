@@ -2,12 +2,20 @@
 name: ctx
 description: >
   Unified pipeline for Codex CLI. Full cycle: DETECT, CONTEXT, TASK, BRAINSTORM, PLAN, EXECUTE, DONE.
-  No MCP — all state via file Read/Write operations on .data/pipeline.json.
+  MCP-first (ctx-hub) when available, with CLI/file fallback for compatibility.
 ---
 
 # /ctx — Unified Pipeline (Codex CLI)
 
-Single entry point for all CTX operations. Codex version uses file operations instead of MCP tools.
+Single entry point for all CTX operations.
+
+## Access priority (Codex)
+
+Use CTX in this order:
+
+1. **MCP (`ctx-hub`)** — preferred when the host exposes CTX tools (`ctx_get_pipeline`, `ctx_set_stage`, etc.)
+2. **CLI wrapper** — `node scripts/ctx-cli.js ...`
+3. **Direct file ops** — read/write `.data/pipeline.json` and append `.data/log.jsonl` (last resort)
 
 ## Commands
 
@@ -31,7 +39,29 @@ Single entry point for all CTX operations. Codex version uses file operations in
 DETECT -> CONTEXT -> TASK -> BRAINSTORM -> PLAN -> EXECUTE -> DONE
 ```
 
-State is stored in `.data/pipeline.json`. Since Codex has no MCP, use file operations:
+State is stored in `.data/pipeline.json`.
+
+### Preferred: MCP tools (when available)
+
+Use CTX MCP tools directly:
+- `ctx_get_pipeline()` — get current pipeline state
+- `ctx_set_stage(stage, data?)` — transition stage
+- `ctx_update_pipeline(patch)` — merge/update fields
+- `ctx_log_action(action, file?, result?)` — append action log
+- `ctx_log_error(error, solution, prevention?)` — append error log
+
+### Fallback: CLI wrapper
+
+If MCP is not available in the current host, use `scripts/ctx-cli.js`:
+
+```bash
+node scripts/ctx-cli.js get_pipeline
+node scripts/ctx-cli.js set_stage --stage context
+node scripts/ctx-cli.js update_pipeline --patch '{"lead":"codex"}'
+node scripts/ctx-cli.js log_action --entry '{"action":"stage_change","to":"context"}'
+```
+
+### Last resort: direct file operations
 
 ### Reading pipeline state
 
@@ -60,7 +90,7 @@ Append a JSON line to `.data/log.jsonl`:
 1. Check if `.data/index.json` exists:
    - Exists: existing project, `isNew = false`
    - Missing: new project, `isNew = true`
-2. Read `.data/pipeline.json` (create if missing with default structure):
+2. Get pipeline state (prefer `ctx_get_pipeline()`; fallback to file read). If missing, create with default structure:
 ```json
 {
   "stage": "detect",
@@ -71,7 +101,7 @@ Append a JSON line to `.data/log.jsonl`:
   "plan": {}
 }
 ```
-3. Set stage to "detect" with `isNew` flag, write back.
+3. Set stage to "detect" with `isNew` flag (prefer `ctx_set_stage`; fallback to file write).
 
 ### CONTEXT
 
@@ -96,7 +126,7 @@ gh issue list -l blocker --state open --json number,title,body 2>/dev/null
 gh issue list -l wip --state open --json number,title,body 2>/dev/null
 ```
 
-3. Update pipeline.json: set stage to "context", merge context data. Write back.
+3. Update pipeline: set stage to "context", merge context data (prefer MCP/CLI, fallback to file write).
 
 4. Create session log file `.sessions/YYYY-MM-DD-HHmm.md`:
 ```markdown
@@ -132,11 +162,11 @@ Or choose from open issues above.
 
 ## /ctx task <description>
 
-1. Read `.data/pipeline.json`
-2. Set `task` field to the description
-3. Set `stage` to "task"
-4. Write back to `.data/pipeline.json`
-5. Append to `.data/log.jsonl`: `{"ts":"...","action":"task_set","task":"<description>"}`
+1. Read pipeline state (prefer `ctx_get_pipeline()`)
+2. Set `task` field to the description (prefer `ctx_update_pipeline`)
+3. Set `stage` to "task" (prefer `ctx_set_stage`)
+4. If using fallback mode, write back to `.data/pipeline.json`
+5. Append action log (prefer `ctx_log_action`, fallback `.data/log.jsonl`)
 6. Show:
 ```
 Task set: <description>
@@ -185,11 +215,11 @@ Respond with your analysis and suggestions." 2>&1 | head -200
 **Limit:** after 5 rounds of brainstorm, produce automatic summary.
 
 After brainstorm:
-1. Read `.data/pipeline.json`
-2. Set `brainstorm.summary` to the summary
-3. Set `stage` to "brainstorm"
-4. Write back
-5. Append to log.jsonl
+1. Read pipeline state (prefer `ctx_get_pipeline()`)
+2. Set `brainstorm.summary` to the summary (prefer `ctx_update_pipeline`)
+3. Set `stage` to "brainstorm" (prefer `ctx_set_stage`)
+4. In fallback mode, write back
+5. Append action log (prefer `ctx_log_action`, fallback `.data/log.jsonl`)
 6. Show:
 ```
 Brainstorm complete. Summary: [brief summary]
@@ -204,13 +234,13 @@ Next: /ctx plan — generate implementation plan
 2. Follow architect instructions with context: task, brainstorm summary, project map
 3. Generate 2-3 plan variants with trade-offs
 4. Show variants to user, ask which to select
-5. Read `.data/pipeline.json`, set:
+5. Read pipeline state and set (prefer `ctx_update_pipeline`, fallback file write):
    - `plan.selected` = chosen variant number
    - `plan.variants` = all variants
    - `plan.agents` = list of agents needed
    - `stage` = "plan"
-6. Write back to `.data/pipeline.json`
-7. Append to log.jsonl
+6. If using fallback mode, write back to `.data/pipeline.json`
+7. Append action log (prefer `ctx_log_action`, fallback `.data/log.jsonl`)
 8. Show:
 ```
 Plan ready. Selected: Variant N
@@ -222,7 +252,7 @@ Next: /ctx execute — start implementation
 
 ## /ctx execute
 
-1. Read `.data/pipeline.json`, get the approved plan from `plan.selected`
+1. Read pipeline state (prefer `ctx_get_pipeline()`), get the approved plan from `plan.selected`
 2. For each subtask in the plan, read the appropriate agent file:
    - Code -> `agents/implementer.md`
    - Tests -> `agents/tester.md`
@@ -230,8 +260,8 @@ Next: /ctx execute — start implementation
 3. Execute subtasks following agent instructions
 4. After all subtasks, read `agents/reviewer.md` and perform code review
 5. If review has issues — iterate
-6. Update pipeline.json: set stage to "execute", then "done" when complete
-7. Append all actions to log.jsonl
+6. Update pipeline: set stage to "execute", then "done" when complete (prefer `ctx_set_stage`)
+7. Append all actions (prefer `ctx_log_action`, fallback `.data/log.jsonl`)
 
 ---
 
@@ -266,7 +296,7 @@ gh issue create -R VladPatr96/my_claude_code \
 
 ## /ctx status
 
-Read `.data/pipeline.json` and show:
+Read pipeline state (prefer `ctx_get_pipeline()`, fallback `.data/pipeline.json`) and show:
 ```
 Pipeline: [current stage]
 Lead: [provider]
@@ -395,7 +425,7 @@ gh issue create -R VladPatr96/my_claude_code \
 ## Rules
 
 1. **Thin dispatcher** — this skill only routes, all logic lives in agent files
-2. **Pipeline state** — always in `.data/pipeline.json`, read before modify, write after
+2. **Pipeline state** — prefer CTX MCP tools; fallback to CLI wrapper; direct file writes only when needed
 3. **Consilium isolation** — providers do not see each other's answers until synthesis
 4. **Lessons** — every bug fix becomes a GitHub Issue with `lesson` label
 5. `.sessions/` is in `.gitignore` — logs are private
