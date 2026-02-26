@@ -179,16 +179,19 @@ export function registerConsiliumTools(server, { getResults, saveResults, DATA_D
         preset: z.string().optional().describe('Пресет из consilium.presets.json (debate-full, debate-fast, debate-claims)'),
         enableClaimExtraction: z.boolean().optional().default(false).describe('Включить claim extraction между раундами (CBDP)'),
         claimProvider: z.string().optional().default('claude').describe('Провайдер для claim extraction'),
-        enableStructuredResponse: z.boolean().optional().default(false).describe('Включить structured response format (CBDP Phase 2)')
+        enableStructuredResponse: z.boolean().optional().default(false).describe('Включить structured response format (CBDP Phase 2)'),
+        enableSmartSynthesis: z.boolean().optional().default(false).describe('Включить smart synthesis с claim graph (CBDP Phase 3)'),
+        synthesisProvider: z.string().optional().default('claude').describe('Провайдер для синтеза')
       }).shape,
     },
-    async ({ topic, providers: providersList, rounds, projectContext, timeout, preset, enableClaimExtraction, claimProvider, enableStructuredResponse }) => {
+    async ({ topic, providers: providersList, rounds, projectContext, timeout, preset, enableClaimExtraction, claimProvider, enableStructuredResponse, enableSmartSynthesis, synthesisProvider }) => {
       try {
         // Resolve preset if provided
         let resolvedProviders = providersList;
         let resolvedRounds = rounds;
         let resolvedClaimExtraction = enableClaimExtraction;
         let resolvedStructuredResponse = enableStructuredResponse;
+        let resolvedSmartSynthesis = enableSmartSynthesis;
         if (preset && existsSync(PRESETS_FILE)) {
           const presets = JSON.parse(readFileSync(PRESETS_FILE, 'utf-8'));
           const presetConfig = presets[preset];
@@ -200,6 +203,9 @@ export function registerConsiliumTools(server, { getResults, saveResults, DATA_D
             }
             if (presetConfig.enableStructuredResponse !== undefined && !enableStructuredResponse) {
               resolvedStructuredResponse = presetConfig.enableStructuredResponse;
+            }
+            if (presetConfig.enableSmartSynthesis !== undefined && !enableSmartSynthesis) {
+              resolvedSmartSynthesis = presetConfig.enableSmartSynthesis;
             }
           }
         }
@@ -223,7 +229,9 @@ export function registerConsiliumTools(server, { getResults, saveResults, DATA_D
           evalStore,
           enableClaimExtraction: resolvedClaimExtraction,
           claimProvider: claimProvider || 'claude',
-          enableStructuredResponse: resolvedStructuredResponse
+          enableStructuredResponse: resolvedStructuredResponse,
+          enableSmartSynthesis: resolvedSmartSynthesis,
+          synthesisProvider: synthesisProvider || 'claude'
         });
 
         const result = await orchestrator.execute();
@@ -256,6 +264,22 @@ export function registerConsiliumTools(server, { getResults, saveResults, DATA_D
             }))
           }))
         };
+
+        // Phase 3: add synthesis, claim graph, auto-stop
+        if (result.synthesis) {
+          output.synthesis = {
+            provider: result.synthesis.provider,
+            status: result.synthesis.status,
+            response: result.synthesis.response?.slice(0, 10000),
+            parsed: result.synthesis.parsed
+          };
+        }
+        if (result.claimGraph) {
+          output.claim_graph = result.claimGraph.stats;
+        }
+        if (result.autoStop) {
+          output.auto_stop = result.autoStop;
+        }
 
         // Close eval store
         if (evalStore) {

@@ -217,3 +217,71 @@ ${roundHistory}
 
 Отвечай на русском.`;
 }
+
+/**
+ * Build a smart synthesis prompt (CBDP Phase 3).
+ * Uses claim graph and trust matrix for weighted synthesis.
+ * @param {object} params
+ * @param {string} params.topic
+ * @param {Array} params.rounds
+ * @param {Map<string, string>|object} params.aliasMap
+ * @param {{consensus, contested, unique, stats}} params.claimGraph
+ * @param {object} params.aggregatedTrustScores
+ * @param {{stoppedAfterRound: number, reason: string}|null} [params.autoStopped]
+ * @returns {string}
+ */
+export function buildSmartSynthesisPrompt({ topic, rounds, aliasMap, claimGraphFormatted, aggregatedTrustScores, autoStopped }) {
+  const aliasEntries = aliasMap instanceof Map
+    ? [...aliasMap.entries()]
+    : Object.entries(aliasMap);
+  const aliasReveal = aliasEntries
+    .map(([provider, alias]) => `- ${alias} = ${provider}`)
+    .join('\n');
+
+  // Format trust matrix
+  const trustLines = [];
+  if (aggregatedTrustScores && typeof aggregatedTrustScores === 'object') {
+    for (const [from, targets] of Object.entries(aggregatedTrustScores)) {
+      const scores = Object.entries(targets)
+        .map(([to, score]) => `${to}: ${score}`)
+        .join(', ');
+      if (scores) trustLines.push(`  ${from} → {${scores}}`);
+    }
+  }
+  const trustSection = trustLines.length > 0
+    ? `\nМатрица доверия (trust scores, среднее по раундам):\n${trustLines.join('\n')}`
+    : '';
+
+  const claimGraphSection = claimGraphFormatted
+    ? `\nГраф claims:\n\n${claimGraphFormatted}`
+    : '';
+
+  const autoStopSection = autoStopped
+    ? `\nДискуссия завершена досрочно после раунда ${autoStopped.stoppedAfterRound}: ${autoStopped.reason}\n`
+    : '';
+
+  return `Ты главный синтезатор многораундового консилиума (CBDP Smart Synthesis).
+Задача: ${topic}
+
+Маппинг участников (раскрыт):
+${aliasReveal}
+${autoStopSection}${trustSection}
+${claimGraphSection}
+---
+Проанализируй дискуссию и ответь СТРОГО JSON-объектом:
+
+{
+  "consensus_points": ["Утверждения, по которым все сошлись"],
+  "disputed_points": [{"claim_id": "A1", "summary": "Суть спора и позиции сторон"}],
+  "recommendation": "Итоговая рекомендация, синтезирующая лучшие элементы с учётом trust scores",
+  "confidence": 0.0-1.0,
+  "trust_weighted_summary": "Краткий обзор: чьи аргументы наиболее убедительны с учётом оценок доверия"
+}
+
+Правила:
+- Используй claim graph для определения точек согласия и спора
+- Учитывай trust scores: мнения более доверенных участников имеют больший вес
+- Для каждого спорного claim укажи позиции сторон
+- Ответь ТОЛЬКО JSON-объектом, без markdown
+- Отвечай на русском`;
+}

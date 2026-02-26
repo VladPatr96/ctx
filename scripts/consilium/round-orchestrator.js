@@ -5,8 +5,9 @@
  * Dependency injection for invoke and evalStore enables testing.
  */
 
-import { buildR1Prompt, buildFollowUpPrompt, buildStructuredFollowUpPrompt, formatClaimsBlock } from './prompts.js';
+import { buildR1Prompt, buildFollowUpPrompt, buildStructuredFollowUpPrompt, buildSmartSynthesisPrompt, formatClaimsBlock } from './prompts.js';
 import { extractClaimsFromResponses } from './claim-extractor.js';
+import { buildClaimGraph, formatClaimGraph } from './claim-graph.js';
 
 const ALIAS_LETTERS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
 
@@ -180,7 +181,10 @@ export function createRoundOrchestrator(options) {
     enableClaimExtraction = false,
     claimProvider = 'claude',
     claimTimeout = 30000,
-    enableStructuredResponse = false
+    enableStructuredResponse = false,
+    enableSmartSynthesis = false,
+    synthesisProvider = 'claude',
+    synthesisTimeout = 90000
   } = options;
 
   const clampedRounds = Math.max(1, Math.min(4, maxRounds));
@@ -198,6 +202,7 @@ export function createRoundOrchestrator(options) {
       // Phase 2: accumulated claims and trust scores
       const accumulatedClaims = new Map(); // alias → [...claims]
       const trustScoreHistory = new Map(); // alias → [{round, scores}]
+      let autoStopInfo = null; // Phase 3: auto-stop info
 
       // Start eval run if store provided and no existing runId
       if (evalStore && !runId) {
@@ -433,6 +438,19 @@ export function createRoundOrchestrator(options) {
         }
 
         roundHistory.push(roundEntry);
+
+        // Phase 3: auto-stop if no contested claims
+        if (enableSmartSynthesis && enableStructuredResponse && roundNum >= 2 && roundNum < clampedRounds) {
+          const graph = buildClaimGraph({
+            allClaims: accumulatedClaims,
+            rounds: roundHistory,
+            enableStructuredResponse
+          });
+          if (graph.stats.contested_count === 0) {
+            autoStopInfo = { stoppedAfterRound: roundNum, reason: 'No contested claims remaining' };
+            break;
+          }
+        }
       }
 
       const totalDurationMs = Date.now() - startTime;
@@ -471,6 +489,75 @@ export function createRoundOrchestrator(options) {
           }
         }
         result.aggregatedTrustScores = aggregated;
+      }
+
+      // Phase 3: smart synthesis
+      if (enableSmartSynthesis) {
+        const claimGraphData = enableStructuredResponse && accumulatedClaims.size > 0
+          ? buildClaimGraph({ allClaims: accumulatedClaims, rounds: roundHistory, enableStructuredResponse })
+          : null;
+
+        if (claimGraphData) {
+          result.claimGraph = claimGraphData;
+        }
+        if (autoStopInfo) {
+          result.autoStop = autoStopInfo;
+        }
+
+        // Build and execute synthesis
+        try {
+          const claimGraphStr = claimGraphData ? formatClaimGraph(claimGraphData) : null;
+          const aggregatedScores = result.aggregatedTrustScores || {};
+          const synthesisPrompt = buildSmartSynthesisPrompt({
+            topic,
+            rounds: roundHistory,
+            aliasMap,
+            claimGraphFormatted: claimGraphStr,
+            aggregatedTrustScores: aggregatedScores,
+            autoStopped: autoStopInfo
+          });
+
+          const synthResult = await doInvoke(synthesisProvider, synthesisPrompt, { timeout: synthesisTimeout });
+          const synthEntry = {
+            provider: synthesisProvider,
+            status: synthResult.status === 'success' ? 'success' : 'error',
+            response: synthResult.response || synthResult.error || null,
+            parsed: null
+          };
+
+          // Try to parse structured synthesis response
+          if (synthResult.status === 'success' && synthResult.response) {
+            try {
+              let jsonStr = synthResult.response.trim();
+              const jsonMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/);
+              if (jsonMatch) jsonStr = jsonMatch[1].trim();
+              const firstBrace = jsonStr.indexOf('{');
+              const lastBrace = jsonStr.lastIndexOf('}');
+              if (firstBrace !== -1 && lastBrace > firstBrace) {
+                jsonStr = jsonStr.slice(firstBrace, lastBrace + 1);
+              }
+              const parsed = JSON.parse(jsonStr);
+              synthEntry.parsed = {
+                consensus_points: Array.isArray(parsed.consensus_points) ? parsed.consensus_points : [],
+                disputed_points: Array.isArray(parsed.disputed_points) ? parsed.disputed_points : [],
+                recommendation: parsed.recommendation || '',
+                confidence: typeof parsed.confidence === 'number' ? parsed.confidence : 0.5,
+                trust_weighted_summary: parsed.trust_weighted_summary || ''
+              };
+            } catch {
+              // Keep raw response, parsed stays null
+            }
+          }
+
+          result.synthesis = synthEntry;
+        } catch (err) {
+          result.synthesis = {
+            provider: synthesisProvider,
+            status: 'error',
+            response: err?.message || 'Synthesis failed',
+            parsed: null
+          };
+        }
       }
 
       return result;

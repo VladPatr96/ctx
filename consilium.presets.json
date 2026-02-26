@@ -41,5 +41,13 @@
     "rounds": 3,
     "enableClaimExtraction": true,
     "enableStructuredResponse": true
+  },
+  "debate-smart": {
+    "description": "Полный CBDP — claims + structured + smart synthesis (Phase 3)",
+    "providers": ["claude", "gemini", "codex"],
+    "rounds": 3,
+    "enableClaimExtraction": true,
+    "enableStructuredResponse": true,
+    "enableSmartSynthesis": true
   }
 }

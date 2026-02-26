@@ -11,9 +11,14 @@ import {
   buildFollowUpPrompt,
   buildStructuredFollowUpPrompt,
   buildSynthesisPrompt,
+  buildSmartSynthesisPrompt,
   formatAnonymizedResponses,
   formatClaimsBlock
 } from '../scripts/consilium/prompts.js';
+import {
+  buildClaimGraph,
+  formatClaimGraph
+} from '../scripts/consilium/claim-graph.js';
 import {
   buildClaimExtractionPrompt,
   parseClaimExtractionResponse,
@@ -965,4 +970,372 @@ test('orchestrator: enableStructuredResponse=true + enableClaimExtraction=true �
   // Extraction should have been called
   const extractionCalls = invokeCalls.filter(c => c.prompt.includes('извлеки'));
   assert.ok(extractionCalls.length > 0, 'extraction should have been called');
+});
+
+// ==== CBDP Phase 3: buildClaimGraph ====
+
+test('buildClaimGraph: consensus — accepted by 2+, no challenges', () => {
+  const allClaims = {
+    'Participant A': [{ id: 'A1', text: 'use microservices', type: 'opinion' }],
+    'Participant B': [{ id: 'B1', text: 'use monolith', type: 'opinion' }]
+  };
+  const rounds = [
+    { round: 1, responses: [] },
+    { round: 2, responses: [
+      { alias: 'Participant A', status: 'success', response: JSON.stringify({ stance: 'agree', confidence: 0.8, accepts: ['B1'], challenges: [], new_claims: [], trust_scores: {} }) },
+      { alias: 'Participant B', status: 'success', response: JSON.stringify({ stance: 'agree', confidence: 0.9, accepts: ['A1'], challenges: [], new_claims: [], trust_scores: {} }) }
+    ]}
+  ];
+  const graph = buildClaimGraph({ allClaims, rounds });
+  // A1 accepted by B, B1 accepted by A → each has 1 accept (not 2+, but no challenges → consensus with 1)
+  assert.equal(graph.contested.length, 0);
+  assert.equal(graph.stats.contested_count, 0);
+  assert.equal(graph.stats.contention_ratio, 0);
+});
+
+test('buildClaimGraph: contested — at least 1 challenge', () => {
+  const allClaims = {
+    'Participant A': [{ id: 'A1', text: 'use microservices', type: 'opinion' }],
+    'Participant B': [{ id: 'B1', text: 'use monolith', type: 'opinion' }]
+  };
+  const rounds = [
+    { round: 1, responses: [] },
+    { round: 2, responses: [
+      { alias: 'Participant A', status: 'success', response: JSON.stringify({ stance: 'disagree', confidence: 0.7, accepts: [], challenges: [{ target: 'B1', type: 'contradict', argument: 'monolith too rigid' }], new_claims: [], trust_scores: {} }) },
+      { alias: 'Participant B', status: 'success', response: JSON.stringify({ stance: 'disagree', confidence: 0.6, accepts: [], challenges: [{ target: 'A1', type: 'weaken', argument: 'too complex' }], new_claims: [], trust_scores: {} }) }
+    ]}
+  ];
+  const graph = buildClaimGraph({ allClaims, rounds });
+  assert.equal(graph.contested.length, 2, 'both claims should be contested');
+  assert.equal(graph.consensus.length, 0);
+  assert.equal(graph.stats.contested_count, 2);
+  assert.ok(graph.stats.contention_ratio > 0);
+});
+
+test('buildClaimGraph: unique — not referenced by anyone', () => {
+  const allClaims = {
+    'Participant A': [
+      { id: 'A1', text: 'first claim', type: 'fact' },
+      { id: 'A2', text: 'second claim', type: 'opinion' }
+    ],
+    'Participant B': [{ id: 'B1', text: 'B claim', type: 'risk' }]
+  };
+  const rounds = [
+    { round: 1, responses: [] },
+    { round: 2, responses: [
+      { alias: 'Participant A', status: 'success', response: JSON.stringify({ stance: 'agree', confidence: 0.8, accepts: ['B1'], challenges: [], new_claims: [], trust_scores: {} }) },
+      { alias: 'Participant B', status: 'success', response: JSON.stringify({ stance: 'agree', confidence: 0.8, accepts: ['A1'], challenges: [], new_claims: [], trust_scores: {} }) }
+    ]}
+  ];
+  const graph = buildClaimGraph({ allClaims, rounds });
+  // A2 not referenced → unique
+  assert.equal(graph.unique.length, 1);
+  assert.equal(graph.unique[0].id, 'A2');
+  assert.equal(graph.unique[0].from, 'Participant A');
+});
+
+test('buildClaimGraph: empty claims → empty graph', () => {
+  const graph = buildClaimGraph({ allClaims: {}, rounds: [] });
+  assert.equal(graph.stats.total, 0);
+  assert.equal(graph.consensus.length, 0);
+  assert.equal(graph.contested.length, 0);
+  assert.equal(graph.unique.length, 0);
+  assert.equal(graph.stats.contention_ratio, 0);
+});
+
+test('buildClaimGraph: contention_ratio calculation', () => {
+  const allClaims = {
+    'Participant A': [
+      { id: 'A1', text: 'claim 1', type: 'fact' },
+      { id: 'A2', text: 'claim 2', type: 'fact' }
+    ]
+  };
+  const rounds = [
+    { round: 1, responses: [] },
+    { round: 2, responses: [
+      { alias: 'Participant B', status: 'success', response: JSON.stringify({ stance: 'partial_agree', confidence: 0.7, accepts: ['A1'], challenges: [{ target: 'A2', type: 'weaken', argument: 'weak' }], new_claims: [], trust_scores: {} }) }
+    ]}
+  ];
+  const graph = buildClaimGraph({ allClaims, rounds });
+  // 1 contested out of 2 total = 0.5
+  assert.equal(graph.stats.contention_ratio, 0.5);
+});
+
+test('buildClaimGraph: Map input for allClaims', () => {
+  const allClaims = new Map([
+    ['Participant A', [{ id: 'A1', text: 'test', type: 'fact' }]]
+  ]);
+  const graph = buildClaimGraph({ allClaims, rounds: [] });
+  assert.equal(graph.stats.total, 1);
+  assert.equal(graph.unique.length, 1);
+});
+
+// ==== formatClaimGraph ====
+
+test('formatClaimGraph: includes all sections', () => {
+  const graph = {
+    consensus: [{ id: 'A1', text: 'agreed', type: 'fact', supportedBy: ['Participant B'] }],
+    contested: [{ id: 'B1', text: 'disputed', type: 'opinion', positions: [
+      { alias: 'Participant A', stance: 'challenge', argument: 'wrong' }
+    ]}],
+    unique: [{ id: 'C1', text: 'solo', type: 'risk', from: 'Participant C' }],
+    stats: { total: 3, consensus_count: 1, contested_count: 1, unique_count: 1, contention_ratio: 0.33 }
+  };
+  const formatted = formatClaimGraph(graph);
+  assert.ok(formatted.includes('Консенсус'));
+  assert.ok(formatted.includes('Спорные'));
+  assert.ok(formatted.includes('Уникальные'));
+  assert.ok(formatted.includes('Статистика'));
+  assert.ok(formatted.includes('[A1]'));
+  assert.ok(formatted.includes('[B1]'));
+  assert.ok(formatted.includes('[C1]'));
+  assert.ok(formatted.includes('ОСПАРИВАЕТ'));
+});
+
+test('formatClaimGraph: empty graph → only stats, no detail sections', () => {
+  const graph = { consensus: [], contested: [], unique: [], stats: { total: 0, consensus_count: 0, contested_count: 0, unique_count: 0, contention_ratio: 0 } };
+  const formatted = formatClaimGraph(graph);
+  assert.ok(formatted.includes('Статистика'));
+  assert.ok(formatted.includes('Всего claims: 0'));
+  // No detail sections (claims lists) should appear
+  assert.ok(!formatted.includes('Консенсус (принятые claims)'), 'should not have consensus detail section');
+  assert.ok(!formatted.includes('Спорные claims'), 'should not have contested detail section');
+  assert.ok(!formatted.includes('Уникальные (без реакции)'), 'should not have unique detail section');
+});
+
+// ==== buildSmartSynthesisPrompt ====
+
+test('buildSmartSynthesisPrompt: includes claim graph and trust matrix', () => {
+  const prompt = buildSmartSynthesisPrompt({
+    topic: 'test topic',
+    rounds: [],
+    aliasMap: new Map([['claude', 'Participant A'], ['gemini', 'Participant B']]),
+    claimGraphFormatted: '=== Статистика ===\nВсего claims: 5',
+    aggregatedTrustScores: { 'Participant A': { B: 0.8 }, 'Participant B': { A: 0.7 } },
+    autoStopped: null
+  });
+  assert.ok(prompt.includes('test topic'));
+  assert.ok(prompt.includes('Participant A = claude'));
+  assert.ok(prompt.includes('Всего claims: 5'));
+  assert.ok(prompt.includes('Матрица доверия'));
+  assert.ok(prompt.includes('consensus_points'));
+  assert.ok(prompt.includes('disputed_points'));
+  assert.ok(prompt.includes('trust_weighted_summary'));
+});
+
+test('buildSmartSynthesisPrompt: includes auto-stop info', () => {
+  const prompt = buildSmartSynthesisPrompt({
+    topic: 'test',
+    rounds: [],
+    aliasMap: new Map([['claude', 'Participant A']]),
+    claimGraphFormatted: null,
+    aggregatedTrustScores: {},
+    autoStopped: { stoppedAfterRound: 2, reason: 'No contested claims remaining' }
+  });
+  assert.ok(prompt.includes('завершена досрочно'));
+  assert.ok(prompt.includes('раунда 2'));
+  assert.ok(prompt.includes('No contested claims'));
+});
+
+test('buildSmartSynthesisPrompt: no auto-stop → no auto-stop text', () => {
+  const prompt = buildSmartSynthesisPrompt({
+    topic: 'test',
+    rounds: [],
+    aliasMap: new Map([['claude', 'Participant A']]),
+    claimGraphFormatted: null,
+    aggregatedTrustScores: {},
+    autoStopped: null
+  });
+  assert.ok(!prompt.includes('завершена досрочно'));
+});
+
+// ==== Orchestrator with enableSmartSynthesis=true ====
+
+test('orchestrator: enableSmartSynthesis=true — synthesis called after rounds', async () => {
+  const invokeCalls = [];
+  const mockInvoke = async (provider, prompt) => {
+    invokeCalls.push({ provider, prompt });
+    if (prompt.includes('извлеки')) {
+      return { status: 'success', response: JSON.stringify([{ text: 'claim', type: 'fact' }]) };
+    }
+    if (prompt.includes('Smart Synthesis') || prompt.includes('синтезатор')) {
+      return {
+        status: 'success',
+        response: JSON.stringify({
+          consensus_points: ['all agree on X'],
+          disputed_points: [{ claim_id: 'A1', summary: 'disputed' }],
+          recommendation: 'do X',
+          confidence: 0.85,
+          trust_weighted_summary: 'A is most trusted'
+        })
+      };
+    }
+    if (!prompt.includes('раунд')) {
+      return { status: 'success', response: `R1 from ${provider}` };
+    }
+    return {
+      status: 'success',
+      response: JSON.stringify({
+        stance: 'partial_agree',
+        confidence: 0.7,
+        accepts: ['A1'],
+        challenges: [{ target: 'B1', type: 'weaken', argument: 'weak' }],
+        new_claims: [],
+        trust_scores: { A: 0.8 }
+      })
+    };
+  };
+
+  const orch = createRoundOrchestrator({
+    topic: 'test synthesis',
+    providers: ['alpha', 'beta'],
+    rounds: 2,
+    invokeFn: mockInvoke,
+    enableClaimExtraction: true,
+    enableStructuredResponse: true,
+    enableSmartSynthesis: true,
+    claimProvider: 'alpha',
+    synthesisProvider: 'alpha'
+  });
+
+  const result = await orch.execute();
+  assert.ok(result.synthesis, 'should have synthesis');
+  assert.equal(result.synthesis.status, 'success');
+  assert.ok(result.synthesis.parsed, 'should have parsed synthesis');
+  assert.deepEqual(result.synthesis.parsed.consensus_points, ['all agree on X']);
+  assert.equal(result.synthesis.parsed.recommendation, 'do X');
+  assert.equal(result.synthesis.parsed.confidence, 0.85);
+});
+
+test('orchestrator: enableSmartSynthesis=true — claimGraph in result', async () => {
+  const mockInvoke = async (provider, prompt) => {
+    if (prompt.includes('извлеки')) {
+      return { status: 'success', response: JSON.stringify([{ text: 'claim', type: 'fact' }]) };
+    }
+    if (prompt.includes('синтезатор') || prompt.includes('Smart Synthesis')) {
+      return { status: 'success', response: '{"consensus_points":[],"disputed_points":[],"recommendation":"ok","confidence":0.5,"trust_weighted_summary":""}' };
+    }
+    if (!prompt.includes('раунд')) {
+      return { status: 'success', response: `R1 from ${provider}` };
+    }
+    return {
+      status: 'success',
+      response: JSON.stringify({ stance: 'agree', confidence: 0.9, accepts: [], challenges: [], new_claims: [], trust_scores: {} })
+    };
+  };
+
+  const orch = createRoundOrchestrator({
+    topic: 'test graph',
+    providers: ['a', 'b'],
+    rounds: 2,
+    invokeFn: mockInvoke,
+    enableClaimExtraction: true,
+    enableStructuredResponse: true,
+    enableSmartSynthesis: true,
+    claimProvider: 'a'
+  });
+
+  const result = await orch.execute();
+  assert.ok(result.claimGraph, 'should have claimGraph');
+  assert.ok(result.claimGraph.stats, 'should have stats');
+  assert.ok(typeof result.claimGraph.stats.total === 'number');
+});
+
+test('orchestrator: auto-stop when 0 contested claims after R2', async () => {
+  const mockInvoke = async (provider, prompt) => {
+    if (prompt.includes('извлеки')) {
+      return { status: 'success', response: JSON.stringify([{ text: 'claim', type: 'fact' }]) };
+    }
+    if (prompt.includes('синтезатор') || prompt.includes('Smart Synthesis')) {
+      return { status: 'success', response: '{"consensus_points":["all agree"],"disputed_points":[],"recommendation":"consensus","confidence":0.95,"trust_weighted_summary":""}' };
+    }
+    if (!prompt.includes('раунд')) {
+      return { status: 'success', response: `R1 from ${provider}` };
+    }
+    // All accept each other's claims, no challenges → 0 contested
+    return {
+      status: 'success',
+      response: JSON.stringify({
+        stance: 'agree',
+        confidence: 0.95,
+        accepts: ['A1', 'B1'],
+        challenges: [],
+        new_claims: [],
+        trust_scores: { A: 0.9, B: 0.9 }
+      })
+    };
+  };
+
+  const orch = createRoundOrchestrator({
+    topic: 'test auto-stop',
+    providers: ['x', 'y'],
+    rounds: 3, // Should stop after R2
+    invokeFn: mockInvoke,
+    enableClaimExtraction: true,
+    enableStructuredResponse: true,
+    enableSmartSynthesis: true,
+    claimProvider: 'x'
+  });
+
+  const result = await orch.execute();
+  assert.ok(result.autoStop, 'should have auto-stop info');
+  assert.equal(result.autoStop.stoppedAfterRound, 2);
+  assert.equal(result.rounds.length, 2, 'should only have 2 rounds (R3 skipped)');
+});
+
+test('orchestrator: enableSmartSynthesis=true — synthesis fallback on invalid JSON', async () => {
+  const mockInvoke = async (provider, prompt) => {
+    if (prompt.includes('извлеки')) {
+      return { status: 'success', response: JSON.stringify([{ text: 'claim', type: 'fact' }]) };
+    }
+    if (prompt.includes('синтезатор') || prompt.includes('Smart Synthesis')) {
+      return { status: 'success', response: 'This is not JSON synthesis output' };
+    }
+    if (!prompt.includes('раунд')) {
+      return { status: 'success', response: `R1 from ${provider}` };
+    }
+    return {
+      status: 'success',
+      response: JSON.stringify({ stance: 'agree', confidence: 0.9, accepts: [], challenges: [], new_claims: [], trust_scores: {} })
+    };
+  };
+
+  const orch = createRoundOrchestrator({
+    topic: 'test synthesis fallback',
+    providers: ['a', 'b'],
+    rounds: 2,
+    invokeFn: mockInvoke,
+    enableClaimExtraction: true,
+    enableStructuredResponse: true,
+    enableSmartSynthesis: true,
+    claimProvider: 'a'
+  });
+
+  const result = await orch.execute();
+  assert.ok(result.synthesis, 'should have synthesis');
+  assert.equal(result.synthesis.status, 'success');
+  assert.equal(result.synthesis.parsed, null, 'parsed should be null for invalid JSON');
+  assert.ok(result.synthesis.response.includes('not JSON'), 'raw response preserved');
+});
+
+test('orchestrator: enableSmartSynthesis=false → no synthesis (no regression)', async () => {
+  const mockInvoke = async (provider, prompt) => {
+    if (!prompt.includes('раунд')) {
+      return { status: 'success', response: `R1 from ${provider}` };
+    }
+    return { status: 'success', response: JSON.stringify({ current_position: 'pos', evaluations: [], agreements: [], disagreements: [], confidence: 0.8 }) };
+  };
+
+  const orch = createRoundOrchestrator({
+    topic: 'test no synthesis',
+    providers: ['a', 'b'],
+    rounds: 2,
+    invokeFn: mockInvoke,
+    enableSmartSynthesis: false
+  });
+
+  const result = await orch.execute();
+  assert.equal(result.synthesis, undefined, 'should not have synthesis');
+  assert.equal(result.claimGraph, undefined, 'should not have claimGraph');
+  assert.equal(result.autoStop, undefined, 'should not have autoStop');
 });
