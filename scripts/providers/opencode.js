@@ -1,7 +1,7 @@
 /**
  * OpenCode CLI provider adapter.
- * Primary: opencode run "prompt"
- * Fallback: opencode --model "<model>" "prompt"
+ * Primary: opencode run "prompt" --format json
+ * Fallback: opencode run "prompt" (default/text mode)
  */
 
 import { runCommand, runCliWithFallback, buildDetail } from '../utils/shell.js';
@@ -131,11 +131,11 @@ function shouldRetryWithCodingPlan(model) {
 }
 
 async function tryDirectMode(prompt, model, opts) {
-  const args = [];
+  // Use `run` subcommand in fallback too. Top-level positional starts TUI in a project dir.
+  const args = ['run', String(prompt)];
   if (model) {
     args.push('--model', model);
   }
-  args.push(String(prompt));
   return runCliWithFallback('opencode', args, opts);
 }
 
