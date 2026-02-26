@@ -3,7 +3,7 @@
  * gemini -p "prompt" -o text
  */
 
-import { runCommand, runCommandShell, shellEscape } from '../utils/shell.js';
+import { runCommand, runCommandShell, shellEscape, buildDetail } from '../utils/shell.js';
 
 export default {
   name: 'gemini',
@@ -56,13 +56,4 @@ function normalizeModel(model) {
   return raw;
 }
 
-
-function buildDetail(result) {
-  const raw = result.rawError || {};
-  const detailParts = [
-    typeof raw.stderr === 'string' ? raw.stderr.trim() : '',
-    typeof raw.stdout === 'string' ? raw.stdout.trim() : ''
-  ].filter(Boolean);
-  return detailParts.join('\n').slice(0, 2000) || result.error || null;
-}
 

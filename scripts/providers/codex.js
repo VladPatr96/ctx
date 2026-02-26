@@ -3,7 +3,7 @@
  * codex exec --ephemeral --skip-git-repo-check "prompt"
  */
 
-import { runCommand } from '../utils/shell.js';
+import { runCommand, runCliWithFallback, buildDetail } from '../utils/shell.js';
 
 export default {
   name: 'codex',
@@ -75,19 +75,3 @@ export default {
   }
 };
 
-function buildDetail(result) {
-  const raw = result.rawError || {};
-  const detailParts = [
-    typeof raw.stderr === 'string' ? raw.stderr.trim() : '',
-    typeof raw.stdout === 'string' ? raw.stdout.trim() : ''
-  ].filter(Boolean);
-  return detailParts.join('\n').slice(0, 2000) || result.error || null;
-}
-
-async function runCliWithFallback(command, args, opts) {
-  const first = await runCommand(command, args, { ...opts, shell: false });
-  if (!first.success && String(first.error || '').includes('ENOENT')) {
-    return runCommand(command, args, { ...opts, shell: true });
-  }
-  return first;
-}

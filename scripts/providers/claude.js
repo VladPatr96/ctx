@@ -4,7 +4,7 @@
  * Для внешнего вызова — через claude CLI.
  */
 
-import { runCommand } from '../utils/shell.js';
+import { runCommand, runCliWithFallback, buildDetail } from '../utils/shell.js';
 
 export default {
   name: 'claude',
@@ -31,7 +31,11 @@ export default {
     });
 
     if (!result.success) {
-      return buildInvokeError(result);
+      return {
+        status: 'error',
+        error: result.error || 'claude_invoke_failed',
+        detail: buildDetail(result)
+      };
     }
     return { status: 'success', response: result.stdout };
   },
@@ -51,24 +55,4 @@ function normalizeModel(model) {
   return String(model).trim();
 }
 
-function buildInvokeError(result) {
-  const raw = result.rawError || {};
-  const detailParts = [
-    typeof raw.stderr === 'string' ? raw.stderr.trim() : '',
-    typeof raw.stdout === 'string' ? raw.stdout.trim() : ''
-  ].filter(Boolean);
 
-  return {
-    status: 'error',
-    error: result.error || 'claude_invoke_failed',
-    detail: detailParts.join('\n').slice(0, 2000) || result.error || null
-  };
-}
-
-async function runCliWithFallback(command, args, opts) {
-  const first = await runCommand(command, args, { ...opts, shell: false });
-  if (!first.success && String(first.error || '').includes('ENOENT')) {
-    return runCommand(command, args, { ...opts, shell: true });
-  }
-  return first;
-}

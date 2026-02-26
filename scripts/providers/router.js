@@ -20,14 +20,6 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const PIPELINE_FILE = join(__dirname, '..', '..', '.data', 'pipeline.json');
 const PIPELINE_LOCK_FILE = join(__dirname, '..', '..', '.data', '.pipeline.lock');
 
-/**
- * Escapes a string for use as an argument in a Windows shell (CMD/PowerShell).
- */
-function shellEscape(str) {
-  if (typeof str !== 'string') return '';
-  // Basic escaping for Windows shell interpolation
-  return str.replace(/[&|()^<>=!%]/g, '^$&').replace(/"/g, '""');
-}
 
 // ---- Adaptive routing (feature-flagged) ----
 let _evalStore = undefined;

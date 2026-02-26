@@ -122,6 +122,31 @@ export function runCommandShell(commandString, opts = {}) {
 }
 
 /**
+ * Try command without shell first, fall back to shell if ENOENT.
+ * Handles the common case where CLI tools are installed via npm/pip
+ * and may need shell resolution on Windows.
+ */
+export async function runCliWithFallback(command, args, opts = {}) {
+  const first = await runCommand(command, args, { ...opts, shell: false });
+  if (!first.success && String(first.error || '').includes('ENOENT')) {
+    return runCommand(command, args, { ...opts, shell: true });
+  }
+  return first;
+}
+
+/**
+ * Extract detail string from a failed command result (stderr + stdout, truncated).
+ */
+export function buildDetail(result) {
+  const raw = result.rawError || {};
+  const detailParts = [
+    typeof raw.stderr === 'string' ? raw.stderr.trim() : '',
+    typeof raw.stdout === 'string' ? raw.stdout.trim() : ''
+  ].filter(Boolean);
+  return detailParts.join('\n').slice(0, 2000) || result.error || null;
+}
+
+/**
  * Escape a string for safe embedding inside double quotes in a shell command.
  */
 export function shellEscape(str) {
