@@ -1,4 +1,4 @@
-import { execFile, execFileSync } from 'node:child_process';
+import { execFile, execFileSync, spawn } from 'node:child_process';
 import { promisify } from 'node:util';
 
 const execFileP = promisify(execFile);
@@ -22,6 +22,9 @@ const isWin = process.platform === 'win32';
 
 function getEnv(opts) {
   const env = Object.assign({}, process.env, opts.env || {});
+  // Allow nested CLI invocations from inside Claude Code sessions
+  delete env.CLAUDECODE;
+  delete env.CLAUDE_CODE_ENTRYPOINT;
   if (isWin) {
     // Force specific user paths for CLI tools
     const userNpm = "C:\\Users\\\u041F\u0430\u0442\u0440\u0430\u0432\u0430\u0435\u0432\\AppData\\Roaming\\npm";
@@ -66,6 +69,56 @@ export async function runCommand(command, args = [], opts = {}) {
       rawError: err
     };
   }
+}
+
+/**
+ * Run a pre-built command string via shell (spawn).
+ * Use when you need full control over quoting (e.g. prompts with special chars).
+ * The caller is responsible for proper escaping within the command string.
+ */
+export function runCommandShell(commandString, opts = {}) {
+  return new Promise((resolve) => {
+    const child = spawn(commandString, [], {
+      cwd: opts.cwd || process.cwd(),
+      shell: true,
+      env: getEnv(opts),
+      stdio: ['pipe', 'pipe', 'pipe']
+    });
+
+    let stdout = '', stderr = '', settled = false;
+    const done = (result) => { if (!settled) { settled = true; resolve(result); } };
+
+    const timer = setTimeout(() => {
+      child.kill();
+      // If we collected stdout before timeout, treat as success
+      // (some CLIs keep MCP connections alive and never exit cleanly)
+      if (stdout.trim()) {
+        done({ success: true, stdout: stdout.trim(), stderr: stderr.trim() });
+      } else {
+        done({ success: false, error: 'timeout' });
+      }
+    }, opts.timeout || 30000);
+
+    child.stdout.on('data', (d) => { stdout += d; });
+    child.stderr.on('data', (d) => { stderr += d; });
+
+    child.on('close', (code) => {
+      clearTimeout(timer);
+      if (code === 0 || code === null) {
+        done({ success: true, stdout: stdout.trim(), stderr: stderr.trim() });
+      } else {
+        done({ success: false, error: (stderr || stdout || '').trim() || `Exit code ${code}` });
+      }
+    });
+
+    child.on('error', (err) => {
+      clearTimeout(timer);
+      done({ success: false, error: err.message });
+    });
+
+    // Close stdin immediately so the child doesn't wait for input
+    child.stdin.end();
+  });
 }
 
 export function runCommandSync(command, args = [], opts = {}) {

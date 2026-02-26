@@ -3,6 +3,7 @@
  * gemini -p "prompt" -o text
  */
 
+import { spawn } from 'node:child_process';
 import { runCommand } from '../utils/shell.js';
 
 export default {
@@ -20,13 +21,13 @@ export default {
 
   async invoke(prompt, opts = {}) {
     const timeout = opts.timeout || 60000;
-    const args = ['-p', String(prompt), '-o', 'text'];
-    if (opts.model) args.push('--model', normalizeModel(opts.model));
+    // Build command string with proper quoting to avoid Windows shell arg splitting.
+    // spawn(cmdString, [], {shell:true}) passes the whole string to cmd.exe.
+    const escaped = shellEscape(String(prompt));
+    const modelFlag = opts.model ? ` --model ${normalizeModel(opts.model)}` : '';
+    const cmd = `gemini -p "${escaped}" -o text${modelFlag}`;
 
-    const result = await runCliWithFallback('gemini', args, {
-      timeout,
-      cwd: opts.cwd || process.cwd()
-    });
+    const result = await spawnShell(cmd, { timeout, cwd: opts.cwd || process.cwd() });
 
     if (!result.success) {
       const msg = result.error || '';
@@ -56,6 +57,46 @@ function normalizeModel(model) {
   return raw;
 }
 
+function spawnShell(cmd, opts = {}) {
+  return new Promise((resolve) => {
+    const env = Object.assign({}, process.env);
+    delete env.CLAUDECODE;
+    delete env.CLAUDE_CODE_ENTRYPOINT;
+
+    const child = spawn(cmd, [], {
+      shell: true,
+      cwd: opts.cwd || process.cwd(),
+      env,
+      stdio: ['pipe', 'pipe', 'pipe']
+    });
+
+    let stdout = '', stderr = '', settled = false;
+    const done = (r) => { if (!settled) { settled = true; resolve(r); } };
+
+    const timer = setTimeout(() => {
+      child.kill();
+      done(stdout.trim()
+        ? { success: true, stdout: stdout.trim(), stderr: stderr.trim() }
+        : { success: false, error: 'timeout' });
+    }, opts.timeout || 60000);
+
+    child.stdout.on('data', (d) => { stdout += d; });
+    child.stderr.on('data', (d) => { stderr += d; });
+    child.on('close', (code) => {
+      clearTimeout(timer);
+      done(code === 0 || code === null
+        ? { success: true, stdout: stdout.trim(), stderr: stderr.trim() }
+        : { success: false, error: (stderr || stdout || '').trim() || `Exit code ${code}` });
+    });
+    child.on('error', (err) => { clearTimeout(timer); done({ success: false, error: err.message }); });
+  });
+}
+
+function shellEscape(str) {
+  // Escape double quotes and backslashes for shell embedding in "..."
+  return str.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/`/g, '\\`').replace(/\$/g, '\\$');
+}
+
 function buildDetail(result) {
   const raw = result.rawError || {};
   const detailParts = [
@@ -65,10 +106,3 @@ function buildDetail(result) {
   return detailParts.join('\n').slice(0, 2000) || result.error || null;
 }
 
-async function runCliWithFallback(command, args, opts) {
-  const first = await runCommand(command, args, { ...opts, shell: false });
-  if (!first.success && String(first.error || '').includes('ENOENT')) {
-    return runCommand(command, args, { ...opts, shell: true });
-  }
-  return first;
-}
