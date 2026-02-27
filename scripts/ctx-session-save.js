@@ -84,12 +84,14 @@ function getLatestSessionLog() {
 function extractSections(log) {
   if (!log) return { actions: '', errors: '', decisions: '', files: '', tasks: '', summary: '' };
 
+  // Support CRLF session logs on Windows.
+  const normalizedLog = log.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
   const sections = {};
   const sectionNames = ['Actions', 'Errors & Solutions', 'Decisions', 'Files Modified', 'Tasks', 'Summary'];
 
   for (const name of sectionNames) {
     const regex = new RegExp(`## ${name}\\n([\\s\\S]*?)(?=\\n## |$)`);
-    const match = log.match(regex);
+    const match = normalizedLog.match(regex);
     sections[name.toLowerCase().replace(/ & /g, '_').replace(/ /g, '_')] = match ? match[1].trim() : '';
   }
 
@@ -149,16 +151,54 @@ ${sections.decisions || '_None_'}
 ${sections.actions || sections.summary || '_None_'}`;
 }
 
-function createIssue(repo, title, body, labels) {
-  const args = ['issue', 'create'];
-  if (repo) args.push('--repo', repo);
-  args.push('--title', title);
-  for (const label of labels) {
-    args.push('-l', label);
-  }
-  args.push('--body', body);
+function getRepoLabels(repo) {
+  if (!repo) return null;
 
-  const result = runCommandSync('gh', args, { timeout: 30000 });
+  const result = runCommandSync(
+    'gh',
+    ['label', 'list', '-R', repo, '--limit', '200', '--json', 'name'],
+    { timeout: 30000 }
+  );
+
+  if (!result.success) return null;
+  try {
+    const labels = JSON.parse(result.stdout || '[]');
+    return new Set(labels.map(label => label?.name).filter(Boolean));
+  } catch {
+    return null;
+  }
+}
+
+function createIssue(repo, title, body, labels) {
+  const requestedLabels = [...new Set((labels || []).filter(Boolean))];
+  let labelsToUse = [...requestedLabels];
+
+  const availableLabels = getRepoLabels(repo);
+  if (availableLabels) {
+    const droppedLabels = labelsToUse.filter(label => !availableLabels.has(label));
+    labelsToUse = labelsToUse.filter(label => availableLabels.has(label));
+    if (droppedLabels.length > 0) {
+      console.warn(`[ctx] Missing labels in ${repo}: ${droppedLabels.join(', ')}. Creating issue without them.`);
+    }
+  }
+
+  const runCreate = (labelsForRun) => {
+    const args = ['issue', 'create'];
+    if (repo) args.push('--repo', repo);
+    args.push('--title', title);
+    for (const label of labelsForRun) {
+      args.push('-l', label);
+    }
+    args.push('--body', body);
+    return runCommandSync('gh', args, { timeout: 30000 });
+  };
+
+  let result = runCreate(labelsToUse);
+  if (!result.success && labelsToUse.length > 0 && /label/i.test(String(result.error || ''))) {
+    console.warn(`[ctx] Retrying issue creation in ${repo || 'current repo'} without labels.`);
+    result = runCreate([]);
+  }
+
   if (!result.success) {
     console.error(`Failed to create issue in ${repo || 'current repo'}: ${result.error}`);
     return null;
