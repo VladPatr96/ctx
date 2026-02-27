@@ -6,6 +6,9 @@ __pycache__/
 # Credentials (never commit)
 .credentials.json
 
+# Claude Code local settings
+.claude/settings.local.json
+
 # OS
 .DS_Store
 Thumbs.db
