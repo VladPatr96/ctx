@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "test": "node --test --test-concurrency=1",
+    "test:kb": "node --test --test-concurrency=1 --test-reporter=spec --test-reporter=./scripts/testing/kb-reporter.mjs --test-reporter-destination=stdout --test-reporter-destination=stderr",
     "test:mcp": "node scripts/ctx-mcp-hub.js"
   },
   "dependencies": {

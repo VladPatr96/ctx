@@ -22,3 +22,6 @@ node_modules/
 
 # Generated agents (per-project, not shared)
 agents/generated/
+
+# Worktrees (agent isolation)
+.worktrees/
