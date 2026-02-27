@@ -13,9 +13,10 @@
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { runCommandSync } from './utils/shell.js';
-import { computeHash } from './knowledge/knowledge-store.js';
 
 const DEFAULT_CENTRAL_REPO = 'VladPatr96/my_claude_code';
+const LOCAL_KB_DIR = join(process.cwd(), '.data', 'knowledge');
+const LOCAL_KB_JSON = join(LOCAL_KB_DIR, 'knowledge.json');
 
 function getCentralRepo() {
   // 1. Env variable
@@ -169,16 +170,38 @@ function createIssue(repo, title, body, labels) {
 async function loadKnowledgeStore() {
   if (process.env.CTX_KB_DISABLED === '1') return null;
   try {
-    const { KnowledgeStore } = await import('./knowledge/knowledge-store.js');
-    return new KnowledgeStore();
-  } catch {
-    try {
-      const { JsonKnowledgeStore } = await import('./knowledge/kb-json-fallback.js');
-      return new JsonKnowledgeStore();
-    } catch {
-      return null;
+    const { createKnowledgeStore } = await import('./knowledge/kb-json-fallback.js');
+    const runtime = await createKnowledgeStore({
+      dbPath: process.env.CTX_KB_PATH || undefined,
+      onWarning: (message) => console.warn(`[ctx] ${message}`)
+    });
+    if (runtime.store) {
+      return { store: runtime.store, mode: runtime.mode || 'unknown' };
     }
+  } catch {
+    // Fallback below
   }
+  return loadLocalJsonStore();
+}
+
+async function loadLocalJsonStore() {
+  try {
+    const { JsonKnowledgeStore } = await import('./knowledge/kb-json-fallback.js');
+    return {
+      store: new JsonKnowledgeStore({
+        dbDir: LOCAL_KB_DIR,
+        filePath: LOCAL_KB_JSON
+      }),
+      mode: 'json-local'
+    };
+  } catch {
+    return null;
+  }
+}
+
+function isReadonlyDbError(err) {
+  const msg = String(err?.message || err || '').toLowerCase();
+  return msg.includes('readonly database') || msg.includes('read-only database');
 }
 
 async function saveToKB(store, project, sections, git) {
@@ -248,6 +271,10 @@ async function syncKB() {
 
 async function main() {
   const args = process.argv.slice(2);
+  if (args.includes('--help') || args.includes('-h')) {
+    console.log('Usage: node scripts/ctx-session-save.js --event <compact|stop>');
+    return;
+  }
   const eventIdx = args.indexOf('--event');
   const event = eventIdx !== -1 ? args[eventIdx + 1] : 'unknown';
 
@@ -263,11 +290,44 @@ async function main() {
   console.log(`[ctx] Saving session for ${project} (event: ${event})`);
 
   // 0. Save to local KB (fast, <5ms)
-  const store = await loadKnowledgeStore();
-  if (store) {
-    const kbSaved = await saveToKB(store, project, sections, git);
-    console.log(`[ctx] KB: ${kbSaved} entries saved`);
-    store.close();
+  let kbSaved = false;
+  let kbRuntime = await loadKnowledgeStore();
+  if (kbRuntime?.store) {
+    let activeStore = kbRuntime.store;
+    let activeMode = kbRuntime.mode || 'unknown';
+    try {
+      const savedEntries = await saveToKB(activeStore, project, sections, git);
+      console.log(`[ctx] KB (${activeMode}): ${savedEntries} entries saved`);
+      kbSaved = true;
+    } catch (err) {
+      if (activeMode === 'sqlite' && isReadonlyDbError(err)) {
+        console.warn('[ctx] KB sqlite is read-only. Retrying with local JSON fallback.');
+        try {
+          if (typeof activeStore.close === 'function') activeStore.close();
+        } catch {}
+
+        kbRuntime = await loadLocalJsonStore();
+        activeStore = kbRuntime?.store;
+        activeMode = kbRuntime?.mode || 'json-local';
+        if (activeStore) {
+          try {
+            const savedEntries = await saveToKB(activeStore, project, sections, git);
+            console.log(`[ctx] KB (${activeMode}): ${savedEntries} entries saved`);
+            kbSaved = true;
+          } catch (fallbackErr) {
+            console.warn(`[ctx] KB fallback save failed: ${fallbackErr.message || fallbackErr}`);
+          }
+        } else {
+          console.warn('[ctx] KB fallback store is unavailable.');
+        }
+      } else {
+        console.warn(`[ctx] KB save failed: ${err.message || err}`);
+      }
+    } finally {
+      try {
+        if (activeStore && typeof activeStore.close === 'function') activeStore.close();
+      } catch {}
+    }
   }
 
   // 1. Issue в репозитории проекта (если есть GitHub remote)
@@ -286,7 +346,7 @@ async function main() {
   }
 
   // 3. Sync KB to remote (background)
-  if (store) {
+  if (kbSaved) {
     const syncResult = await syncKB();
     console.log(`[ctx] KB sync: ${syncResult.status}`);
   }

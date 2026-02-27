@@ -15,6 +15,76 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const PLUGIN_ROOT = process.env.CLAUDE_PLUGIN_ROOT || join(__dirname, '..', '..');
 const PRESETS_FILE = join(PLUGIN_ROOT, 'consilium.presets.json');
 const AGENTS_DIR = join(PLUGIN_ROOT, 'agents');
+const DEFAULT_PROVIDER_TIMEOUT_MS = 60000;
+const DEFAULT_CLAIM_TIMEOUT_MS = 30000;
+const DEFAULT_SYNTHESIS_TIMEOUT_MS = 90000;
+const MIN_PROVIDER_TIMEOUT_MS = 8000;
+const MIN_PHASE_TIMEOUT_MS = 5000;
+const DEFAULT_TOOL_BUDGET_MS = 105000;
+const FIXED_OVERHEAD_MS = 5000;
+const PER_STEP_OVERHEAD_MS = 1500;
+const MAX_AUTO_PROVIDER_TIMEOUT_MS = 45000;
+
+function parsePositiveInt(value, fallback) {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n <= 0) return fallback;
+  return Math.round(n);
+}
+
+function estimateSequentialSteps(rounds, enableClaimExtraction, enableSmartSynthesis) {
+  let steps = Math.max(1, rounds);
+  if (enableClaimExtraction && rounds > 1) steps += 1;
+  if (enableSmartSynthesis) steps += 1;
+  return steps;
+}
+
+function resolveConsiliumTiming({
+  requestedTimeout,
+  rounds,
+  enableClaimExtraction,
+  enableSmartSynthesis
+}) {
+  const sequentialSteps = estimateSequentialSteps(rounds, enableClaimExtraction, enableSmartSynthesis);
+  const toolBudgetMs = parsePositiveInt(process.env.CTX_CONSILIUM_TOOL_BUDGET_MS, DEFAULT_TOOL_BUDGET_MS);
+  const budgetForInvocations = Math.max(
+    MIN_PROVIDER_TIMEOUT_MS * sequentialSteps,
+    toolBudgetMs - FIXED_OVERHEAD_MS - (sequentialSteps * PER_STEP_OVERHEAD_MS)
+  );
+  const autoProviderTimeoutMs = Math.max(
+    MIN_PROVIDER_TIMEOUT_MS,
+    Math.min(
+      MAX_AUTO_PROVIDER_TIMEOUT_MS,
+      Math.floor(budgetForInvocations / sequentialSteps)
+    )
+  );
+  const providerTimeoutMs = requestedTimeout
+    ? parsePositiveInt(requestedTimeout, DEFAULT_PROVIDER_TIMEOUT_MS)
+    : autoProviderTimeoutMs;
+  const claimTimeoutMs = Math.max(
+    MIN_PHASE_TIMEOUT_MS,
+    Math.min(providerTimeoutMs, DEFAULT_CLAIM_TIMEOUT_MS)
+  );
+  const synthesisTimeoutMs = Math.max(
+    MIN_PHASE_TIMEOUT_MS,
+    Math.min(providerTimeoutMs, DEFAULT_SYNTHESIS_TIMEOUT_MS)
+  );
+  const estimatedWorstCaseMs =
+    FIXED_OVERHEAD_MS +
+    (sequentialSteps * PER_STEP_OVERHEAD_MS) +
+    (rounds * providerTimeoutMs) +
+    ((enableClaimExtraction && rounds > 1) ? claimTimeoutMs : 0) +
+    (enableSmartSynthesis ? synthesisTimeoutMs : 0);
+
+  return {
+    mode: requestedTimeout ? 'requested' : 'auto_budgeted',
+    sequentialSteps,
+    toolBudgetMs,
+    providerTimeoutMs,
+    claimTimeoutMs,
+    synthesisTimeoutMs,
+    estimatedWorstCaseMs
+  };
+}
 
 export function registerConsiliumTools(server, { getResults, saveResults, DATA_DIR }) {
 
@@ -175,7 +245,7 @@ export function registerConsiliumTools(server, { getResults, saveResults, DATA_D
         providers: z.array(z.string()).default(['claude', 'gemini', 'codex']).describe('Список провайдеров'),
         rounds: z.number().min(1).max(4).default(2).describe('Количество раундов (1-4)'),
         projectContext: z.string().optional().describe('Контекст проекта'),
-        timeout: z.number().optional().default(60000).describe('Таймаут на провайдера (мс)'),
+        timeout: z.number().optional().describe('Таймаут на провайдера (мс). Если не задан — рассчитывается автоматически из лимита инструмента'),
         preset: z.string().optional().describe('Пресет из consilium.presets.json (debate-full, debate-fast, debate-claims)'),
         enableClaimExtraction: z.boolean().optional().default(false).describe('Включить claim extraction между раундами (CBDP)'),
         claimProvider: z.string().optional().default('claude').describe('Провайдер для claim extraction'),
@@ -210,6 +280,13 @@ export function registerConsiliumTools(server, { getResults, saveResults, DATA_D
           }
         }
 
+        const timing = resolveConsiliumTiming({
+          requestedTimeout: timeout,
+          rounds: resolvedRounds,
+          enableClaimExtraction: resolvedClaimExtraction,
+          enableSmartSynthesis: resolvedSmartSynthesis
+        });
+
         // Create eval store (optional)
         let evalStore = null;
         if (DATA_DIR) {
@@ -225,13 +302,15 @@ export function registerConsiliumTools(server, { getResults, saveResults, DATA_D
           providers: resolvedProviders,
           rounds: resolvedRounds,
           projectContext: projectContext || '',
-          timeout: timeout || 60000,
+          timeout: timing.providerTimeoutMs,
           evalStore,
           enableClaimExtraction: resolvedClaimExtraction,
           claimProvider: claimProvider || 'claude',
+          claimTimeout: timing.claimTimeoutMs,
           enableStructuredResponse: resolvedStructuredResponse,
           enableSmartSynthesis: resolvedSmartSynthesis,
-          synthesisProvider: synthesisProvider || 'claude'
+          synthesisProvider: synthesisProvider || 'claude',
+          synthesisTimeout: timing.synthesisTimeoutMs
         });
 
         const result = await orchestrator.execute();
@@ -321,6 +400,15 @@ export function registerConsiliumTools(server, { getResults, saveResults, DATA_D
           providers: result.providers,
           rounds_completed: result.rounds.length,
           alias_map: aliasMapObj,
+          timing: {
+            mode: timing.mode,
+            provider_timeout_ms: timing.providerTimeoutMs,
+            claim_timeout_ms: timing.claimTimeoutMs,
+            synthesis_timeout_ms: timing.synthesisTimeoutMs,
+            sequential_steps: timing.sequentialSteps,
+            tool_budget_ms: timing.toolBudgetMs,
+            estimated_worst_case_ms: timing.estimatedWorstCaseMs
+          },
           total_duration_ms: result.totalDurationMs,
           run_id: result.runId,
           rounds: result.rounds.map(r => ({
