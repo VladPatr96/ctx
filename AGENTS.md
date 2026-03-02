@@ -21,6 +21,11 @@ CTX now works on **all providers** with **identical functionality**: Claude Code
 node scripts/ctx-setup.js all
 ```
 
+**Quick update for installed providers only:**
+```bash
+npm run update:providers
+```
+
 The universal skill automatically detects the mode (MCP or CLI wrapper) and provides the same API across all providers.
 
 ## Pipeline State (Shared across all providers)

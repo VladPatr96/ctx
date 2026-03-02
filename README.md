@@ -156,6 +156,15 @@ node scripts/ctx-setup.js all
 
 Or individually: `node scripts/ctx-setup.js codex|gemini|opencode`
 
+### Update only installed providers
+
+```bash
+npm run update:providers
+```
+
+This command updates Claude/Codex/Gemini/OpenCode only if they are detected on the machine.
+Missing providers are skipped automatically.
+
 ### GitHub labels (first time)
 
 ```bash
@@ -245,3 +254,9 @@ node --test tests/adaptive-weight.test.mjs  # Adaptive routing scoring
 - [GitHub CLI](https://cli.github.com/) (`gh`) — authenticated
 - [Claude Code](https://claude.com/claude-code) v1.0.33+ (for MCP integration)
 - Gemini CLI / OpenCode / Codex CLI — optional, for multi-provider features
+
+## npm publish on push
+
+Repository includes GitHub Actions workflow that publishes package to npm on each push to `master`/`main` if:
+- `NPM_TOKEN` secret is configured
+- `package.json` version is not published yet

@@ -4,6 +4,8 @@
   "description": "Multi-provider context management plugin for Claude Code",
   "type": "module",
   "scripts": {
+    "update:providers": "node scripts/ctx-update-providers.js",
+    "setup:all": "node scripts/ctx-setup.js all",
     "test": "node --test --test-concurrency=1",
     "test:kb": "node --test --test-concurrency=1 --test-reporter=spec --test-reporter=./scripts/testing/kb-reporter.mjs --test-reporter-destination=stdout --test-reporter-destination=stderr",
     "test:mcp": "node scripts/ctx-mcp-hub.js"
