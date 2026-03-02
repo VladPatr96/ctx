@@ -317,6 +317,10 @@ export function registerConsiliumTools(server, { getResults, saveResults, DATA_D
 
         // --- Feedback loop: record provider responses for adaptive routing ---
         if (evalStore && result.runId) {
+          // Determine task_type from topic via router
+          const routeResult = route(topic);
+          const taskType = routeResult?.strength || null;
+
           // 1. Record each provider's aggregate response
           for (const provider of resolvedProviders) {
             const alias = result.aliasMap.get(provider);
@@ -347,13 +351,15 @@ export function registerConsiliumTools(server, { getResults, saveResults, DATA_D
                 status: 'completed',
                 response_ms: avgMs,
                 confidence,
-                key_idea: `${providerResponses.length} rounds completed`
+                key_idea: `${providerResponses.length} rounds completed`,
+                task_type: taskType
               });
             } else {
               evalStore.addProviderResponse(result.runId, {
                 provider,
                 status: 'error',
-                error_message: 'No successful responses'
+                error_message: 'No successful responses',
+                task_type: taskType
               });
             }
           }

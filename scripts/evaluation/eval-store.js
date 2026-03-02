@@ -44,6 +44,9 @@ export function createEvalStore(dataDir = '.data') {
   db.exec('PRAGMA busy_timeout = 2000;');
   db.exec(readFileSync(SCHEMA_FILE, 'utf8'));
 
+  // Idempotent schema migration: add task_type column
+  try { db.exec('ALTER TABLE provider_responses ADD COLUMN task_type TEXT;'); } catch { /* already exists */ }
+
   // ---- Prepared statements ----
 
   const insertRunStmt = db.prepare(`
@@ -52,8 +55,8 @@ export function createEvalStore(dataDir = '.data') {
   `);
 
   const insertProviderStmt = db.prepare(`
-    INSERT INTO provider_responses(run_id, provider, model, status, response_ms, confidence, key_idea, error_message)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO provider_responses(run_id, provider, model, status, response_ms, confidence, key_idea, error_message, task_type)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   const completeRunStmt = db.prepare(`
@@ -132,8 +135,22 @@ export function createEvalStore(dataDir = '.data') {
     FROM provider_responses WHERE status = 'completed'
   `);
 
+  const providerMetricsByTaskTypeStmt = db.prepare(`
+    SELECT provider, COUNT(*) as total_responses,
+      SUM(CASE WHEN was_chosen = 1 THEN 1 ELSE 0 END) as wins,
+      AVG(response_ms) as avg_response_ms, AVG(confidence) as avg_confidence
+    FROM provider_responses WHERE status = 'completed' AND task_type = ?
+    GROUP BY provider
+  `);
+
+  const countCompletedRunsStmt = db.prepare(`
+    SELECT COUNT(*) as total FROM consilium_runs WHERE ended_at IS NOT NULL
+  `);
+
   let _metricsCache = null;
   let _metricsCacheTime = 0;
+  const _taskTypeMetricsCache = new Map();
+  const _taskTypeMetricsCacheTime = new Map();
 
   const ciStatsStmt = db.prepare(`
     SELECT ci_status, COUNT(*) as cnt
@@ -232,12 +249,12 @@ export function createEvalStore(dataDir = '.data') {
     addProviderResponse(runId, {
       provider, model = null, status = 'completed',
       response_ms = null, confidence = null, key_idea = null,
-      error_message = null
+      error_message = null, task_type = null
     }) {
       try {
         insertProviderStmt.run(
           runId, provider, model, status,
-          response_ms, confidence, key_idea, error_message
+          response_ms, confidence, key_idea, error_message, task_type
         );
       } catch (err) {
         console.error('[eval-store] addProviderResponse failed:', err.message);
@@ -391,6 +408,66 @@ export function createEvalStore(dataDir = '.data') {
       } catch (err) {
         console.error('[eval-store] getProviderMetrics failed:', err.message);
         return { providers: new Map(), globalWinRate: 0.25 };
+      }
+    },
+
+    /**
+     * Get provider metrics filtered by task_type.
+     * Cached per taskType for 60 seconds.
+     * @param {string} taskType
+     * @returns {{ providers: Map<string, object>, globalWinRate: number }}
+     */
+    getProviderMetricsByTaskType(taskType) {
+      const now = Date.now();
+      const cachedTime = _taskTypeMetricsCacheTime.get(taskType) || 0;
+      if (_taskTypeMetricsCache.has(taskType) && (now - cachedTime) < 60_000) {
+        return _taskTypeMetricsCache.get(taskType);
+      }
+      try {
+        const rows = providerMetricsByTaskTypeStmt.all(taskType);
+        const providers = new Map();
+        for (const row of rows) {
+          providers.set(row.provider, {
+            total_responses: row.total_responses,
+            wins: row.wins,
+            avg_response_ms: row.avg_response_ms,
+            avg_confidence: row.avg_confidence
+          });
+        }
+        const global = globalWinRateStmt.get();
+        const globalWinRate = global.total_responses > 0
+          ? global.total_wins / global.total_responses
+          : 0.25;
+
+        const result = { providers, globalWinRate };
+        _taskTypeMetricsCache.set(taskType, result);
+        _taskTypeMetricsCacheTime.set(taskType, now);
+        return result;
+      } catch (err) {
+        console.error('[eval-store] getProviderMetricsByTaskType failed:', err.message);
+        return { providers: new Map(), globalWinRate: 0.25 };
+      }
+    },
+
+    /**
+     * Get readiness status for adaptive routing auto-enable.
+     * @returns {{ totalRuns: number, isReady: boolean, alpha: number, adaptiveEnabled: boolean }}
+     */
+    getReadiness() {
+      try {
+        const { total } = countCompletedRunsStmt.get();
+        const isReady = total >= 50;
+        const alpha = Math.min(0.35, (total / 100) * 0.35);
+        const envForced = process.env.CTX_ADAPTIVE_ROUTING === '0';
+        return {
+          totalRuns: total,
+          isReady,
+          alpha,
+          adaptiveEnabled: isReady && !envForced
+        };
+      } catch (err) {
+        console.error('[eval-store] getReadiness failed:', err.message);
+        return { totalRuns: 0, isReady: false, alpha: 0, adaptiveEnabled: false };
       }
     },
 

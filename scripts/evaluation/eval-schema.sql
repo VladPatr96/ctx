@@ -75,3 +75,6 @@ CREATE TABLE IF NOT EXISTS round_responses (
 );
 CREATE INDEX IF NOT EXISTS idx_round_responses_run ON round_responses(run_id);
 CREATE INDEX IF NOT EXISTS idx_round_responses_round ON round_responses(run_id, round);
+
+-- Step 5: per-task-type routing support (idempotent via try/catch in eval-store)
+-- ALTER TABLE provider_responses ADD COLUMN task_type TEXT;
