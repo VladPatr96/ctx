@@ -1,12 +1,15 @@
 /**
  * Orchestrator domain tools: worktree lifecycle for parallel AI agents.
  *
- * Tools (5):
- * - ctx_worktree_create  — create isolated worktree for an agent
- * - ctx_worktree_remove  — remove worktree and optionally delete branch
- * - ctx_worktree_list    — list all worktrees with status
- * - ctx_worktree_status  — detailed status for a single worktree
- * - ctx_worktree_merge   — merge agent branch into base branch
+ * Tools (8):
+ * - ctx_worktree_create    — create isolated worktree for an agent
+ * - ctx_worktree_remove    — remove worktree and optionally delete branch
+ * - ctx_worktree_list      — list all worktrees with status
+ * - ctx_worktree_status    — detailed status for a single worktree
+ * - ctx_worktree_merge     — merge agent branch into base branch
+ * - ctx_agent_execute      — run one agent in isolated worktree
+ * - ctx_agent_run_parallel — run multiple agents in parallel with concurrency limit
+ * - ctx_agent_status       — query execution status
  */
 
 import { z } from 'zod';
@@ -17,6 +20,8 @@ import {
   getWorktree,
   mergeWorktree
 } from '../orchestrator/worktree-manager.js';
+import { executeAgent, getExecutionStatus, listExecutions } from '../orchestrator/executor.js';
+import { runParallel } from '../orchestrator/agent-runner.js';
 
 const AGENT_ID = z.string()
   .regex(/^[a-z0-9](?:[a-z0-9-]{0,62})$/)
@@ -134,6 +139,116 @@ export function registerOrchestratorTools(server) {
         const result = await mergeWorktree(agentId, { squash, message });
         return {
           content: [{ type: 'text', text: JSON.stringify(result, null, 2) }]
+        };
+      } catch (err) {
+        return {
+          content: [{ type: 'text', text: `Error: ${err.message}` }],
+          isError: true
+        };
+      }
+    }
+  );
+
+  // ==================== Agent Execution tools ====================
+
+  const PROVIDER = z.enum(['claude', 'gemini', 'codex', 'opencode'])
+    .describe('AI CLI провайдер');
+
+  server.registerTool(
+    'ctx_agent_execute',
+    {
+      description: 'Запустить одного агента в изолированном worktree: создание worktree → invoke провайдера → сбор результата → очистка.',
+      inputSchema: z.object({
+        agentId: AGENT_ID,
+        task: z.string().max(4000).describe('Задача/промпт для агента'),
+        provider: PROVIDER,
+        timeout: z.number().min(5000).max(600000).optional()
+          .describe('Таймаут выполнения в мс (по умолчанию 120000)'),
+        baseBranch: z.string().optional().describe('Базовая ветка (по умолчанию master)'),
+        cleanup: z.boolean().optional().describe('Удалять worktree после завершения (по умолчанию true)')
+      }).shape,
+    },
+    async ({ agentId, task, provider, timeout, baseBranch, cleanup }) => {
+      try {
+        const result = await executeAgent(agentId, {
+          task, provider, timeout, baseBranch, cleanup,
+        });
+        return {
+          content: [{ type: 'text', text: JSON.stringify(result, null, 2) }]
+        };
+      } catch (err) {
+        return {
+          content: [{ type: 'text', text: `Error: ${err.message}` }],
+          isError: true
+        };
+      }
+    }
+  );
+
+  server.registerTool(
+    'ctx_agent_run_parallel',
+    {
+      description: 'Параллельный запуск нескольких агентов в worktrees с ограничением concurrency. Максимум 6 агентов.',
+      inputSchema: z.object({
+        specs: z.array(z.object({
+          agentId: AGENT_ID,
+          task: z.string().max(4000).describe('Задача/промпт'),
+          provider: PROVIDER,
+          timeout: z.number().min(5000).max(600000).optional()
+            .describe('Таймаут для агента в мс'),
+        })).min(1).max(6).describe('Список спецификаций агентов'),
+        concurrency: z.number().min(1).max(6).optional()
+          .describe('Макс. параллельных запусков (по умолчанию 3)'),
+        globalTimeout: z.number().min(10000).max(600000).optional()
+          .describe('Глобальный таймаут в мс (по умолчанию 300000)'),
+        baseBranch: z.string().optional().describe('Базовая ветка'),
+        cleanup: z.boolean().optional().describe('Удалять worktrees после завершения'),
+      }).shape,
+    },
+    async ({ specs, concurrency, globalTimeout, baseBranch, cleanup }) => {
+      try {
+        const result = await runParallel(specs, {
+          concurrency, globalTimeout, baseBranch, cleanup,
+        });
+        return {
+          content: [{ type: 'text', text: JSON.stringify(result, null, 2) }]
+        };
+      } catch (err) {
+        return {
+          content: [{ type: 'text', text: `Error: ${err.message}` }],
+          isError: true
+        };
+      }
+    }
+  );
+
+  server.registerTool(
+    'ctx_agent_status',
+    {
+      description: 'Статус выполнения агентов. По agentId — один агент, без — все, с фильтром по статусу.',
+      inputSchema: z.object({
+        agentId: AGENT_ID.optional(),
+        status: z.enum(['pending', 'running', 'completed', 'failed', 'timeout']).optional()
+          .describe('Фильтр по статусу'),
+      }).shape,
+    },
+    async ({ agentId, status }) => {
+      try {
+        if (agentId) {
+          const entry = getExecutionStatus(agentId);
+          if (!entry) {
+            return {
+              content: [{ type: 'text', text: `No execution found for agent "${agentId}"` }],
+              isError: true,
+            };
+          }
+          return {
+            content: [{ type: 'text', text: JSON.stringify(entry, null, 2) }]
+          };
+        }
+        const entries = listExecutions({ status });
+        return {
+          content: [{ type: 'text', text: JSON.stringify({ total: entries.length, executions: entries }, null, 2) }]
         };
       } catch (err) {
         return {

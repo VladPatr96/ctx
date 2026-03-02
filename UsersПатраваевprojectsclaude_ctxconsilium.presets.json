@@ -1,0 +1,33 @@
+{
+  "full": {
+    "description": "All 4 providers",
+    "providers": [
+      "claude",
+      "gemini",
+      "opencode",
+      "codex"
+    ]
+  },
+  "design": {
+    "description": "UI/UX decisions",
+    "providers": [
+      "claude",
+      "gemini"
+    ]
+  },
+  "code-review": {
+    "description": "Code quality analysis",
+    "providers": [
+      "codex",
+      "claude"
+    ]
+  },
+  "arch": {
+    "description": "Architecture decisions",
+    "providers": [
+      "claude",
+      "gemini",
+      "opencode"
+    ]
+  }
+}
