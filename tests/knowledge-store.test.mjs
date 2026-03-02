@@ -320,3 +320,167 @@ test(`KnowledgeStore (${storeMode}): searchEntries with combined filters`, () =>
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+// ==================== kb_links tests ====================
+
+test(`KnowledgeStore (${storeMode}): addLink + getLinks`, () => {
+  if (storeMode !== 'sqlite') return; // links only in SQLite
+  const { store, dir } = createTempStore();
+  try {
+    store.saveEntry({ project: 'p', category: 'error', title: 'Bug A', body: 'Bug description' });
+    store.saveEntry({ project: 'p', category: 'solution', title: 'Fix A', body: 'Fix description' });
+
+    // Get IDs via search
+    const bugs = store.searchEntries('Bug');
+    const fixes = store.searchEntries('Fix');
+    assert.ok(bugs.length >= 1);
+    assert.ok(fixes.length >= 1);
+    const bugId = bugs[0].id;
+    const fixId = fixes[0].id;
+
+    const result = store.addLink(fixId, bugId, 'solves');
+    assert.equal(result.added, true);
+
+    const links = store.getLinks(fixId);
+    assert.equal(links.outgoing.length, 1);
+    assert.equal(links.outgoing[0].linkedId, bugId);
+    assert.equal(links.outgoing[0].relation, 'solves');
+    assert.equal(links.outgoing[0].title, 'Bug A');
+
+    // Check reverse side
+    const bugLinks = store.getLinks(bugId);
+    assert.equal(bugLinks.incoming.length, 1);
+    assert.equal(bugLinks.incoming[0].linkedId, fixId);
+    assert.equal(bugLinks.incoming[0].relation, 'solves');
+  } finally {
+    store.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test(`KnowledgeStore (${storeMode}): addLink duplicate — UNIQUE constraint`, () => {
+  if (storeMode !== 'sqlite') return;
+  const { store, dir } = createTempStore();
+  try {
+    store.saveEntry({ project: 'p', category: 'error', title: 'Dup Bug', body: 'Bug body' });
+    store.saveEntry({ project: 'p', category: 'solution', title: 'Dup Fix', body: 'Fix body' });
+
+    const bugs = store.searchEntries('Dup Bug');
+    const fixes = store.searchEntries('Dup Fix');
+    const bugId = bugs[0].id;
+    const fixId = fixes[0].id;
+
+    const r1 = store.addLink(fixId, bugId, 'solves');
+    assert.equal(r1.added, true);
+
+    // Duplicate — INSERT OR IGNORE, no error
+    const r2 = store.addLink(fixId, bugId, 'solves');
+    assert.equal(r2.added, false);
+  } finally {
+    store.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test(`KnowledgeStore (${storeMode}): removeLink`, () => {
+  if (storeMode !== 'sqlite') return;
+  const { store, dir } = createTempStore();
+  try {
+    store.saveEntry({ project: 'p', category: 'error', title: 'Rem Bug', body: 'Bug body' });
+    store.saveEntry({ project: 'p', category: 'solution', title: 'Rem Fix', body: 'Fix body' });
+
+    const bugs = store.searchEntries('Rem Bug');
+    const fixes = store.searchEntries('Rem Fix');
+    const bugId = bugs[0].id;
+    const fixId = fixes[0].id;
+
+    store.addLink(fixId, bugId, 'related');
+    const before = store.getLinks(fixId);
+    assert.equal(before.outgoing.length, 1);
+
+    const result = store.removeLink(fixId, bugId, 'related');
+    assert.equal(result.removed, true);
+
+    const after = store.getLinks(fixId);
+    assert.equal(after.outgoing.length, 0);
+  } finally {
+    store.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test(`KnowledgeStore (${storeMode}): ON DELETE CASCADE removes links`, () => {
+  if (storeMode !== 'sqlite') return;
+  const { store, dir } = createTempStore();
+  try {
+    store.saveEntry({ project: 'p', category: 'error', title: 'Cascade Bug', body: 'Bug to delete' });
+    store.saveEntry({ project: 'p', category: 'solution', title: 'Cascade Fix', body: 'Fix stays' });
+
+    const bugs = store.searchEntries('Cascade Bug');
+    const fixes = store.searchEntries('Cascade Fix');
+    const bugId = bugs[0].id;
+    const fixId = fixes[0].id;
+
+    store.addLink(fixId, bugId, 'solves');
+    const before = store.getLinks(fixId);
+    assert.equal(before.outgoing.length, 1);
+
+    // Delete the target entry directly
+    store.db.exec(`DELETE FROM kb_entries WHERE id = ${bugId}`);
+
+    // CASCADE should remove the link
+    const after = store.getLinks(fixId);
+    assert.equal(after.outgoing.length, 0);
+  } finally {
+    store.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// ==================== Sync queue tests ====================
+
+test('KbSync: queuePush accumulates, flush drains', async () => {
+  const { KbSync } = await import('../scripts/knowledge/kb-sync.js');
+  const sync = new KbSync({ repoDir: mkdtempSync(join(tmpdir(), 'ctx-sync-')) });
+
+  // Override push to track calls
+  const pushCalls = [];
+  sync.push = async (msg) => { pushCalls.push(msg); return { status: 'clean' }; };
+
+  sync.queuePush('msg1');
+  sync.queuePush('msg2');
+  sync.queuePush('msg3');
+  assert.equal(sync._syncQueue.length, 3);
+
+  await sync.flush();
+  assert.equal(sync._syncQueue.length, 0);
+  // flush calls push once with the last message
+  assert.equal(pushCalls.length, 1);
+  assert.equal(pushCalls[0], 'msg3');
+});
+
+test('KbSync: backoff increases interval on errors', async () => {
+  const { KbSync } = await import('../scripts/knowledge/kb-sync.js');
+  const sync = new KbSync({ repoDir: mkdtempSync(join(tmpdir(), 'ctx-sync-')) });
+
+  sync.push = async () => { return { status: 'error', error: 'network' }; };
+
+  sync.queuePush('fail1');
+  await sync._processSyncQueue();
+  assert.equal(sync._consecutiveErrors, 1);
+  assert.ok(sync._currentInterval > sync._syncInterval);
+
+  sync.queuePush('fail2');
+  await sync._processSyncQueue();
+  assert.equal(sync._consecutiveErrors, 2);
+  assert.ok(sync._currentInterval <= sync._maxInterval);
+
+  // Reset on success
+  sync.push = async () => { return { status: 'ok' }; };
+  sync.queuePush('ok');
+  await sync._processSyncQueue();
+  assert.equal(sync._consecutiveErrors, 0);
+  assert.equal(sync._currentInterval, sync._syncInterval);
+
+  await sync.flush();
+});

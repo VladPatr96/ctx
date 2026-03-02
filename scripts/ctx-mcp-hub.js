@@ -34,6 +34,7 @@ import { registerReactionTools } from './tools/reactions.js';
 import { registerRoutingTools } from './tools/routing.js';
 import { createKnowledgeStore } from './knowledge/kb-json-fallback.js';
 import { KbSync } from './knowledge/kb-sync.js';
+import { createCacheStore } from './cache/cache-store.js';
 
 // ==================== Config ====================
 
@@ -63,18 +64,49 @@ const sessionFile = join(DATA_DIR, 'session.json');
 const resultsFile = join(DATA_DIR, 'results.json');
 
 function getSession() {
-  return readJson(sessionFile) || {
+  if (cacheStore) {
+    const cached = cacheStore.get('session:current');
+    if (cached) return cached;
+  }
+  const session = readJson(sessionFile) || {
     startedAt: new Date().toISOString(),
     project: basename(PROJECT_DIR),
     actions: [],
     errors: [],
     tasks: []
   };
+  if (cacheStore) {
+    cacheStore.set('session:current', session);
+  }
+  return session;
 }
 
-function saveSession(session) { writeJson(sessionFile, session); }
+function saveSession(session) {
+  writeJson(sessionFile, session);
+  if (cacheStore) {
+    cacheStore.set('session:current', session);
+  }
+}
 function getResults() { return readJson(resultsFile) || []; }
 function saveResults(results) { writeJson(resultsFile, results); }
+
+// ==================== Cache Store ====================
+
+let cacheStore = null;
+let cacheDb = null;
+try {
+  const { createRequire } = await import('node:module');
+  const require = createRequire(import.meta.url);
+  const { DatabaseSync } = require('node:sqlite');
+  const cacheDbPath = join(DATA_DIR, 'state.sqlite');
+  cacheDb = new DatabaseSync(cacheDbPath);
+  cacheDb.exec('PRAGMA journal_mode = WAL;');
+  cacheDb.exec('PRAGMA synchronous = NORMAL;');
+  cacheDb.exec('PRAGMA busy_timeout = 2000;');
+  cacheStore = createCacheStore(cacheDb);
+} catch (err) {
+  console.error('[mcp-hub] Cache store unavailable:', err.message);
+}
 
 // ==================== Knowledge Base ====================
 
@@ -103,18 +135,47 @@ registerKnowledgeTools(server, { runCommand, readJson, DATA_DIR, GITHUB_OWNER, k
 registerConsiliumTools(server, { getResults, saveResults, DATA_DIR });
 registerPipelineTools(server);
 registerAgentTools(server);
-registerEvaluationTools(server, { DATA_DIR });
+registerEvaluationTools(server, { DATA_DIR, cacheStore });
 registerOrchestratorTools(server);
 registerReactionTools(server);
 registerRoutingTools(server, { DATA_DIR });
 
 // ==================== Cleanup ====================
 
+async function shutdown() {
+  if (kbSync) {
+    try { await kbSync.flush(); } catch { /* ignore */ }
+  }
+  if (cacheStore) {
+    try { cacheStore.close(); } catch { /* ignore */ }
+  }
+  if (cacheDb && typeof cacheDb.close === 'function') {
+    try { cacheDb.close(); } catch { /* ignore */ }
+  }
+  if (knowledgeStore && typeof knowledgeStore.close === 'function') {
+    knowledgeStore.close();
+  }
+}
+
 process.on('exit', () => {
+  // Sync cleanup only — async flush handled by SIGINT/SIGTERM
+  if (cacheStore) {
+    try { cacheStore.close(); } catch { /* ignore */ }
+  }
+  if (cacheDb && typeof cacheDb.close === 'function') {
+    try { cacheDb.close(); } catch { /* ignore */ }
+  }
   if (knowledgeStore && typeof knowledgeStore.close === 'function') {
     knowledgeStore.close();
   }
 });
+
+for (const sig of ['SIGINT', 'SIGTERM']) {
+  process.on(sig, async () => {
+    await shutdown();
+    process.exit(0);
+  });
+}
 
 // ==================== Start ====================
 

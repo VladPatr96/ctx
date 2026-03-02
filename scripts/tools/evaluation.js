@@ -8,10 +8,13 @@
 import { z } from 'zod';
 import { createEvalStore } from '../evaluation/eval-store.js';
 
-export function registerEvaluationTools(server, { DATA_DIR }) {
+export function registerEvaluationTools(server, { DATA_DIR, cacheStore = null }) {
   let store = null;
   try {
     store = createEvalStore(DATA_DIR);
+    if (cacheStore && store) {
+      store.setCacheStore(cacheStore);
+    }
   } catch (err) {
     console.error('[evaluation-tools] Failed to init eval store:', err.message);
   }
@@ -173,6 +176,41 @@ export function registerEvaluationTools(server, { DATA_DIR }) {
           content: [{ type: 'text', text: `Error: ${err.message}` }]
         };
       }
+    }
+  );
+
+  // --- ctx_cache_stats ---
+  server.registerTool(
+    'ctx_cache_stats',
+    {
+      description: 'Получить статистику двухуровневого кэша: L1 (RAM), L2 (SQLite), hit rates, namespaces.',
+      inputSchema: z.object({}).shape,
+    },
+    async () => {
+      if (!cacheStore) {
+        return { content: [{ type: 'text', text: 'Cache store unavailable' }] };
+      }
+      const s = cacheStore.stats();
+      const result = {
+        l1: {
+          size_bytes: s.l1.size,
+          count: s.l1.count,
+          hits: s.l1.hits,
+          misses: s.l1.misses,
+          hit_rate: `${s.l1.hitRate}%`,
+        },
+        l2: {
+          count: s.l2.count,
+          size_bytes: s.l2.sizeBytes,
+          hits: s.l2.hits,
+          misses: s.l2.misses,
+          hit_rate: `${s.l2.hitRate}%`,
+        },
+        namespaces: s.namespaces,
+      };
+      return {
+        content: [{ type: 'text', text: JSON.stringify(result, null, 2) }]
+      };
     }
   );
 

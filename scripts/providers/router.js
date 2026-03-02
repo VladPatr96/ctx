@@ -40,12 +40,32 @@ function getEvalStore() {
 
 process.on('exit', () => { shutdownRoutingLogger(); _evalStore?.close(); });
 
+// ---- Routing config cache ----
+let _configCache = null;
+let _configCacheTime = 0;
+const CONFIG_CACHE_TTL = 10_000; // 10 seconds
+
 /**
  * Load routing config from .data/routing-config.json.
+ * Cached for 10 seconds to avoid disk I/O on every route() call.
  * @returns {{ enabled?: boolean, threshold?: number, overrides?: object }}
  */
 function loadRoutingConfig() {
-  return readJsonFile(ROUTING_CONFIG_FILE, {});
+  const now = Date.now();
+  if (_configCache && (now - _configCacheTime) < CONFIG_CACHE_TTL) {
+    return _configCache;
+  }
+  _configCache = readJsonFile(ROUTING_CONFIG_FILE, {});
+  _configCacheTime = now;
+  return _configCache;
+}
+
+/**
+ * Invalidate routing config cache (call after writes).
+ */
+function invalidateConfigCache() {
+  _configCache = null;
+  _configCacheTime = 0;
 }
 
 /**
@@ -67,6 +87,7 @@ function checkOverride(taskType) {
       override.remaining--;
       if (override.remaining <= 0) delete config.overrides[taskType];
       writeJsonAtomic(ROUTING_CONFIG_FILE, config);
+      invalidateConfigCache();
     }
     return override.provider;
   } catch {

@@ -147,10 +147,9 @@ export function createEvalStore(dataDir = '.data') {
     SELECT COUNT(*) as total FROM consilium_runs WHERE ended_at IS NOT NULL
   `);
 
-  let _metricsCache = null;
-  let _metricsCacheTime = 0;
-  const _taskTypeMetricsCache = new Map();
-  const _taskTypeMetricsCacheTime = new Map();
+  // Metrics caching via external cache-store (if provided), with local fallback
+  let _cacheStore = null;
+  const _localCache = new Map(); // fallback: key → { value, time }
 
   const ciStatsStmt = db.prepare(`
     SELECT ci_status, COUNT(*) as cnt
@@ -377,15 +376,36 @@ export function createEvalStore(dataDir = '.data') {
     },
 
     /**
+     * Inject external cache-store for metrics caching.
+     * @param {object} cacheStore — createCacheStore() instance
+     */
+    setCacheStore(cacheStore) {
+      _cacheStore = cacheStore;
+    },
+
+    /**
      * Get raw provider metrics for adaptive routing.
-     * Cached for 60 seconds. Fail-safe: returns empty on error.
+     * Cached for 60 seconds via cache-store (or local fallback). Fail-safe: returns empty on error.
      * @returns {{ providers: Map<string, object>, globalWinRate: number }}
      */
     getProviderMetrics() {
+      const CACHE_KEY = 'metrics:global';
+      const TTL = 60_000;
       const now = Date.now();
-      if (_metricsCache && (now - _metricsCacheTime) < 60_000) {
-        return _metricsCache;
+
+      // Try cache-store first, then local fallback
+      if (_cacheStore) {
+        const cached = _cacheStore.get(CACHE_KEY);
+        if (cached) {
+          cached.providers = new Map(cached._providerEntries || []);
+          delete cached._providerEntries;
+          return cached;
+        }
+      } else {
+        const local = _localCache.get(CACHE_KEY);
+        if (local && (now - local.time) < TTL) return local.value;
       }
+
       try {
         const rows = providerMetricsRawStmt.all();
         const providers = new Map();
@@ -402,9 +422,14 @@ export function createEvalStore(dataDir = '.data') {
           ? global.total_wins / global.total_responses
           : 0.25;
 
-        _metricsCache = { providers, globalWinRate };
-        _metricsCacheTime = now;
-        return _metricsCache;
+        const result = { providers, globalWinRate };
+        if (_cacheStore) {
+          const toCache = { _providerEntries: [...providers], globalWinRate };
+          _cacheStore.set(CACHE_KEY, toCache, { ttl: TTL });
+        } else {
+          _localCache.set(CACHE_KEY, { value: result, time: now });
+        }
+        return result;
       } catch (err) {
         console.error('[eval-store] getProviderMetrics failed:', err.message);
         return { providers: new Map(), globalWinRate: 0.25 };
@@ -413,16 +438,27 @@ export function createEvalStore(dataDir = '.data') {
 
     /**
      * Get provider metrics filtered by task_type.
-     * Cached per taskType for 60 seconds.
+     * Cached per taskType for 60 seconds via cache-store (or local fallback).
      * @param {string} taskType
      * @returns {{ providers: Map<string, object>, globalWinRate: number }}
      */
     getProviderMetricsByTaskType(taskType) {
+      const CACHE_KEY = `metrics:tasktype:${taskType}`;
+      const TTL = 60_000;
       const now = Date.now();
-      const cachedTime = _taskTypeMetricsCacheTime.get(taskType) || 0;
-      if (_taskTypeMetricsCache.has(taskType) && (now - cachedTime) < 60_000) {
-        return _taskTypeMetricsCache.get(taskType);
+
+      if (_cacheStore) {
+        const cached = _cacheStore.get(CACHE_KEY);
+        if (cached) {
+          cached.providers = new Map(cached._providerEntries || []);
+          delete cached._providerEntries;
+          return cached;
+        }
+      } else {
+        const local = _localCache.get(CACHE_KEY);
+        if (local && (now - local.time) < TTL) return local.value;
       }
+
       try {
         const rows = providerMetricsByTaskTypeStmt.all(taskType);
         const providers = new Map();
@@ -440,8 +476,12 @@ export function createEvalStore(dataDir = '.data') {
           : 0.25;
 
         const result = { providers, globalWinRate };
-        _taskTypeMetricsCache.set(taskType, result);
-        _taskTypeMetricsCacheTime.set(taskType, now);
+        if (_cacheStore) {
+          const toCache = { _providerEntries: [...providers], globalWinRate };
+          _cacheStore.set(CACHE_KEY, toCache, { ttl: TTL });
+        } else {
+          _localCache.set(CACHE_KEY, { value: result, time: now });
+        }
         return result;
       } catch (err) {
         console.error('[eval-store] getProviderMetricsByTaskType failed:', err.message);

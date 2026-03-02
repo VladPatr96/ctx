@@ -125,14 +125,23 @@ export function registerKnowledgeTools(server, { runCommand, readJson, DATA_DIR,
             content: [{ type: 'text', text: JSON.stringify({
               source: 'kb-local',
               count: results.length,
-              results: results.map(r => ({
-                project: r.project,
-                category: r.category,
-                title: r.title,
-                body: r.body.length > 500 ? r.body.slice(0, 500) + '...' : r.body,
-                tags: r.tags,
-                github_url: r.github_url
-              }))
+              results: results.map(r => {
+                const entry = {
+                  id: r.id,
+                  project: r.project,
+                  category: r.category,
+                  title: r.title,
+                  body: r.body.length > 500 ? r.body.slice(0, 500) + '...' : r.body,
+                  tags: r.tags,
+                  github_url: r.github_url
+                };
+                try {
+                  const links = knowledgeStore.getLinks(r.id);
+                  const allLinks = [...links.outgoing, ...links.incoming];
+                  if (allLinks.length > 0) entry.links = allLinks;
+                } catch { /* links unavailable */ }
+                return entry;
+              })
             }, null, 2) }]
           };
         }
@@ -237,6 +246,51 @@ export function registerKnowledgeTools(server, { runCommand, readJson, DATA_DIR,
       return {
         content: [{ type: 'text', text: JSON.stringify(output) }]
       };
+    }
+  );
+
+  server.registerTool(
+    'ctx_kb_link',
+    {
+      description: 'Управление связями между записями KB (граф знаний). Добавить, удалить или просмотреть связи.',
+      inputSchema: z.object({
+        action: z.enum(['add', 'remove', 'list']).describe('Действие'),
+        source_id: z.number().int().optional().describe('ID исходной записи (для add/remove)'),
+        target_id: z.number().int().optional().describe('ID целевой записи (для add/remove)'),
+        relation: z.enum(['solves', 'depends_on', 'supersedes', 'related']).optional().describe('Тип связи (для add/remove)'),
+        entry_id: z.number().int().optional().describe('ID записи для просмотра связей (для list)')
+      }).shape,
+    },
+    async ({ action, source_id, target_id, relation, entry_id }) => {
+      if (!knowledgeStore) {
+        return { content: [{ type: 'text', text: 'KB disabled.' }] };
+      }
+
+      if (action === 'add') {
+        if (!source_id || !target_id || !relation) {
+          return { content: [{ type: 'text', text: 'Required: source_id, target_id, relation' }] };
+        }
+        const result = knowledgeStore.addLink(source_id, target_id, relation);
+        return { content: [{ type: 'text', text: JSON.stringify(result) }] };
+      }
+
+      if (action === 'remove') {
+        if (!source_id || !target_id || !relation) {
+          return { content: [{ type: 'text', text: 'Required: source_id, target_id, relation' }] };
+        }
+        const result = knowledgeStore.removeLink(source_id, target_id, relation);
+        return { content: [{ type: 'text', text: JSON.stringify(result) }] };
+      }
+
+      if (action === 'list') {
+        if (!entry_id) {
+          return { content: [{ type: 'text', text: 'Required: entry_id' }] };
+        }
+        const links = knowledgeStore.getLinks(entry_id);
+        return { content: [{ type: 'text', text: JSON.stringify(links, null, 2) }] };
+      }
+
+      return { content: [{ type: 'text', text: 'Unknown action' }] };
     }
   );
 

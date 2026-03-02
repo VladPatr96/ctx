@@ -5,7 +5,7 @@
  * State is persisted in .data/worktrees.json with file-level locking.
  */
 
-import { existsSync, mkdirSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, rmSync, realpathSync } from 'node:fs';
 import { join, resolve, sep } from 'node:path';
 import { runCommand } from '../utils/shell.js';
 import { readJsonFile, writeJsonAtomic, withLockSync } from '../utils/state-io.js';
@@ -78,7 +78,12 @@ function withState(fn) {
 // ==================== Porcelain parser ====================
 
 function normalizePath(p) {
-  return p.replace(/\\/g, '/').toLowerCase();
+  // Resolve Windows 8.3 short names (e.g. 4F15~1 → Патраваев) via native realpath
+  let resolved = p;
+  try {
+    if (existsSync(p)) resolved = realpathSync.native(p);
+  } catch { /* best-effort */ }
+  return resolved.replace(/\\/g, '/').toLowerCase();
 }
 
 function parsePorcelainOutput(stdout) {

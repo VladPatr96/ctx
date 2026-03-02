@@ -55,12 +55,18 @@ export class KnowledgeStore {
     this.db.exec('PRAGMA journal_mode = WAL;');
     this.db.exec('PRAGMA synchronous = NORMAL;');
     this.db.exec('PRAGMA busy_timeout = 2000;');
+    this.db.exec('PRAGMA foreign_keys = ON;');
     this.db.exec(readFileSync(SCHEMA_FILE, 'utf8'));
 
     // Migration: add version_count column (safe for existing DBs)
     try { this.db.exec('ALTER TABLE kb_entries ADD COLUMN version_count INTEGER DEFAULT 1'); } catch {}
 
     this.prepareStatements();
+
+    // Batch access count updates
+    this._pendingAccessBumps = [];
+    this._flushTimer = setInterval(() => this._flushAccessBumps(), 5000);
+    this._flushTimer.unref();
   }
 
   prepareStatements() {
@@ -131,6 +137,53 @@ export class KnowledgeStore {
     `);
 
     this.totalCountStmt = this.db.prepare('SELECT COUNT(*) as cnt FROM kb_entries');
+
+    // kb_links statements
+    this.addLinkStmt = this.db.prepare(`
+      INSERT OR IGNORE INTO kb_links(source_id, target_id, relation, created_at)
+      VALUES (?, ?, ?, ?)
+    `);
+
+    this.removeLinkStmt = this.db.prepare(`
+      DELETE FROM kb_links WHERE source_id = ? AND target_id = ? AND relation = ?
+    `);
+
+    this.getLinksBySourceStmt = this.db.prepare(`
+      SELECT l.id, l.target_id AS linked_id, l.relation, l.created_at,
+             e.title, e.category, e.project
+      FROM kb_links l
+      JOIN kb_entries e ON e.id = l.target_id
+      WHERE l.source_id = ?
+    `);
+
+    this.getLinksByTargetStmt = this.db.prepare(`
+      SELECT l.id, l.source_id AS linked_id, l.relation, l.created_at,
+             e.title, e.category, e.project
+      FROM kb_links l
+      JOIN kb_entries e ON e.id = l.source_id
+      WHERE l.target_id = ?
+    `);
+  }
+
+  _batchBumpAccess(id) {
+    this._pendingAccessBumps.push(id);
+    if (this._pendingAccessBumps.length >= 100) {
+      this._flushAccessBumps();
+    }
+  }
+
+  _flushAccessBumps() {
+    if (this._pendingAccessBumps.length === 0) return;
+    const ids = this._pendingAccessBumps.splice(0);
+    try {
+      this.db.exec('BEGIN');
+      for (const id of ids) {
+        this.bumpAccessStmt.run(id);
+      }
+      this.db.exec('COMMIT');
+    } catch {
+      try { this.db.exec('ROLLBACK'); } catch { /* ignore */ }
+    }
   }
 
   hasEntry(hash) {
@@ -174,7 +227,7 @@ export class KnowledgeStore {
       results = results.slice(0, limit);
 
       for (const r of results) {
-        this.bumpAccessStmt.run(r.id);
+        this._batchBumpAccess(r.id);
       }
       return results;
     } catch {
@@ -185,7 +238,7 @@ export class KnowledgeStore {
   getContextForProject(project, limit = 5) {
     const entries = this.getByProjectStmt.all(project, limit);
     for (const e of entries) {
-      this.bumpAccessStmt.run(e.id);
+      this._batchBumpAccess(e.id);
     }
     const snapshot = this.getSnapshot(project);
     return { entries, snapshot };
@@ -228,6 +281,26 @@ export class KnowledgeStore {
     return { total, byCategory, byProject };
   }
 
+  addLink(sourceId, targetId, relation) {
+    const now = new Date().toISOString();
+    const result = this.addLinkStmt.run(sourceId, targetId, relation, now);
+    return { added: result.changes > 0, sourceId, targetId, relation };
+  }
+
+  getLinks(entryId) {
+    const asSource = this.getLinksBySourceStmt.all(entryId);
+    const asTarget = this.getLinksByTargetStmt.all(entryId);
+    return {
+      outgoing: asSource.map(r => ({ id: r.id, linkedId: r.linked_id, relation: r.relation, title: r.title, category: r.category, project: r.project, createdAt: r.created_at })),
+      incoming: asTarget.map(r => ({ id: r.id, linkedId: r.linked_id, relation: r.relation, title: r.title, category: r.category, project: r.project, createdAt: r.created_at }))
+    };
+  }
+
+  removeLink(sourceId, targetId, relation) {
+    const result = this.removeLinkStmt.run(sourceId, targetId, relation);
+    return { removed: result.changes > 0 };
+  }
+
   importFromIssues(issues, project) {
     let imported = 0;
     let skipped = 0;
@@ -249,6 +322,11 @@ export class KnowledgeStore {
   }
 
   close() {
+    if (this._flushTimer) {
+      clearInterval(this._flushTimer);
+      this._flushTimer = null;
+    }
+    this._flushAccessBumps();
     if (this.db && typeof this.db.close === 'function') {
       this.db.close();
     }

@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.6.1",
+    "lru-cache": "^11.2.6",
     "zod": "^3.24.0"
   }
 }

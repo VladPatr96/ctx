@@ -24,6 +24,15 @@ export class KbSync {
     this.autoSync = !parseBool(process.env.CTX_KB_AUTO_SYNC === '0'
       ? '1' // inverted: CTX_KB_AUTO_SYNC=0 means disabled
       : process.env.CTX_KB_AUTO_SYNC || '');
+
+    // Async sync queue
+    this._syncQueue = [];
+    this._syncInterval = 30_000;
+    this._maxInterval = 300_000;
+    this._currentInterval = this._syncInterval;
+    this._consecutiveErrors = 0;
+    this._syncTimer = setInterval(() => this._processSyncQueue(), this._syncInterval);
+    this._syncTimer.unref();
   }
 
   /**
@@ -154,6 +163,55 @@ export class KbSync {
     }
 
     return { status: 'push-failed', error: push.error };
+  }
+
+  /**
+   * Queue a push request instead of pushing immediately.
+   */
+  queuePush(message = 'kb: update') {
+    this._syncQueue.push({ message, timestamp: Date.now() });
+  }
+
+  /**
+   * Process queued push requests with exponential backoff on errors.
+   */
+  async _processSyncQueue() {
+    if (this._syncQueue.length === 0) return;
+
+    // Drain queue — take all pending, use latest message
+    const pending = this._syncQueue.splice(0);
+    const message = pending[pending.length - 1].message;
+
+    try {
+      const result = await this.push(message);
+      if (result.status === 'ok' || result.status === 'clean') {
+        this._consecutiveErrors = 0;
+        this._currentInterval = this._syncInterval;
+      } else {
+        this._onSyncError();
+      }
+    } catch {
+      this._onSyncError();
+    }
+  }
+
+  _onSyncError() {
+    this._consecutiveErrors++;
+    this._currentInterval = Math.min(
+      this._syncInterval * Math.pow(2, this._consecutiveErrors),
+      this._maxInterval
+    );
+  }
+
+  /**
+   * Flush sync queue immediately (for graceful shutdown).
+   */
+  async flush() {
+    if (this._syncTimer) {
+      clearInterval(this._syncTimer);
+      this._syncTimer = null;
+    }
+    await this._processSyncQueue();
   }
 
   /**
