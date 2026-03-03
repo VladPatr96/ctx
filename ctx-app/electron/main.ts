@@ -201,32 +201,7 @@ ipcMain.handle('get-env', () => ({
   version: app.getVersion(),
 }))
 
-ipcMain.handle('ctx-api:get-base-url', () => DASHBOARD_BASE_URL)
-ipcMain.handle('ctx-api:get-state', async () => fetchDashboardJson('/api/state'))
-ipcMain.handle('ctx-api:set-task', async (_event, task: string) => {
-  await fetchDashboardJson('/api/pipeline/task', {
-    method: 'POST',
-    body: JSON.stringify({ task })
-  })
-})
-ipcMain.handle('ctx-api:set-stage', async (_event, stage: string) => {
-  await fetchDashboardJson('/api/pipeline/stage', {
-    method: 'POST',
-    body: JSON.stringify({ stage })
-  })
-})
-ipcMain.handle('ctx-api:search-kb', async (_event, query: string, limit = 10, project?: string) => {
-  const params = new URLSearchParams({ q: query, limit: String(limit) })
-  if (project) params.set('project', project)
-  return fetchDashboardJson(`/api/kb/search?${params.toString()}`)
-})
-ipcMain.handle('ctx-api:get-kb-stats', async () => fetchDashboardJson('/api/kb/stats'))
-ipcMain.handle('ctx-api:get-agent-details', async (_event, agentId: string) => {
-  return fetchDashboardJson('/api/agent/details', {
-    method: 'POST',
-    body: JSON.stringify({ id: agentId })
-  })
-})
+// Terminal-only IPC (API calls now go through HTTP directly from renderer)
 ipcMain.handle('ctx-terminal:get-allowlist', () =>
   listAllowlistedCommands()
 )

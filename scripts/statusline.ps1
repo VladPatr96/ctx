@@ -1,25 +1,85 @@
-# Claude Code statusline with usage limits (Windows)
-# Reads JSON from stdin, outputs formatted statusline with ANSI colors
+# Claude Code statusline with 10-dot bars (Windows)
+# Reads JSON from stdin and renders a 4-line status block.
 
-$input_data = [Console]::In.ReadToEnd()
-$json = $input_data | ConvertFrom-Json
-
-# Extract from JSON
-$dir_full = $json.workspace.current_dir
-$dir_name = if ($dir_full) { Split-Path $dir_full -Leaf } else { "?" }
-$model = if ($json.model.display_name) { $json.model.display_name } else { "?" }
-$cost = if ($json.cost.total_cost_usd) { $json.cost.total_cost_usd } else { 0 }
-$pct = if ($json.context_window.used_percentage) { [int]$json.context_window.used_percentage } else { 0 }
-
-# Git branch
-$branch = ""
-if ($dir_full -and (Test-Path "$dir_full\.git" -ErrorAction SilentlyContinue)) {
-    try {
-        $branch = (git -C $dir_full branch --show-current 2>$null)
-    } catch {}
+$inputData = [Console]::In.ReadToEnd()
+if ([string]::IsNullOrWhiteSpace($inputData)) {
+    exit 0
 }
 
-# Usage limits (cached, refresh every 2 min)
+try {
+    $json = $inputData | ConvertFrom-Json
+} catch {
+    exit 0
+}
+
+# ANSI escapes
+$e = [char]27
+$reset = "$e[0m"
+$dim = "$e[2m"
+$green = "$e[32m"
+$yellow = "$e[33m"
+$red = "$e[31m"
+$cyan = "$e[36m"
+$blue = "$e[34m"
+
+function ClampPercent([double]$value) {
+    if ($value -lt 0) { return 0.0 }
+    if ($value -gt 100) { return 100.0 }
+    return $value
+}
+
+function Get-RemainingColor([double]$remainingPct) {
+    if ($remainingPct -gt 50) { return $green }
+    if ($remainingPct -ge 20) { return $yellow }
+    return $red
+}
+
+function Get-ContextColor([double]$usedPct) {
+    if ($usedPct -lt 50) { return $green }
+    if ($usedPct -lt 80) { return $yellow }
+    return $red
+}
+
+function Build-DotBar([double]$percent, [string]$mode) {
+    $pct = ClampPercent $percent
+    $filled = [Math]::Round($pct / 10.0, 0, [MidpointRounding]::AwayFromZero)
+    if ($filled -lt 0) { $filled = 0 }
+    if ($filled -gt 10) { $filled = 10 }
+    $empty = 10 - $filled
+
+    $color = if ($mode -eq "remaining") { Get-RemainingColor $pct } else { Get-ContextColor $pct }
+    $filledDots = if ($filled -gt 0) { ('●' * $filled) } else { '' }
+    $emptyDots = if ($empty -gt 0) { ('○' * $empty) } else { '' }
+
+    return "${color}${filledDots}${reset}${dim}${emptyDots}${reset}"
+}
+
+function Format-Countdown([string]$isoUtc) {
+    if ([string]::IsNullOrWhiteSpace($isoUtc)) { return "--" }
+    try {
+        $resetAt = [DateTimeOffset]::Parse($isoUtc)
+        $diff = $resetAt - [DateTimeOffset]::UtcNow
+        if ($diff.TotalSeconds -le 0) { return "0m" }
+        $hours = [int][Math]::Floor($diff.TotalHours)
+        $mins = [int][Math]::Floor($diff.TotalMinutes % 60)
+        if ($hours -gt 0) { return "${hours}h${mins}m" }
+        return "${mins}m"
+    } catch {
+        return "--"
+    }
+}
+
+function Format-WeeklyReset([string]$isoUtc) {
+    if ([string]::IsNullOrWhiteSpace($isoUtc)) { return "--" }
+    try {
+        $local = [DateTimeOffset]::Parse($isoUtc).ToLocalTime()
+        return $local.ToString("ddd HH:mm", [System.Globalization.CultureInfo]::InvariantCulture)
+    } catch {
+        return "--"
+    }
+}
+
+# Usage limits (cache for 2 minutes).
 $cacheFile = Join-Path $env:TEMP "claude-usage-cache.json"
 $cacheTTL = 120
 
@@ -32,7 +92,6 @@ function Get-ClaudeUsage {
     }
 
     if (($now - $cacheTime) -gt $cacheTTL) {
-        # Try to get token from credentials file
         $credFile = Join-Path $env:USERPROFILE ".claude\.credentials.json"
         $token = $null
         if (Test-Path $credFile) {
@@ -56,89 +115,93 @@ function Get-ClaudeUsage {
     }
 
     if (Test-Path $cacheFile) {
-        return Get-Content $cacheFile -Raw | ConvertFrom-Json
+        try {
+            return Get-Content $cacheFile -Raw | ConvertFrom-Json
+        } catch {
+            return $null
+        }
     }
     return $null
 }
 
+# Top line fields from Claude statusline payload.
+$dirFull = $json.workspace.current_dir
+$dirName = if ($dirFull) { Split-Path $dirFull -Leaf } else { "?" }
+$model = if ($json.model.display_name) { [string]$json.model.display_name } else { "?" }
+
+$cost = 0.0
+try {
+    if ($null -ne $json.cost.total_cost_usd) { $cost = [double]$json.cost.total_cost_usd }
+} catch {}
+$costFmt = '$' + $cost.ToString("0.00", [System.Globalization.CultureInfo]::InvariantCulture)
+
+$ctxUsed = 0.0
+try {
+    if ($null -ne $json.context_window.used_percentage) { $ctxUsed = [double]$json.context_window.used_percentage }
+} catch {}
+$ctxUsed = ClampPercent $ctxUsed
+$ctxUsedInt = [int][Math]::Round($ctxUsed, 0, [MidpointRounding]::AwayFromZero)
+
+# Branch.
+$branch = ""
+if ($dirFull) {
+    try {
+        $branch = (git -C $dirFull branch --show-current 2>$null)
+    } catch {}
+}
+if ($branch -is [array]) {
+    $branch = ($branch | Select-Object -First 1)
+}
+if ($null -eq $branch) {
+    $branch = ""
+}
+$branch = "$branch".Trim()
+
+# Usage bars.
 $usage = Get-ClaudeUsage
-$fiveHLeft = ""
-$weekLeft = ""
-$timeLeft = ""
+$fiveRemaining = 0.0
+$weekRemaining = 0.0
+$fiveResetLeft = "--"
+$weekResetLabel = "--"
+$hasUsage = $false
 
-if ($usage -and $usage.five_hour) {
-    $fiveHUsed = if ($usage.five_hour.utilization) { $usage.five_hour.utilization } else { 0 }
-    $weekUsed = if ($usage.seven_day.utilization) { $usage.seven_day.utilization } else { 0 }
-    $fiveHReset = $usage.five_hour.resets_at
+if ($usage -and $usage.five_hour -and $usage.seven_day) {
+    $hasUsage = $true
+    $fiveUsed = 0.0
+    $weekUsed = 0.0
+    try {
+        if ($null -ne $usage.five_hour.utilization) { $fiveUsed = [double]$usage.five_hour.utilization }
+        if ($null -ne $usage.seven_day.utilization) { $weekUsed = [double]$usage.seven_day.utilization }
+    } catch {}
 
-    $fiveHLeft = [math]::Max(0, [int](100 - $fiveHUsed))
-    $weekLeft = [math]::Max(0, [int](100 - $weekUsed))
-
-    # Time until reset
-    if ($fiveHReset) {
-        try {
-            $resetTime = [DateTimeOffset]::Parse($fiveHReset)
-            $diff = $resetTime - [DateTimeOffset]::UtcNow
-            if ($diff.TotalSeconds -gt 0) {
-                $hours = [int]$diff.TotalHours
-                $mins = [int]($diff.TotalMinutes % 60)
-                if ($hours -gt 0) {
-                    $timeLeft = "${hours}h${mins}m"
-                } else {
-                    $timeLeft = "${mins}m"
-                }
-            }
-        } catch {}
-    }
+    $fiveRemaining = ClampPercent (100.0 - $fiveUsed)
+    $weekRemaining = ClampPercent (100.0 - $weekUsed)
+    $fiveResetLeft = Format-Countdown ([string]$usage.five_hour.resets_at)
+    $weekResetLabel = Format-WeeklyReset ([string]$usage.seven_day.resets_at)
 }
 
-# Format cost
-$costFmt = "{0:F2}" -f [double]$cost
+$fivePctInt = if ($hasUsage) { [int][Math]::Round($fiveRemaining, 0, [MidpointRounding]::AwayFromZero) } else { $null }
+$weekPctInt = if ($hasUsage) { [int][Math]::Round($weekRemaining, 0, [MidpointRounding]::AwayFromZero) } else { $null }
 
-# ESC character for ANSI
-$e = [char]27
+$fiveBar = Build-DotBar -percent $fiveRemaining -mode "remaining"
+$weekBar = Build-DotBar -percent $weekRemaining -mode "remaining"
+$ctxBar = Build-DotBar -percent $ctxUsed -mode "context"
 
-# Colors for context %
-if ($pct -lt 50) {
-    $pctColor = "$e[32m"   # green
-} elseif ($pct -lt 80) {
-    $pctColor = "$e[33m"   # yellow
-} else {
-    $pctColor = "$e[31m"   # red
-}
+$fiveColor = Get-RemainingColor $fiveRemaining
+$weekColor = Get-RemainingColor $weekRemaining
+$ctxColor = Get-ContextColor $ctxUsed
+$sep = " ${dim}•${reset} "
 
-# Color function for usage limits
-function Get-UsageColor($val) {
-    if ($val -gt 50) { return "$e[0m" }      # white/default
-    elseif ($val -gt 20) { return "$e[33m" }  # yellow
-    else { return "$e[31m" }                   # red
-}
+$branchChunk = if ($branch) { " ${dim}(${branch})${reset}" } else { "" }
+$line1 = "${blue}${dirName}${reset}${branchChunk}${sep}${cyan}${model}${reset}${sep}${green}${costFmt}${reset}"
 
-# Build output
-$out = ""
+$fivePctText = if ($hasUsage) { "${fiveColor}${fivePctInt}%${reset}" } else { "${dim}--${reset}" }
+$weekPctText = if ($hasUsage) { "${weekColor}${weekPctInt}%${reset}" } else { "${dim}--${reset}" }
+$ctxPctText = "${ctxColor}${ctxUsedInt}%${reset}"
 
-# Dir and branch
-if ($branch) {
-    $out = "$e[34m${dir_name}$e[0m $e[2m(${branch})$e[0m"
-} else {
-    $out = "$e[34m${dir_name}$e[0m"
-}
+$line2 = "5h ${fiveBar} ${fivePctText}  ${dim}${fiveResetLeft}${reset}"
+$line3 = "W  ${weekBar} ${weekPctText}  ${dim}${weekResetLabel}${reset}"
+$line4 = "ctx${ctxBar} ${ctxPctText}"
 
-# Model
-$out += " $([char]0x2022) $e[36m${model}$e[0m"
-
-# Usage limits
-if ($fiveHLeft -ne "" -and $weekLeft -ne "") {
-    $fiveColor = Get-UsageColor $fiveHLeft
-    $weekColor = Get-UsageColor $weekLeft
-    if ($timeLeft) {
-        $out += " $([char]0x2022) ${fiveColor}${timeLeft} ${fiveHLeft}%$e[0m ${weekColor}W${weekLeft}%$e[0m"
-    } else {
-        $out += " $([char]0x2022) ${fiveColor}5h ${fiveHLeft}%$e[0m ${weekColor}W${weekLeft}%$e[0m"
-    }
-}
-
-# Cost and context
-$out += " $([char]0x2022) $e[32m`$${costFmt}$e[0m $([char]0x2022) ${pctColor}${pct}%$e[0m"
-
+$out = @($line1, $line2, $line3, $line4) -join "`n"
 Write-Host -NoNewline $out

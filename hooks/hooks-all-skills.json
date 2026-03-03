@@ -1,0 +1,156 @@
+{
+  "hooks": {
+    "PreCompress": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node scripts/ctx-cli.js security-scan --scope code --quick",
+            "description": "Security quick check"
+          },
+          {
+            "type": "command",
+            "command": "node scripts/ctx-cli.js refactor --severity high --directory src",
+            "description": "Code quality check"
+          },
+          {
+            "type": "command",
+            "command": "node scripts/ctx-cli.js error-analyze --quick",
+            "description": "Error pattern detection"
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node scripts/ctx-session-save.js --event stop",
+            "description": "Save session"
+          },
+          {
+            "type": "command",
+            "command": "node scripts/ctx-cli.js generate-docs --type changelog",
+            "description": "Generate changelog"
+          },
+          {
+            "type": "command",
+            "command": "node scripts/ctx-cli.js test-coverage --quick",
+            "description": "Quick coverage check"
+          },
+          {
+            "type": "command",
+            "command": "node scripts/ctx-cli.js provider-metrics --period session",
+            "description": "Log provider usage"
+          },
+          {
+            "type": "command",
+            "command": "node scripts/ctx-cli.js provider-optimize --goal quality",
+            "description": "Optimize provider usage"
+          }
+        ]
+      }
+    ],
+    "OnError": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node scripts/ctx-cli.js debug --auto-log --save-to-kb",
+            "description": "Auto-debug error"
+          },
+          {
+            "type": "command",
+            "command": "node scripts/ctx-cli.js error-similar --pattern auto",
+            "description": "Find similar errors"
+          },
+          {
+            "type": "command",
+            "command": "node scripts/ctx-cli.js error-analyze --auto-fix",
+            "description": "Suggest fix"
+          }
+        ]
+      }
+    ],
+    "OnSuccess": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node scripts/ctx-cli.js test-coverage --target 80",
+            "description": "Verify coverage"
+          },
+          {
+            "type": "command",
+            "command": "node scripts/ctx-cli.js security-scan --scope dependencies",
+            "description": "Security check"
+          },
+          {
+            "type": "command",
+            "command": "node scripts/ctx-cli.js docs-api --format markdown",
+            "description": "Update API docs"
+          }
+        ]
+      }
+    ],
+    "OnPlanComplete": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node scripts/ctx-cli.js api-design --format openapi",
+            "description": "Generate API spec"
+          },
+          {
+            "type": "command",
+            "command": "node scripts/ctx-cli.js docs-readme --template standard",
+            "description": "Update README"
+          },
+          {
+            "type": "command",
+            "command": "node scripts/ctx-cli.js refactor --directory src",
+            "description": "Check code quality"
+          }
+        ]
+      }
+    ],
+    "OnDeployStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node scripts/ctx-cli.js dockerize --runtime node",
+            "description": "Generate Docker config"
+          },
+          {
+            "type": "command",
+            "command": "node scripts/ctx-cli.js docker-optimize --strategy size",
+            "description": "Optimize image"
+          },
+          {
+            "type": "command",
+            "command": "node scripts/ctx-cli.js security-scan --scope all",
+            "description": "Full security check"
+          }
+        ]
+      }
+    ],
+    "OnDeployComplete": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node scripts/ctx-cli.js generate-docs --type all",
+            "description": "Generate all docs"
+          },
+          {
+            "type": "command",
+            "command": "node scripts/ctx-cli.js provider-health --provider all",
+            "description": "Check provider health"
+          }
+        ]
+      }
+    ]
+  }
+}

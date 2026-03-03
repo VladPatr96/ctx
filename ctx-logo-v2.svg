@@ -1,0 +1,26 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <!-- Фон -->
+  <rect width="512" height="512" rx="100" fill="#020617"/>
+  
+  <g transform="translate(0, -10)">
+    <!-- T - Массивная крыша (Красный коралл) -->
+    <g stroke="#EF4444" stroke-width="28" stroke-linecap="butt" fill="none">
+      <line x1="120" y1="140" x2="392" y2="140" />
+      <line x1="256" y1="140" x2="256" y2="340" />
+    </g>
+
+    <!-- C - Строгая зеленая скобка -->
+    <path d="M210 220H150V340H210" stroke="#10B981" stroke-width="24" stroke-linecap="square" stroke-linejoin="miter" fill="none"/>
+
+    <!-- X - Мягкая голубая форма -->
+    <g stroke="#3B82F6" stroke-width="28" stroke-linecap="round">
+      <line x1="302" y1="220" x2="362" y2="340" />
+      <line x1="362" y1="220" x2="302" y2="340" />
+    </g>
+  </g>
+
+  <!-- Текст: Исправлен разрыв -->
+  <text x="256" y="445" font-family="Inter, sans-serif" font-size="20" font-weight="800" text-anchor="middle" letter-spacing="1">
+    <tspan fill="#10B981">C</tspan><tspan fill="#64748B">omplex </tspan><tspan fill="#EF4444">T</tspan><tspan fill="#64748B">ask e</tspan><tspan fill="#3B82F6">X</tspan><tspan fill="#64748B">ecution</tspan>
+  </text>
+</svg>

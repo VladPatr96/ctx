@@ -43,11 +43,11 @@ body {
 }
 
 #root {
-  min-height: 100vh;
+  height: 100vh;
 }
 
 .app-shell {
-  min-height: 100vh;
+  height: 100vh;
   display: grid;
   grid-template-columns: 220px 1fr;
 }
@@ -56,6 +56,7 @@ body {
   border-right: 1px solid var(--border);
   padding: 20px 14px;
   background: var(--surface);
+  overflow-y: auto;
 }
 
 .logo {
@@ -71,6 +72,9 @@ body {
   background: color-mix(in srgb, var(--surface), #000 8%);
   color: var(--muted);
   border-radius: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   padding: 10px;
   margin-bottom: 8px;
   text-align: left;
@@ -86,6 +90,7 @@ body {
 
 .app-main {
   padding: 16px 18px;
+  overflow-y: auto;
 }
 
 .app-header {
@@ -473,6 +478,47 @@ button:hover {
 
 .telemetry-latency {
   background: linear-gradient(90deg, color-mix(in srgb, var(--primary), #fff 8%), var(--primary));
+}
+
+.error-boundary {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 40px 20px;
+  text-align: center;
+  color: var(--muted);
+}
+
+.error-boundary h3 {
+  color: var(--danger);
+  margin: 0;
+}
+
+.error-details {
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  font-size: 12px;
+  max-width: 500px;
+  overflow: auto;
+  color: var(--muted);
+}
+
+.retry-btn {
+  background: var(--primary);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 20px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.retry-btn:hover {
+  opacity: 0.85;
 }
 
 @media (max-width: 900px) {

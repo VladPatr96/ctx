@@ -12,10 +12,15 @@
  */
 
 import { readFile, existsSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
 import { createStorageAdapter } from './storage/index.js';
 import { parseDataPatch } from './tools/pipeline.js';
+import { generateCLICommands, syncRegistry } from './skills/skill-registry.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 // ==================== Config ====================
 
@@ -120,9 +125,63 @@ async function cmdLogError(args) {
   console.log('Error logged');
 }
 
+// ==================== Skill-based commands ====================
+
+/**
+ * Execute skill command dynamically
+ */
+async function executeSkillCommand(skillName, command, args) {
+  const skillPath = join(__dirname, '..', 'skills', skillName);
+  const commandPath = join(skillPath, 'commands', `${command}.js`);
+  const indexPath = join(skillPath, 'index.js');
+  
+  // Try command-specific file first
+  if (existsSync(commandPath)) {
+    const { default: commandFn } = await import(commandPath);
+    return await commandFn(args, { storage, loadPipeline, savePipeline, appendLog });
+  }
+  
+  // Try index.js with exported command
+  if (existsSync(indexPath)) {
+    const { default: skillModule } = await import(indexPath);
+    if (typeof skillModule[command] === 'function') {
+      return await skillModule[command](args, { storage, loadPipeline, savePipeline, appendLog });
+    }
+  }
+  
+  throw new Error(`Command "${command}" not found in skill "${skillName}"`);
+}
+
+/**
+ * Load skill commands dynamically
+ */
+function loadSkillCommands() {
+  try {
+    // Sync registry first
+    syncRegistry();
+    
+    // Generate CLI commands from skills
+    const skillCommands = generateCLICommands();
+    const commands = {};
+    
+    for (const [cmdName, cmdInfo] of skillCommands) {
+      // Convert command name to function
+      commands[cmdName] = async (args) => {
+        return await executeSkillCommand(cmdInfo.skill, cmdName, args);
+      };
+    }
+    
+    return commands;
+  } catch (error) {
+    console.error('[cli] Failed to load skill commands:', error.message);
+    return {};
+  }
+}
+
 // ==================== Main ====================
 
-const commands = {
+// Load built-in commands
+const builtInCommands = {
   get_pipeline: cmdGetPipeline,
   set_stage: cmdSetStage,
   update_pipeline: cmdUpdatePipeline,
@@ -130,19 +189,30 @@ const commands = {
   log_error: cmdLogError
 };
 
+// Load skill-based commands
+const skillCommands = loadSkillCommands();
+
+// Merge all commands
+const commands = { ...builtInCommands, ...skillCommands };
+
 async function main() {
   const args = process.argv.slice(2);
   
   if (args.length === 0 || args[0] === '--help' || args[0] === '-h') {
+    const skillCmdsList = Object.keys(skillCommands).map(cmd => `  ${cmd.padEnd(40)} (skill)`).join('\n');
+    
     console.log(`
 CTX CLI — универсальный интерфейс для CTX tools
 
-Команды:
+Встроенные команды:
   get_pipeline                           Получить состояние pipeline
   set_stage --stage <name> [--data ...]  Перейти на стадию
   update_pipeline --patch <json>         Обновить поля pipeline
   log_action --entry <json>              Записать действие в лог
   log_error --entry <json>               Записать ошибку в лог
+
+Команды из скиллов (${Object.keys(skillCommands).length}):
+${skillCmdsList}
 
 Стадии pipeline: detect, context, task, brainstorm, plan, execute, done
 `);
@@ -165,7 +235,10 @@ CTX CLI — универсальный интерфейс для CTX tools
   }
   
   try {
-    await cmd(parsedArgs);
+    const result = await cmd(parsedArgs);
+    if (result !== undefined) {
+      console.log(JSON.stringify(result, null, 2));
+    }
   } catch (error) {
     console.error(`Error: ${error.message}`);
     process.exit(1);

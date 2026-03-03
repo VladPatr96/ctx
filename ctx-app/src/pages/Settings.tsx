@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
 import type { ApiClient } from '../api/client';
-import type { AppState, KBStats, ProviderHealthEntry } from '../api/types';
+import type { KBStats, ProviderHealthEntry } from '../api/types';
+import { useAppStore } from '../store/useAppStore';
 
 interface SettingsPageProps {
   client: ApiClient;
-  state: AppState | null;
   onRefresh: () => Promise<void>;
 }
 
@@ -18,7 +18,8 @@ const PROVIDER_CAPABILITIES: Record<string, string[]> = {
 const EMPTY_STATS: KBStats = { total: 0, byCategory: {}, byProject: {} };
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
 
-export function SettingsPage({ client, state, onRefresh }: SettingsPageProps) {
+export function SettingsPage({ client, onRefresh }: SettingsPageProps) {
+  const state = useAppStore((s) => s.state);
   const [kbStats, setKbStats] = useState<KBStats>(EMPTY_STATS);
   const [error, setError] = useState('');
 
@@ -56,13 +57,13 @@ export function SettingsPage({ client, state, onRefresh }: SettingsPageProps) {
   return (
     <div className="page-grid">
       <section className="panel">
-        <h3>Provider Capabilities</h3>
+        <h3>Возможности провайдеров</h3>
         <div className="cap-grid">
           {Object.entries(PROVIDER_CAPABILITIES).map(([provider, caps]) => (
             <article className="cap-card" key={provider}>
               <header>
                 <strong>{provider}</strong>
-                <span className="muted">{models[provider] || 'model: n/a'}</span>
+                <span className="muted">{models[provider] || 'модель: н/д'}</span>
               </header>
               <ul>
                 {caps.map((cap) => <li key={`${provider}-${cap}`}>{cap}</li>)}
@@ -73,30 +74,30 @@ export function SettingsPage({ client, state, onRefresh }: SettingsPageProps) {
       </section>
 
       <section className="panel">
-        <h3>Storage + KB</h3>
+        <h3>Хранилище + БЗ</h3>
         <div className="row">
-          <button type="button" onClick={() => void onRefresh()}>Refresh state</button>
+          <button type="button" onClick={() => void onRefresh()}>Обновить состояние</button>
         </div>
         {error ? <p className="error-text">{error}</p> : null}
-        <p className="metric">KB total: {kbStats.total}</p>
+        <p className="metric">Записей в БЗ: {kbStats.total}</p>
         <pre className="details-box">{JSON.stringify(storageHealth, null, 2)}</pre>
       </section>
 
       <section className="panel">
-        <h3>Provider Health</h3>
+        <h3>Здоровье провайдеров</h3>
         {Object.keys(providerHealth).length === 0 ? (
-          <p className="muted">No provider-health snapshot yet</p>
+          <p className="muted">Данных о здоровье провайдеров пока нет</p>
         ) : (
           <div className="cap-grid">
             {Object.entries(providerHealth).map(([provider, info]) => (
               <article className="cap-card" key={`health-${provider}`}>
                 <header>
                   <strong>{provider}</strong>
-                  <span className="muted">failures: {info.failures ?? 0}</span>
+                  <span className="muted">ошибок: {info.failures ?? 0}</span>
                 </header>
                 <ul>
-                  <li>last success: {info.lastSuccess || 'n/a'}</li>
-                  <li>last failure: {info.lastFailure || 'n/a'}</li>
+                  <li>последний успех: {info.lastSuccess || 'н/д'}</li>
+                  <li>последняя ошибка: {info.lastFailure || 'н/д'}</li>
                 </ul>
               </article>
             ))}
@@ -105,9 +106,9 @@ export function SettingsPage({ client, state, onRefresh }: SettingsPageProps) {
       </section>
 
       <section className="panel">
-        <h3>Provider Telemetry</h3>
+        <h3>Телеметрия провайдеров</h3>
         {telemetryRows.length === 0 ? (
-          <p className="muted">No telemetry yet</p>
+          <p className="muted">Телеметрии пока нет</p>
         ) : (
           <div className="telemetry-grid">
             {telemetryRows.map((row) => (
@@ -115,25 +116,25 @@ export function SettingsPage({ client, state, onRefresh }: SettingsPageProps) {
                 <header>
                   <strong>{row.provider}</strong>
                   <span className="muted">
-                    calls: {row.calls} / failures: {row.failuresTotal}
+                    вызовов: {row.calls} / ошибок: {row.failuresTotal}
                   </span>
                 </header>
                 <div className="telemetry-row">
-                  <span className="muted">success</span>
+                  <span className="muted">успех</span>
                   <div className="telemetry-track">
                     <div className="telemetry-bar telemetry-success" style={{ width: `${row.successRate}%` }} />
                   </div>
-                  <span>{row.hasTelemetry ? `${row.successRate.toFixed(1)}%` : 'n/a'}</span>
+                  <span>{row.hasTelemetry ? `${row.successRate.toFixed(1)}%` : 'н/д'}</span>
                 </div>
                 <div className="telemetry-row">
-                  <span className="muted">latency</span>
+                  <span className="muted">задержка</span>
                   <div className="telemetry-track">
                     <div
                       className="telemetry-bar telemetry-latency"
                       style={{ width: `${clamp((row.avgLatencyMs / maxLatency) * 100, 0, 100)}%` }}
                     />
                   </div>
-                  <span>{row.avgLatencyMs > 0 ? `${row.avgLatencyMs} ms` : 'n/a'}</span>
+                  <span>{row.avgLatencyMs > 0 ? `${row.avgLatencyMs} мс` : 'н/д'}</span>
                 </div>
               </article>
             ))}

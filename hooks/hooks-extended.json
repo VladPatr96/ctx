@@ -1,0 +1,64 @@
+{
+  "hooks": {
+    "PreCompress": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node scripts/ctx-cli.js security-scan --scope code --quick"
+          },
+          {
+            "type": "command",
+            "command": "node scripts/ctx-cli.js refactor-analyze --directory src"
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node scripts/ctx-session-save.js --event stop"
+          },
+          {
+            "type": "command",
+            "command": "node scripts/ctx-cli.js generate-docs --type changelog"
+          },
+          {
+            "type": "command",
+            "command": "node scripts/ctx-cli.js provider-metrics --period 24h"
+          }
+        ]
+      }
+    ],
+    "OnError": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node scripts/ctx-cli.js debug --auto-log --save-to-kb"
+          },
+          {
+            "type": "command",
+            "command": "node scripts/ctx-cli.js error-similar --pattern auto"
+          }
+        ]
+      }
+    ],
+    "OnSuccess": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node scripts/ctx-cli.js test-coverage --target 80"
+          },
+          {
+            "type": "command",
+            "command": "node scripts/ctx-cli.js provider-optimize --goal quality"
+          }
+        ]
+      }
+    ]
+  }
+}

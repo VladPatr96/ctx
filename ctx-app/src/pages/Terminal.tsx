@@ -51,39 +51,39 @@ export function TerminalPage({ client }: TerminalPageProps) {
   };
 
   const allowlistText = useMemo(() => {
-    if (allowlist.length === 0) return 'allowlist is not available';
+    if (allowlist.length === 0) return 'список недоступен';
     return allowlist.join(', ');
   }, [allowlist]);
 
   return (
     <div className="page-grid">
       <section className="panel">
-        <h3>Desktop Terminal</h3>
+        <h3>Терминал</h3>
         <p className="muted">
           {isElectron
-            ? 'Runs allowlisted commands via Electron IPC.'
-            : 'Terminal is available only in Desktop (Electron) mode.'}
+            ? 'Выполняет разрешённые команды через Electron IPC.'
+            : 'Терминал доступен только в десктопном (Electron) режиме.'}
         </p>
-        <p className="muted">Allowlist: {allowlistText}</p>
+        <p className="muted">Разрешённые команды: {allowlistText}</p>
         <div className="row">
           <input
             id="terminal-input"
             type="text"
             value={command}
             onChange={(event) => setCommand(event.target.value)}
-            placeholder="Enter allowlisted command..."
+            placeholder="Введите разрешённую команду..."
             disabled={!isElectron || busy}
           />
           <button type="button" onClick={() => void runCommand()} disabled={!isElectron || busy}>
-            {busy ? 'Running...' : 'Run'}
+            {busy ? 'Выполняется...' : 'Запустить'}
           </button>
         </div>
         {error ? <p className="error-text">{error}</p> : null}
       </section>
 
       <section className="panel">
-        <h3>History</h3>
-        {history.length === 0 ? <p className="muted">No commands yet</p> : null}
+        <h3>История</h3>
+        {history.length === 0 ? <p className="muted">Команд пока нет</p> : null}
         <div className="result-stream">
           {history.map((entry) => (
             <article className="result-card" key={entry.id}>
@@ -92,7 +92,7 @@ export function TerminalPage({ client }: TerminalPageProps) {
                 <span>{entry.result.durationMs} ms</span>
               </header>
               <p className={entry.result.ok ? 'muted' : 'error-text'}>
-                {entry.result.ok ? `exit code ${entry.result.code}` : entry.result.error || 'failed'}
+                {entry.result.ok ? `код выхода ${entry.result.code}` : entry.result.error || 'ошибка'}
               </p>
               {entry.result.stdout ? (
                 <pre>{entry.result.stdout.slice(0, 2500)}</pre>

@@ -1,0 +1,148 @@
+name: CTX Auto Pipeline
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  # Job 1: Security Scan
+  security:
+    runs-on: ubuntu-latest
+    name: 🔒 Security Scan
+    
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 20
+          
+      - name: Install dependencies
+        run: npm ci
+        
+      - name: Run security scan
+        run: node scripts/ctx-cli.js security-scan --scope all
+        
+      - name: Upload security report
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: security-report
+          path: /tmp/ctx-security.json
+
+  # Job 2: Test Coverage
+  coverage:
+    runs-on: ubuntu-latest
+    name: 📊 Test Coverage
+    
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 20
+          
+      - name: Install dependencies
+        run: npm ci
+        
+      - name: Run tests with coverage
+        run: node scripts/ctx-cli.js test-coverage --target 90
+        
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: coverage-report
+          path: coverage/
+
+  # Job 3: API Documentation
+  api-docs:
+    runs-on: ubuntu-latest
+    name: 📚 API Documentation
+    needs: [security, coverage]
+    
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 20
+          
+      - name: Install dependencies
+        run: npm ci
+        
+      - name: Generate API docs
+        run: node scripts/ctx-cli.js api-design --format openapi
+        
+      - name: Upload API docs
+        uses: actions/upload-artifact@v3
+        with:
+          name: api-docs
+          path: openapi.yaml
+
+  # Job 4: Docker Build
+  docker:
+    runs-on: ubuntu-latest
+    name: 🐳 Docker Build
+    needs: [security, coverage]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Generate Dockerfile
+        run: node scripts/ctx-cli.js dockerize --runtime node
+        
+      - name: Build Docker image
+        run: docker build -t ctx-hub:${{ github.sha }} .
+        
+      - name: Optimize image
+        run: node scripts/ctx-cli.js docker-optimize --strategy size
+
+  # Job 5: Deploy (on main branch only)
+  deploy:
+    runs-on: ubuntu-latest
+    name: 🚀 Deploy
+    needs: [docker]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Deploy to staging
+        run: node scripts/ctx-cli.js cicd-deploy --env staging
+        
+      - name: Health check
+        run: |
+          echo "Waiting for deployment..."
+          sleep 10
+          curl -f https://staging.example.com/health || exit 1
+          
+      - name: Notify on success
+        if: success()
+        run: |
+          echo "✅ Deploy successful!"
+          # Add Slack/Discord notification here
+
+  # Job 6: Rollback on failure
+  rollback:
+    runs-on: ubuntu-latest
+    name: 🔄 Rollback
+    needs: [deploy]
+    if: failure()
+    
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Rollback to previous version
+        run: node scripts/ctx-cli.js cicd-rollback --version previous
+        
+      - name: Notify on rollback
+        run: |
+          echo "🔄 Rolled back to previous version"
+          # Add Slack/Discord notification here

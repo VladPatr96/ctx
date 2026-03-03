@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line, CartesianGrid } from 'recharts';
 import type { ApiClient } from '../api/client';
 import type { RoutingHealthData, RoutingDecision, RoutingAnomaly } from '../api/types';
 
@@ -20,7 +21,7 @@ function AnomalyAlerts({ anomalies }: { anomalies: RoutingAnomaly[] }) {
         >
           <header>
             <strong style={{ color: a.severity === 'critical' ? 'var(--error, #e53e3e)' : 'var(--warning, #d69e2e)' }}>
-              {a.severity === 'critical' ? 'CRITICAL' : 'WARN'}: {a.type}
+              {a.severity === 'critical' ? 'КРИТИЧНО' : 'ВНИМАНИЕ'}: {a.type}
             </strong>
           </header>
           <p style={{ margin: 0, fontSize: 13 }}>{a.message}</p>
@@ -30,25 +31,47 @@ function AnomalyAlerts({ anomalies }: { anomalies: RoutingAnomaly[] }) {
   );
 }
 
+const CHART_COLORS = ['#5fa2ff', '#34d399', '#fbbf24', '#f87171', '#a78bfa'];
+
 function ProviderDistribution({ distribution, total }: { distribution: Array<{ selected_provider: string; cnt: number }>; total: number }) {
   if (distribution.length === 0) return null;
-  const sorted = [...distribution].sort((a, b) => b.cnt - a.cnt);
-  const colors = ['var(--primary, #4299e1)', 'var(--success, #48bb78)', 'var(--warning, #d69e2e)', 'var(--error, #e53e3e)', '#9f7aea'];
+  const chartData = [...distribution]
+    .sort((a, b) => b.cnt - a.cnt)
+    .map((d) => ({ name: d.selected_provider, count: d.cnt, pct: total > 0 ? +(d.cnt / total * 100).toFixed(1) : 0 }));
   return (
     <div className="telemetry-card" style={{ marginBottom: 16 }}>
-      <header><strong>Provider Distribution</strong><span style={{ fontSize: 12, opacity: 0.7 }}>{total} decisions</span></header>
-      {sorted.map((d, i) => {
-        const pct = total > 0 ? (d.cnt / total * 100) : 0;
-        return (
-          <div className="telemetry-row" key={d.selected_provider}>
-            <span>{d.selected_provider}</span>
-            <div className="telemetry-track">
-              <div className="telemetry-bar" style={{ width: `${pct}%`, background: colors[i % colors.length] }} />
-            </div>
-            <span>{pct.toFixed(1)}% ({d.cnt})</span>
-          </div>
-        );
-      })}
+      <header><strong>Распределение по провайдерам</strong><span style={{ fontSize: 12, opacity: 0.7 }}>{total} решений</span></header>
+      <ResponsiveContainer width="100%" height={180}>
+        <BarChart data={chartData} layout="vertical" margin={{ left: 60, right: 20, top: 5, bottom: 5 }}>
+          <XAxis type="number" stroke="var(--muted)" fontSize={11} />
+          <YAxis type="category" dataKey="name" stroke="var(--muted)" fontSize={12} width={55} />
+          <Tooltip contentStyle={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, fontSize: 12 }} />
+          <Bar dataKey="count" fill={CHART_COLORS[0]} radius={[0, 4, 4, 0]} />
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+function ScoreTimeline({ decisions }: { decisions: RoutingDecision[] }) {
+  if (decisions.length === 0) return null;
+  const chartData = decisions.map((d) => ({
+    time: new Date(d.timestamp).toLocaleTimeString(),
+    score: +d.final_score.toFixed(3),
+    provider: d.selected_provider,
+  }));
+  return (
+    <div className="telemetry-card" style={{ marginBottom: 16 }}>
+      <header><strong>Динамика оценок</strong></header>
+      <ResponsiveContainer width="100%" height={200}>
+        <LineChart data={chartData} margin={{ left: 10, right: 20, top: 5, bottom: 5 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="var(--border-soft)" />
+          <XAxis dataKey="time" stroke="var(--muted)" fontSize={10} />
+          <YAxis stroke="var(--muted)" fontSize={11} domain={[0, 1]} />
+          <Tooltip contentStyle={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, fontSize: 12 }} />
+          <Line type="monotone" dataKey="score" stroke={CHART_COLORS[0]} strokeWidth={2} dot={{ r: 3 }} />
+        </LineChart>
+      </ResponsiveContainer>
     </div>
   );
 }
@@ -58,14 +81,14 @@ function ScoreStats({ stats, total }: { stats: RoutingHealthData['stats']; total
   const fmt = (v?: number) => v != null ? v.toFixed(3) : '—';
   return (
     <div className="telemetry-card" style={{ marginBottom: 16 }}>
-      <header><strong>Score Statistics</strong></header>
+      <header><strong>Статистика оценок</strong></header>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, fontSize: 13 }}>
-        <div>Avg Score: <strong>{fmt(stats.avg_score)}</strong></div>
-        <div>Range: {fmt(stats.min_score)} — {fmt(stats.max_score)}</div>
-        <div>Avg Alpha: <strong>{fmt(stats.avg_alpha)}</strong></div>
-        <div>Range: {fmt(stats.min_alpha)} — {fmt(stats.max_alpha)}</div>
-        <div>Avg Explore: <strong>{fmt(stats.avg_explore)}</strong></div>
-        <div>Diverged: <strong>{stats.diverged_count ?? 0}</strong></div>
+        <div>Средняя оценка: <strong>{fmt(stats.avg_score)}</strong></div>
+        <div>Диапазон: {fmt(stats.min_score)} — {fmt(stats.max_score)}</div>
+        <div>Средняя alpha: <strong>{fmt(stats.avg_alpha)}</strong></div>
+        <div>Диапазон: {fmt(stats.min_alpha)} — {fmt(stats.max_alpha)}</div>
+        <div>Среднее explore: <strong>{fmt(stats.avg_explore)}</strong></div>
+        <div>Расхождений: <strong>{stats.diverged_count ?? 0}</strong></div>
       </div>
     </div>
   );
@@ -73,21 +96,21 @@ function ScoreStats({ stats, total }: { stats: RoutingHealthData['stats']; total
 
 function RecentDecisions({ decisions }: { decisions: RoutingDecision[] }) {
   if (decisions.length === 0) {
-    return <p style={{ fontSize: 13, opacity: 0.6 }}>No routing decisions recorded yet.</p>;
+    return <p style={{ fontSize: 13, opacity: 0.6 }}>Решений по роутингу пока нет.</p>;
   }
   return (
     <div style={{ overflowX: 'auto' }}>
       <table style={{ width: '100%', fontSize: 12, borderCollapse: 'collapse' }}>
         <thead>
           <tr style={{ textAlign: 'left', borderBottom: '1px solid var(--border)' }}>
-            <th style={{ padding: '6px 8px' }}>Time</th>
-            <th style={{ padding: '6px 8px' }}>Type</th>
-            <th style={{ padding: '6px 8px' }}>Selected</th>
-            <th style={{ padding: '6px 8px' }}>Runner-up</th>
-            <th style={{ padding: '6px 8px' }}>Score</th>
-            <th style={{ padding: '6px 8px' }}>Delta</th>
-            <th style={{ padding: '6px 8px' }}>Mode</th>
-            <th style={{ padding: '6px 8px' }}>Div</th>
+            <th style={{ padding: '6px 8px' }}>Время</th>
+            <th style={{ padding: '6px 8px' }}>Тип</th>
+            <th style={{ padding: '6px 8px' }}>Выбран</th>
+            <th style={{ padding: '6px 8px' }}>Второй</th>
+            <th style={{ padding: '6px 8px' }}>Оценка</th>
+            <th style={{ padding: '6px 8px' }}>Дельта</th>
+            <th style={{ padding: '6px 8px' }}>Режим</th>
+            <th style={{ padding: '6px 8px' }}>Расх.</th>
           </tr>
         </thead>
         <tbody>
@@ -121,7 +144,7 @@ export function RoutingPage({ client }: RoutingPageProps) {
       const result = await client.getRoutingHealth(50, 1);
       setData(result);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load routing data');
+      setError(err instanceof Error ? err.message : 'Не удалось загрузить данные роутинга');
     } finally {
       setLoading(false);
     }
@@ -132,9 +155,9 @@ export function RoutingPage({ client }: RoutingPageProps) {
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <h2 style={{ margin: 0 }}>Adaptive Routing</h2>
+        <h2 style={{ margin: 0 }}>Адаптивный роутинг</h2>
         <button type="button" className="nav-btn" onClick={fetchData} disabled={loading}>
-          {loading ? 'Loading...' : 'Refresh'}
+          {loading ? 'Загрузка...' : 'Обновить'}
         </button>
       </div>
 
@@ -144,12 +167,13 @@ export function RoutingPage({ client }: RoutingPageProps) {
         <>
           <AnomalyAlerts anomalies={data.anomalies} />
           <ProviderDistribution distribution={data.distribution} total={data.total_decisions} />
+          <ScoreTimeline decisions={data.recent_decisions} />
           <ScoreStats stats={data.stats} total={data.total_decisions} />
-          <h3>Recent Decisions</h3>
+          <h3>Последние решения</h3>
           <RecentDecisions decisions={data.recent_decisions} />
         </>
       ) : !loading && !error ? (
-        <p style={{ opacity: 0.6 }}>No data available. Enable CTX_ADAPTIVE_ROUTING=1 to start collecting routing decisions.</p>
+        <p style={{ opacity: 0.6 }}>Данных нет. Включите CTX_ADAPTIVE_ROUTING=1 для сбора решений по роутингу.</p>
       ) : null}
     </div>
   );

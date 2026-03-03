@@ -21,7 +21,8 @@ export const LogEntrySchema = z.object({
   ts: z.string().optional(),
   time: z.string().optional(),
   action: z.string().optional(),
-  message: z.string().optional()
+  message: z.string().optional(),
+  stage: z.string().optional()
 }).passthrough();
 
 export const AgentSchema = z.object({

@@ -1,7 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo } from 'react';
 import { createApiClient } from './api/client';
-import { useCtxState } from './api/hooks';
-import { Sidebar, type AppTab } from './components/layout/Sidebar';
+import { useCtxConnection } from './api/hooks';
+import { useAppStore } from './store/useAppStore';
+import { Sidebar } from './components/layout/Sidebar';
+import { ErrorBoundary } from './components/layout/ErrorBoundary';
 import { DashboardPage } from './pages/Dashboard';
 import { KnowledgePage } from './pages/Knowledge';
 import { AgentsPage } from './pages/Agents';
@@ -11,16 +13,16 @@ import { RoutingPage } from './pages/Routing';
 
 function App() {
   const client = useMemo(() => createApiClient(), []);
-  const { state, status, error, refresh } = useCtxState(client);
-  const [activeTab, setActiveTab] = useState<AppTab>('dashboard');
-  const [theme, setTheme] = useState<'dark' | 'light'>(() => {
-    const stored = localStorage.getItem('ctx-theme');
-    return stored === 'light' ? 'light' : 'dark';
-  });
+  const { refresh } = useCtxConnection(client);
+  const activeTab = useAppStore((s) => s.activeTab);
+  const setActiveTab = useAppStore((s) => s.setActiveTab);
+  const theme = useAppStore((s) => s.theme);
+  const setTheme = useAppStore((s) => s.setTheme);
+  const status = useAppStore((s) => s.status);
+  const error = useAppStore((s) => s.error);
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
-    localStorage.setItem('ctx-theme', theme);
   }, [theme]);
 
   useEffect(() => {
@@ -50,7 +52,7 @@ function App() {
 
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, []);
+  }, [setActiveTab]);
 
   return (
     <div className="app-shell">
@@ -58,14 +60,14 @@ function App() {
 
       <div className="app-main">
         <header className="app-header">
-          <h1>CTX Web Dashboard</h1>
+          <h1>CTX Панель управления</h1>
           <div className="header-controls">
             <button
               type="button"
               className="theme-toggle"
-              onClick={() => setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'))}
+              onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
             >
-              {theme === 'dark' ? 'Light' : 'Dark'}
+              {theme === 'dark' ? 'Светлая' : 'Тёмная'}
             </button>
             <div className={`status-pill status-${status}`}>
               <span className="dot" />
@@ -76,18 +78,20 @@ function App() {
 
         <main className="app-content">
           {error ? <div className="error-banner">{error}</div> : null}
-          {activeTab === 'dashboard' ? (
-            <DashboardPage client={client} state={state} onRefresh={refresh} />
-          ) : null}
-          {activeTab === 'knowledge' ? (
-            <KnowledgePage client={client} />
-          ) : null}
-          {activeTab === 'agents' ? <AgentsPage client={client} state={state} /> : null}
-          {activeTab === 'routing' ? <RoutingPage client={client} /> : null}
-          {activeTab === 'settings' ? (
-            <SettingsPage client={client} state={state} onRefresh={refresh} />
-          ) : null}
-          {activeTab === 'terminal' ? <TerminalPage client={client} /> : null}
+          <ErrorBoundary key={activeTab}>
+            {activeTab === 'dashboard' ? (
+              <DashboardPage client={client} onRefresh={refresh} />
+            ) : null}
+            {activeTab === 'knowledge' ? (
+              <KnowledgePage client={client} />
+            ) : null}
+            {activeTab === 'agents' ? <AgentsPage client={client} /> : null}
+            {activeTab === 'routing' ? <RoutingPage client={client} /> : null}
+            {activeTab === 'settings' ? (
+              <SettingsPage client={client} onRefresh={refresh} />
+            ) : null}
+            {activeTab === 'terminal' ? <TerminalPage client={client} /> : null}
+          </ErrorBoundary>
         </main>
       </div>
     </div>

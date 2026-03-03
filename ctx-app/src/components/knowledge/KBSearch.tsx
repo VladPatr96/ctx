@@ -29,7 +29,7 @@ export function KBSearch({ client }: KBSearchProps) {
 
   return (
     <section className="panel">
-      <h3>KB Search</h3>
+      <h3>Поиск по базе знаний</h3>
       <div className="row">
         <input
           id="kb-search-input"
@@ -41,10 +41,10 @@ export function KBSearch({ client }: KBSearchProps) {
               void onSearch();
             }
           }}
-          placeholder="Search lessons, decisions, errors..."
+          placeholder="Поиск уроков, решений, ошибок..."
         />
         <button type="button" onClick={onSearch} disabled={loading}>
-          {loading ? 'Searching...' : 'Search'}
+          {loading ? 'Поиск...' : 'Найти'}
         </button>
       </div>
       {error ? <p className="error-text">{error}</p> : null}

@@ -1,6 +1,6 @@
-# CTX Plugin
+# ctx — Complex Task eXecution
 
-Multi-provider context management plugin for [Claude Code](https://claude.com/claude-code), [Gemini CLI](https://github.com/google-gemini/gemini-cli), [OpenCode](https://github.com/opencode-ai/opencode), and [Codex CLI](https://github.com/openai/codex).
+**Complex Task eXecution (ctx)** is a multi-provider context management plugin for [Claude Code](https://claude.com/claude-code), [Gemini CLI](https://github.com/google-gemini/gemini-cli), [OpenCode](https://github.com/opencode-ai/opencode), and [Codex CLI](https://github.com/openai/codex).
 
 Session logging, cross-project knowledge base (SQLite FTS5), deep file indexing, adaptive routing, and multi-round anonymous consilium with CBDP (Claim-Based Deliberation Protocol).
 
@@ -164,6 +164,20 @@ npm run update:providers
 
 This command updates Claude/Codex/Gemini/OpenCode only if they are detected on the machine.
 Missing providers are skipped automatically.
+
+### Provider limits statusline (CLI)
+
+One-line status for provider usage limits/auth state, designed for a separate terminal window.
+
+```bash
+npm run statusline:providers
+```
+
+Live mode (updates every 15 seconds):
+
+```bash
+npm run statusline:providers:watch
+```
 
 ### GitHub labels (first time)
 

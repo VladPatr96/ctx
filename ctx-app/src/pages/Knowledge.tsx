@@ -27,9 +27,9 @@ export function KnowledgePage({ client }: KnowledgePageProps) {
   return (
     <div className="page-grid">
       <section className="panel">
-        <h3>Knowledge Stats</h3>
+        <h3>Статистика базы знаний</h3>
         {error ? <p className="error-text">{error}</p> : null}
-        <p className="metric">Total entries: {stats.total}</p>
+        <p className="metric">Всего записей: {stats.total}</p>
         <ul className="mini-list">
           {Object.entries(stats.byCategory).map(([name, count]) => (
             <li key={name}>

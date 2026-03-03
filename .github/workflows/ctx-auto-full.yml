@@ -1,0 +1,304 @@
+name: CTX Full Auto Pipeline (All 10 Skills)
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  schedule:
+    # Ежедневно в 9:00 UTC
+    - cron: '0 9 * * *'
+
+jobs:
+  # ============================================
+  # Приоритет 1: Критически важные (3 skills)
+  # ============================================
+  
+  # Job 1: Security Scanner
+  security:
+    runs-on: ubuntu-latest
+    name: 🔒 Security Scanner
+    
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 20
+          
+      - name: Install dependencies
+        run: npm ci
+        
+      - name: 🔍 Security scan (code)
+        run: node scripts/ctx-cli.js security-scan --scope code
+        
+      - name: 🔍 Security scan (dependencies)
+        run: node scripts/ctx-cli.js security-scan --scope dependencies
+        
+      - name: 📊 Security report
+        if: always()
+        run: node scripts/ctx-cli.js security-report --format markdown
+        
+      - name: Upload security report
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: security-report
+          path: security-report.md
+
+  # Job 2: Error Debugger
+  error-analysis:
+    runs-on: ubuntu-latest
+    name: 🐛 Error Analysis
+    
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 20
+          
+      - name: Install dependencies
+        run: npm ci
+        
+      - name: 🔍 Analyze error patterns
+        run: node scripts/ctx-cli.js error-analyze --files src/**/*.js
+        
+      - name: 📊 Find similar errors in KB
+        run: node scripts/ctx-cli.js error-similar --pattern "TypeError|ReferenceError"
+        
+      - name: Upload error report
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: error-analysis
+          path: error-analysis.json
+
+  # Job 3: Test Coverage Booster
+  coverage:
+    runs-on: ubuntu-latest
+    name: 📊 Test Coverage
+    
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 20
+          
+      - name: Install dependencies
+        run: npm ci
+        
+      - name: 🧪 Run tests with coverage
+        run: node scripts/ctx-cli.js test-coverage --target 90
+        
+      - name: 🔬 Generate missing tests
+        if: failure()
+        run: node scripts/ctx-cli.js coverage-generate --target 90
+        
+      - name: 🧬 Mutation testing
+        if: github.event_name == 'schedule'
+        run: node scripts/ctx-cli.js coverage-mutate --runs 100 --threshold 80
+        
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: coverage-report
+          path: coverage/
+
+  # ============================================
+  # Приоритет 2: Продуктивность (3 skills)
+  # ============================================
+  
+  # Job 4: API Designer
+  api-design:
+    runs-on: ubuntu-latest
+    name: 🎨 API Designer
+    needs: [security, coverage]
+    
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 20
+          
+      - name: Install dependencies
+        run: npm ci
+        
+      - name: 🎨 Generate OpenAPI spec
+        run: node scripts/ctx-cli.js api-design --format openapi
+        
+      - name: ✅ Validate API
+        run: node scripts/ctx-cli.js api-validate --base-url http://localhost:3000
+        
+      - name: 📦 Generate SDK
+        run: |
+          node scripts/ctx-cli.js api-generate-sdk --language typescript
+          node scripts/ctx-cli.js api-generate-sdk --language python
+        
+      - name: Upload API docs
+        uses: actions/upload-artifact@v3
+        with:
+          name: api-docs
+          path: |
+            openapi.yaml
+            api-client.ts
+            api_client.py
+
+  # Job 5: Documentation Generator
+  documentation:
+    runs-on: ubuntu-latest
+    name: 📚 Documentation
+    needs: [security, coverage]
+    
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 20
+          
+      - name: Install dependencies
+        run: npm ci
+        
+      - name: 📚 Generate all docs
+        run: node scripts/ctx-cli.js generate-docs --type all
+        
+      - name: 📖 Generate README
+        run: node scripts/ctx-cli.js docs-readme --template full
+        
+      - name: 📖 Generate API docs
+        run: node scripts/ctx-cli.js docs-api --format markdown
+        
+      - name: 📝 Generate changelog
+        run: node scripts/ctx-cli.js docs-changelog --version ${{ github.sha }}
+        
+      - name: Upload documentation
+        uses: actions/upload-artifact@v3
+        with:
+          name: documentation
+          path: |
+            README.md
+            docs/
+            CHANGELOG.md
+
+  # Job 6: Refactoring Assistant
+  refactoring:
+    runs-on: ubuntu-latest
+    name: 🔧 Refactoring
+    needs: [security, coverage]
+    
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 20
+          
+      - name: Install dependencies
+        run: npm ci
+        
+      - name: 🔍 Detect code smells
+        run: node scripts/ctx-cli.js refactor --directory src
+        
+      - name: 📊 Analyze critical files
+        run: node scripts/ctx-cli.js refactor-analyze --files src/**/*.js
+        
+      - name: 💡 Suggest patterns
+        run: node scripts/ctx-cli.js refactor-suggest --pattern all
+        
+      - name: Upload refactoring report
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: refactoring-report
+          path: refactoring-report.json
+
+  # ============================================
+  # Приоритет 3: DevOps (2 skills)
+  # ============================================
+  
+  # Job 7: Dockerizer
+  docker:
+    runs-on: ubuntu-latest
+    name: 🐳 Docker
+    needs: [security, coverage]
+    if: github.event_name == 'push'
+    
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 20
+          
+      - name: Install dependencies
+        run: npm ci
+        
+      - name: 🐳 Generate Dockerfile
+        run: node scripts/ctx-cli.js dockerize --runtime node
+        
+      - name: 📦 Generate docker-compose
+        run: node scripts/ctx-cli.js docker-compose --services app,db,redis
+        
+      - name: 🚀 Optimize image
+        run: node scripts/ctx-cli.js docker-optimize --strategy size
+        
+      - name: 🔨 Build Docker image
+        run: docker build -t ctx-hub:${{ github.sha }} .
+        
+      - name: Upload Docker config
+        uses: actions/upload-artifact@v3
+        with:
+          name: docker-config
+          path: |
+            Dockerfile
+            docker-compose.yml
+            .dockerignore
+
+  # Job 8: CI/CD Pipeline
+  deploy:
+    runs-on: ubuntu-latest
+    name: 🚀 Deploy
+    needs: [docker]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 20
+          
+      - name: Install dependencies
+        run: npm ci
+        
+      - name: 🚀 Deploy to staging
+        run: node scripts/ctx-cli.js cicd-deploy --env staging --strategy blue-green
+        
+      - name: 🏥 Health check
+        run: |
+          sleep 10
+          curl -f https://staging.example.com/health || exit 1
+          
+      - name: 📊 Deploy status
+        if: always()
+        run: node scripts/ctx-cli.js cicd-status
+
+  # ============================================
+  # Приоритет 4: CTX-Specific (2 skills)
+  # ============================================
+  
+  # Job 9: Provider Health Monitor
+  provider-health:
+    

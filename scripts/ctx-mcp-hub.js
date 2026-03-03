@@ -6,7 +6,7 @@
  * MCP Hub — тонкий оркестратор.
  * Регистрирует tools из доменных модулей: session, knowledge, consilium.
  *
- * Tools (28):
+ * Tools (30):
  * - Session:      ctx_log_action, ctx_log_error, ctx_get_session, ctx_get_tasks
  * - Knowledge:    ctx_get_project_map, ctx_search_solutions
  * - Consilium:    ctx_share_result, ctx_read_results, ctx_delegate_task, ctx_inner_consilium
@@ -14,6 +14,7 @@
  * - Agents:       ctx_list_agents, ctx_create_agent
  * - Evaluation:   ctx_eval_start, ctx_eval_provider, ctx_eval_complete, ctx_eval_ci_update, ctx_eval_report
  * - Orchestrator: ctx_worktree_create, ctx_worktree_remove, ctx_worktree_list, ctx_worktree_status, ctx_worktree_merge
+ * - DevPipeline:  ctx_dev_pipeline_run, ctx_dev_pipeline_status
  * - Reactions:    ctx_react_ci_failed, ctx_react_changes_requested, ctx_react_poll, ctx_react_status, ctx_react_reset
  */
 
@@ -32,6 +33,7 @@ import { registerEvaluationTools } from './tools/evaluation.js';
 import { registerOrchestratorTools } from './tools/orchestrator.js';
 import { registerReactionTools } from './tools/reactions.js';
 import { registerRoutingTools } from './tools/routing.js';
+import { registerSkillTools } from './skills/skill-loader.js';
 import { createKnowledgeStore } from './knowledge/kb-json-fallback.js';
 import { KbSync } from './knowledge/kb-sync.js';
 import { createCacheStore } from './cache/cache-store.js';
@@ -139,6 +141,9 @@ registerEvaluationTools(server, { DATA_DIR, cacheStore });
 registerOrchestratorTools(server);
 registerReactionTools(server);
 registerRoutingTools(server, { DATA_DIR });
+
+// Register skill-based tools (auto-discovered)
+registerSkillTools(server);
 
 // ==================== Cleanup ====================
 

@@ -1,21 +1,24 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { ApiClient } from '../api/client';
-import type { AppState, PipelineState } from '../api/types';
+import type { PipelineState } from '../api/types';
+import { useAppStore } from '../store/useAppStore';
 import { PipelineBar } from '../components/pipeline/PipelineBar';
 import { PipelineGraph } from '../components/pipeline/PipelineGraph';
+import { StageDetailPanel } from '../components/pipeline/StageDetailPanel';
 import { LogStream } from '../components/log/LogStream';
 
 const STAGES = ['detect', 'context', 'task', 'brainstorm', 'plan', 'execute', 'done'];
 
 interface DashboardPageProps {
   client: ApiClient;
-  state: AppState | null;
   onRefresh: () => Promise<void>;
 }
 
-export function DashboardPage({ client, state, onRefresh }: DashboardPageProps) {
+export function DashboardPage({ client, onRefresh }: DashboardPageProps) {
+  const state = useAppStore((s) => s.state);
   const [task, setTask] = useState(state?.pipeline?.task || '');
   const [stage, setStage] = useState<PipelineState['stage']>(state?.pipeline?.stage || 'task');
+  const [selectedStage, setSelectedStage] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -39,11 +42,12 @@ export function DashboardPage({ client, state, onRefresh }: DashboardPageProps) 
     }
   };
 
-  const submitStage = async () => {
+  const submitStage = async (targetStage?: string) => {
+    const stageToSet = targetStage || stage;
     setBusy(true);
     setError('');
     try {
-      await client.setStage(stage);
+      await client.setStage(stageToSet);
       await onRefresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -52,22 +56,36 @@ export function DashboardPage({ client, state, onRefresh }: DashboardPageProps) 
     }
   };
 
+  const handleStageClick = useCallback((stageName: string) => {
+    setSelectedStage((prev) => (prev === stageName ? null : stageName));
+  }, []);
+
   return (
     <div className="page-grid">
       <section className="panel">
-        <h3>Pipeline</h3>
+        <h3>Пайплайн</h3>
         <PipelineBar pipeline={state?.pipeline || null} />
-        <PipelineGraph pipeline={state?.pipeline || null} />
+        <div style={{ display: 'flex', gap: 16 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <PipelineGraph pipeline={state?.pipeline || null} onStageClick={handleStageClick} />
+          </div>
+          <StageDetailPanel
+            stage={selectedStage}
+            pipeline={state?.pipeline || null}
+            onSetStage={(s) => submitStage(s)}
+            onClose={() => setSelectedStage(null)}
+          />
+        </div>
         <div className="row">
           <input
             id="task-input"
             type="text"
             value={task}
             onChange={(event) => setTask(event.target.value)}
-            placeholder="Set task..."
+            placeholder="Введите задачу..."
           />
-          <button type="button" onClick={submitTask} disabled={busy}>
-            Save task
+          <button type="button" onClick={() => submitTask()} disabled={busy}>
+            Сохранить
           </button>
         </div>
         <div className="row">
@@ -81,14 +99,14 @@ export function DashboardPage({ client, state, onRefresh }: DashboardPageProps) 
               </option>
             ))}
           </select>
-          <button type="button" onClick={submitStage} disabled={busy}>
-            Set stage
+          <button type="button" onClick={() => submitStage()} disabled={busy}>
+            Установить этап
           </button>
         </div>
         {error ? <p className="error-text">{error}</p> : null}
       </section>
 
-      <LogStream state={state} />
+      <LogStream stageFilter={selectedStage || undefined} onClearStageFilter={() => setSelectedStage(null)} />
     </div>
   );
 }

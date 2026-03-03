@@ -1,8 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import type { ApiClient } from './client';
-import type { AppState } from './types';
-
-type Status = 'connecting' | 'live' | 'error';
+import { useAppStore } from '../store/useAppStore';
 
 function readTokenForEvents(): string {
   const query = new URLSearchParams(window.location.search);
@@ -15,29 +13,21 @@ function makeEventsUrl(): string {
   return `/events?token=${encodeURIComponent(token)}`;
 }
 
-function isElectronRuntime(): boolean {
-  const maybe = window as Window & { isElectron?: boolean; ctxApi?: unknown };
-  return Boolean(maybe.isElectron && maybe.ctxApi);
-}
-
-export function useCtxState(client: ApiClient) {
-  const [state, setState] = useState<AppState | null>(null);
-  const [status, setStatus] = useState<Status>('connecting');
-  const [error, setError] = useState<string>('');
+export function useCtxConnection(client: ApiClient) {
+  const { setState, setStatus, setError } = useAppStore.getState();
   const reconnectTimer = useRef<number | null>(null);
   const sourceRef = useRef<EventSource | null>(null);
+  const retryCount = useRef(0);
 
   const refresh = useCallback(async () => {
     try {
       const snapshot = await client.getState();
       setState(snapshot);
-      setError('');
-      setStatus('live');
+      retryCount.current = 0;
     } catch (err) {
-      setStatus('error');
       setError(err instanceof Error ? err.message : String(err));
     }
-  }, [client]);
+  }, [client, setState, setError]);
 
   const connect = useCallback(() => {
     if (sourceRef.current) {
@@ -51,8 +41,7 @@ export function useCtxState(client: ApiClient) {
       try {
         const payload = JSON.parse(event.data);
         setState(payload);
-        setStatus('live');
-        setError('');
+        retryCount.current = 0;
       } catch {
         // Ignore parse errors and keep stream running.
       }
@@ -67,21 +56,18 @@ export function useCtxState(client: ApiClient) {
       if (reconnectTimer.current !== null) {
         window.clearTimeout(reconnectTimer.current);
       }
+      // Exponential backoff: 1s, 2s, 4s, 8s, max 30s
+      const delay = Math.min(1000 * Math.pow(2, retryCount.current), 30000);
+      retryCount.current += 1;
       reconnectTimer.current = window.setTimeout(() => {
         setStatus('connecting');
         connect();
-      }, 3000);
+      }, delay);
     };
-  }, []);
+  }, [setState, setStatus]);
 
   useEffect(() => {
     void refresh();
-    if (isElectronRuntime()) {
-      const poll = window.setInterval(() => {
-        void refresh();
-      }, 3000);
-      return () => window.clearInterval(poll);
-    }
     connect();
     return () => {
       if (sourceRef.current) sourceRef.current.close();
@@ -89,5 +75,5 @@ export function useCtxState(client: ApiClient) {
     };
   }, [connect, refresh]);
 
-  return { state, status, error, refresh };
+  return { refresh };
 }

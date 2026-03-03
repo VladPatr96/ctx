@@ -1,15 +1,17 @@
 /**
  * Orchestrator domain tools: worktree lifecycle for parallel AI agents.
  *
- * Tools (8):
- * - ctx_worktree_create    — create isolated worktree for an agent
- * - ctx_worktree_remove    — remove worktree and optionally delete branch
- * - ctx_worktree_list      — list all worktrees with status
- * - ctx_worktree_status    — detailed status for a single worktree
- * - ctx_worktree_merge     — merge agent branch into base branch
- * - ctx_agent_execute      — run one agent in isolated worktree
- * - ctx_agent_run_parallel — run multiple agents in parallel with concurrency limit
- * - ctx_agent_status       — query execution status
+ * Tools (10):
+ * - ctx_worktree_create      — create isolated worktree for an agent
+ * - ctx_worktree_remove      — remove worktree and optionally delete branch
+ * - ctx_worktree_list        — list all worktrees with status
+ * - ctx_worktree_status      — detailed status for a single worktree
+ * - ctx_worktree_merge       — merge agent branch into base branch
+ * - ctx_agent_execute        — run one agent in isolated worktree
+ * - ctx_agent_run_parallel   — run multiple agents in parallel with concurrency limit
+ * - ctx_agent_status         — query execution status
+ * - ctx_dev_pipeline_run     — run development pipeline (parallel execute → merge → test → verify)
+ * - ctx_dev_pipeline_status  — query pipeline status or list all pipelines
  */
 
 import { z } from 'zod';
@@ -22,6 +24,7 @@ import {
 } from '../orchestrator/worktree-manager.js';
 import { executeAgent, getExecutionStatus, listExecutions } from '../orchestrator/executor.js';
 import { runParallel } from '../orchestrator/agent-runner.js';
+import { runDevelopmentPipeline, createDevelopmentPipeline } from '../orchestrator/development-pipeline.js';
 
 const AGENT_ID = z.string()
   .regex(/^[a-z0-9](?:[a-z0-9-]{0,62})$/)
@@ -249,6 +252,87 @@ export function registerOrchestratorTools(server) {
         const entries = listExecutions({ status });
         return {
           content: [{ type: 'text', text: JSON.stringify({ total: entries.length, executions: entries }, null, 2) }]
+        };
+      } catch (err) {
+        return {
+          content: [{ type: 'text', text: `Error: ${err.message}` }],
+          isError: true
+        };
+      }
+    }
+  );
+
+  // ==================== Development Pipeline tools ====================
+
+  server.registerTool(
+    'ctx_dev_pipeline_run',
+    {
+      description: 'Запустить development pipeline: параллельное выполнение агентов → risk-aware merge → тесты → верификация. Автоматическое разрешение конфликтов через AI.',
+      inputSchema: z.object({
+        specs: z.array(z.object({
+          agentId: AGENT_ID,
+          task: z.string().max(4000).describe('Задача/промпт'),
+          provider: PROVIDER,
+          priority: z.number().min(0).max(99).optional()
+            .describe('Приоритет merge (0 = наивысший, по умолчанию 99)'),
+        })).min(1).max(6).describe('Список спецификаций агентов'),
+        baseBranch: z.string().optional().describe('Базовая ветка (по умолчанию master)'),
+        testCommand: z.union([
+          z.string(),
+          z.array(z.string()),
+        ]).optional().describe('Команда тестов (строка или массив для sequential run)'),
+        testTimeout: z.number().min(5000).max(600000).optional()
+          .describe('Таймаут тестов в мс (по умолчанию 120000)'),
+        stopOnTestFail: z.boolean().optional()
+          .describe('Остановить pipeline при провале тестов (по умолчанию false — skip agent)'),
+        conflictResolution: z.boolean().optional()
+          .describe('AI-разрешение конфликтов (по умолчанию true)'),
+        conflictProvider: PROVIDER.optional()
+          .describe('Провайдер для разрешения конфликтов (по умолчанию claude)'),
+      }).shape,
+    },
+    async ({ specs, baseBranch, testCommand, testTimeout, stopOnTestFail, conflictResolution, conflictProvider }) => {
+      try {
+        const result = await runDevelopmentPipeline(specs, {
+          baseBranch,
+          testCommand,
+          testTimeout,
+          stopOnTestFail,
+          conflictResolution,
+          conflictProvider,
+        });
+        return {
+          content: [{ type: 'text', text: JSON.stringify(result, null, 2) }]
+        };
+      } catch (err) {
+        return {
+          content: [{ type: 'text', text: `Error: ${err.message}` }],
+          isError: true
+        };
+      }
+    }
+  );
+
+  server.registerTool(
+    'ctx_dev_pipeline_status',
+    {
+      description: 'Статус development pipeline. По pipelineId — конкретный pipeline, без — список всех.',
+      inputSchema: z.object({
+        pipelineId: z.string().optional().describe('ID pipeline (без ID — список всех)'),
+      }).shape,
+    },
+    async ({ pipelineId }) => {
+      try {
+        const pipeline = createDevelopmentPipeline();
+        const result = pipeline.getStatus(pipelineId);
+        if (pipelineId && !result) {
+          return {
+            content: [{ type: 'text', text: `Pipeline "${pipelineId}" not found` }],
+            isError: true,
+          };
+        }
+        return {
+          content: [{ type: 'text', text: JSON.stringify(result, null, 2) }]
         };
       } catch (err) {
         return {
