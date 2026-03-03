@@ -247,10 +247,57 @@ function getCodexStatus(nowMs) {
   const auth = readJson(authPath);
   const lastRefreshMs = parseEpochMs(auth?.last_refresh);
   const lastRefreshAgo = lastRefreshMs ? formatDuration(nowMs - lastRefreshMs) : '--';
+  const modelLimits = getCodexModelLimits();
   return {
     hasAuth: Boolean(auth),
     lastRefreshMs,
-    lastRefreshAgo
+    lastRefreshAgo,
+    modelLimits
+  };
+}
+
+function getCodexConfigModel() {
+  const configPath = join(homedir(), '.codex', 'config.toml');
+  if (!existsSync(configPath)) return null;
+  try {
+    const txt = readFileSync(configPath, 'utf8');
+    const match = txt.match(/^\s*model\s*=\s*"([^"]+)"/m);
+    return match?.[1] ? String(match[1]).trim() : null;
+  } catch {
+    return null;
+  }
+}
+
+function getCodexModelLimits() {
+  const cachePath = join(homedir(), '.codex', 'models_cache.json');
+  const payload = readJson(cachePath);
+  if (!payload || !Array.isArray(payload.models) || payload.models.length === 0) return null;
+
+  const configuredModel = String(getCodexConfigModel() || '').trim().toLowerCase();
+  const models = payload.models;
+  const selected = configuredModel
+    ? models.find(m => String(m?.slug || '').toLowerCase() === configuredModel)
+    : null;
+  const model = selected || models[0];
+
+  let maxContext = 0;
+  for (const entry of models) {
+    const ctx = toInt(entry?.context_window, 0);
+    if (ctx > maxContext) maxContext = ctx;
+  }
+
+  const context = toInt(model?.context_window, 0);
+  const effectivePercent = toInt(model?.effective_context_window_percent, 100);
+  const usableContext = context > 0 ? Math.round(context * (Math.max(0, Math.min(100, effectivePercent)) / 100)) : 0;
+
+  return {
+    modelId: String(model?.slug || model?.display_name || configuredModel || ''),
+    context,
+    effectivePercent,
+    usableContext,
+    maxContext,
+    totalModels: models.length,
+    fetchedAtMs: parseEpochMs(payload?.fetched_at)
   };
 }
 
@@ -379,8 +426,7 @@ function getCliEnv() {
   return env;
 }
 
-async function startOpenCodeServer(timeoutMs = 9000) {
-  const port = 43000 + Math.floor(Math.random() * 2000);
+async function startOpenCodeServer(port, timeoutMs = 9000) {
   const baseArgs = ['serve', '--hostname=127.0.0.1', `--port=${port}`];
   const env = getCliEnv();
   const child = process.platform === 'win32'
@@ -439,22 +485,24 @@ function stopOpenCodeServer(child) {
 }
 
 async function fetchOpenCodeProviderData(cwd) {
-  const server = await startOpenCodeServer();
-  if (!server) return null;
-  try {
-    const url = `${server.url.replace(/\/+$/, '')}/provider?directory=${encodeURIComponent(cwd)}`;
-    const deadline = Date.now() + 8000;
-    while (Date.now() < deadline) {
+  const candidatePorts = [4177, 4178, 4179];
+  for (const port of candidatePorts) {
+    // eslint-disable-next-line no-await-in-loop
+    const server = await startOpenCodeServer(port);
+    if (!server) continue;
+    try {
+      // opencode serve usually needs a few seconds to bootstrap providers.
       // eslint-disable-next-line no-await-in-loop
-      const payload = await fetchJsonWithTimeout(url, {}, 1200);
+      await wait(4200);
+      const url = `${server.url.replace(/\/+$/, '')}/provider?directory=${encodeURIComponent(cwd)}`;
+      // eslint-disable-next-line no-await-in-loop
+      const payload = await fetchJsonWithTimeout(url, {}, 4000);
       if (payload && typeof payload === 'object') return payload;
-      // eslint-disable-next-line no-await-in-loop
-      await wait(350);
+    } finally {
+      server.stop();
     }
-    return null;
-  } finally {
-    server.stop();
   }
+  return null;
 }
 
 async function getOpenCodeModelLimits(cacheFile, cwd) {
@@ -527,8 +575,17 @@ function renderGeminiSegment(snapshot, ansi) {
 function renderCodexSegment(snapshot, ansi) {
   const health = snapshot.providerHealth.codex || null;
   const calls = getProviderCalls(health);
+  const limits = snapshot.codex?.modelLimits || null;
+  let limitText = 'lim:--';
+  if (limits) {
+    const modelName = shortModelId(limits.modelId);
+    const ctx = formatTokenLimit(limits.context);
+    const usable = formatTokenLimit(limits.usableContext || limits.context);
+    limitText = `mdl:${modelName} ${usable}/${ctx}`;
+  }
+  const modelText = limits ? `mdl:${limits.totalModels}` : 'mdl:--';
   const authText = snapshot.codex.hasAuth ? `ok(${snapshot.codex.lastRefreshAgo})` : '--';
-  return `${ansi.cyan}CODEX${ansi.reset} lim:-- auth:${authText} use:${calls}`;
+  return `${ansi.cyan}CODEX${ansi.reset} ${limitText} ${modelText} auth:${authText} use:${calls}`;
 }
 
 function renderOpenCodeSegment(snapshot, ansi) {

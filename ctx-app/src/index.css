@@ -521,6 +521,197 @@ button:hover {
   opacity: 0.85;
 }
 
+/* Dev Pipeline */
+.dp-form-grid {
+  display: grid;
+  gap: 8px;
+}
+
+.dp-spec-row {
+  display: grid;
+  grid-template-columns: 1fr 2fr 100px 60px 40px;
+  gap: 6px;
+  align-items: center;
+}
+
+.dp-spec-row input,
+.dp-spec-row select {
+  font-size: 12px;
+  padding: 6px 8px;
+}
+
+.dp-add-btn {
+  font-size: 12px;
+  padding: 4px 10px;
+  color: var(--primary);
+  border-color: var(--primary);
+  background: transparent;
+  width: auto;
+  flex: none;
+}
+
+.dp-remove-btn {
+  font-size: 14px;
+  padding: 4px 8px;
+  color: var(--danger);
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  width: auto;
+  flex: none;
+}
+
+.dp-launch-btn {
+  background: var(--primary);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 20px;
+  cursor: pointer;
+  font-size: 13px;
+  width: auto;
+  flex: none;
+}
+
+.dp-launch-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.dp-launch-btn:hover:not(:disabled) {
+  opacity: 0.85;
+}
+
+.dp-pipelines-list {
+  display: grid;
+  gap: 8px;
+}
+
+.dp-pipeline-card {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  background: var(--surface-alt);
+}
+
+.dp-pipeline-card header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.dp-pipeline-card header strong {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+}
+
+.dp-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-weight: 600;
+}
+
+.dp-status-badge.running {
+  color: var(--primary);
+  background: color-mix(in srgb, var(--primary), transparent 85%);
+}
+
+.dp-status-badge.success {
+  color: var(--success);
+  background: color-mix(in srgb, var(--success), transparent 85%);
+}
+
+.dp-status-badge.failed,
+.dp-status-badge.error {
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger), transparent 85%);
+}
+
+.dp-summary-row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  margin-bottom: 8px;
+}
+
+.dp-summary-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.dp-summary-item .label {
+  color: var(--muted);
+}
+
+.dp-summary-item .value {
+  font-weight: 600;
+}
+
+.dp-phases {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+
+.dp-phase-pill {
+  font-size: 10px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  color: var(--muted);
+}
+
+.dp-phase-pill.done {
+  color: var(--success);
+  border-color: color-mix(in srgb, var(--success), var(--border) 50%);
+  background: color-mix(in srgb, var(--success), transparent 90%);
+}
+
+.dp-phase-pill.active {
+  color: var(--primary);
+  border-color: color-mix(in srgb, var(--primary), var(--border) 50%);
+  background: color-mix(in srgb, var(--primary), transparent 88%);
+}
+
+.dp-phase-pill.failed {
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger), var(--border) 50%);
+}
+
+.dp-agents-grid {
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.dp-agent-row {
+  display: grid;
+  grid-template-columns: 120px 80px 80px 1fr;
+  gap: 8px;
+  align-items: center;
+  font-size: 12px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-alt);
+}
+
+.dp-agent-row .agent-name {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-weight: 600;
+}
+
 @media (max-width: 900px) {
   .app-shell {
     grid-template-columns: 1fr;
@@ -535,4 +726,217 @@ button:hover {
     grid-template-columns: 1fr;
     gap: 2px;
   }
+}
+
+/* ============================================================
+   ORCHESTRATOR PAGE
+   ============================================================ */
+
+.orch-task-input {
+  width: 100%;
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  padding: 8px 10px;
+  font-size: 13px;
+  font-family: inherit;
+  resize: vertical;
+  min-height: 64px;
+}
+.orch-task-input:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
+.orch-agents-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.orch-agent-chip {
+  border: 1px solid var(--border);
+  background: var(--surface-alt);
+  color: var(--muted);
+  border-radius: 20px;
+  padding: 4px 12px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.orch-agent-chip:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+.orch-agent-chip.active {
+  background: color-mix(in srgb, var(--primary) 15%, transparent);
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+/* Team builder */
+.team-builder {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px;
+  background: var(--surface-alt);
+}
+
+.team-member-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr auto;
+  gap: 6px;
+  margin-bottom: 6px;
+  align-items: center;
+}
+
+/* Terminals grid */
+.orch-terminals-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+  gap: 12px;
+}
+
+/* ============================================================
+   TERMINAL PANEL
+   ============================================================ */
+
+.term-panel {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 300px;
+  max-height: 500px;
+}
+
+.term-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-alt);
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.term-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.term-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.term-branch {
+  font-size: 11px;
+  font-family: monospace;
+  background: color-mix(in srgb, var(--primary) 12%, transparent);
+  border-radius: 4px;
+  padding: 1px 6px;
+}
+
+.term-status-text {
+  font-size: 11px;
+}
+
+.term-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.term-btn {
+  font-size: 11px;
+  padding: 3px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--muted);
+  cursor: pointer;
+}
+.term-btn:hover {
+  border-color: var(--warning);
+  color: var(--warning);
+}
+.term-btn-danger:hover {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.term-output {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 10px;
+  font-family: 'Consolas', 'Cascadia Code', 'Fira Mono', monospace;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.term-line {
+  display: flex;
+  gap: 8px;
+  word-break: break-all;
+}
+
+.term-ts {
+  color: var(--muted);
+  flex-shrink: 0;
+  font-size: 11px;
+  opacity: 0.6;
+}
+
+.term-text {
+  white-space: pre-wrap;
+}
+
+.term-input-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.term-prompt {
+  font-family: monospace;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+.term-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: var(--text);
+  font-family: 'Consolas', 'Cascadia Code', 'Fira Mono', monospace;
+  font-size: 12px;
+  outline: none;
+  padding: 2px 0;
+}
+
+.term-send-btn {
+  font-size: 11px;
+  padding: 3px 10px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--primary);
+  cursor: pointer;
+}
+.term-send-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }

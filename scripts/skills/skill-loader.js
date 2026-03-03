@@ -20,7 +20,7 @@ async function executeSkillCommand(skillName, command, params) {
   const skillModulePath = join(skill.path, 'index.js');
   
   if (existsSync(skillModulePath)) {
-    const { default: skillModule } = await import(skillModulePath);
+    const { default: skillModule } = await import(pathToFileURL(skillModulePath).href);
     
     if (typeof skillModule[command] === 'function') {
       return await skillModule[command](params);
@@ -31,7 +31,7 @@ async function executeSkillCommand(skillName, command, params) {
   const commandPath = join(skill.path, 'commands', `${command}.js`);
   
   if (existsSync(commandPath)) {
-    const { default: commandFn } = await import(commandPath);
+    const { default: commandFn } = await import(pathToFileURL(commandPath).href);
     return await commandFn(params);
   }
   
@@ -39,7 +39,7 @@ async function executeSkillCommand(skillName, command, params) {
 }
 
 import { join, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { existsSync } from 'node:fs';
 
 const __filename = fileURLToPath(import.meta.url);

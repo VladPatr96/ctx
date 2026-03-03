@@ -13,7 +13,7 @@
 
 import { readFile, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { z } from 'zod';
 import { createStorageAdapter } from './storage/index.js';
 import { parseDataPatch } from './tools/pipeline.js';
@@ -137,13 +137,13 @@ async function executeSkillCommand(skillName, command, args) {
   
   // Try command-specific file first
   if (existsSync(commandPath)) {
-    const { default: commandFn } = await import(commandPath);
+    const { default: commandFn } = await import(pathToFileURL(commandPath).href);
     return await commandFn(args, { storage, loadPipeline, savePipeline, appendLog });
   }
-  
+
   // Try index.js with exported command
   if (existsSync(indexPath)) {
-    const { default: skillModule } = await import(indexPath);
+    const { default: skillModule } = await import(pathToFileURL(indexPath).href);
     if (typeof skillModule[command] === 'function') {
       return await skillModule[command](args, { storage, loadPipeline, savePipeline, appendLog });
     }

@@ -109,3 +109,38 @@ test('buildStatusLine renders OpenCode model limits summary', () => {
   assert.match(line, /keys:3 mdl:28/);
   assert.match(line, /use:4/);
 });
+
+test('buildStatusLine renders Codex model limits summary', () => {
+  const nowMs = Date.parse('2026-03-03T10:00:00.000Z');
+  const line = buildStatusLine({
+    nowMs,
+    providerHealth: {
+      claude: { calls: 0 },
+      gemini: { calls: 0 },
+      codex: { calls: 6 },
+      opencode: { calls: 0 }
+    },
+    claude: null,
+    gemini: { expiryMs: null, authLeft: '--' },
+    codex: {
+      hasAuth: true,
+      lastRefreshAgo: '8m',
+      modelLimits: {
+        modelId: 'gpt-5.3-codex',
+        context: 272000,
+        effectivePercent: 95,
+        usableContext: 258400,
+        maxContext: 400000,
+        totalModels: 10,
+        fetchedAtMs: nowMs
+      }
+    },
+    opencode: { hasAccount: false, nextResetMs: null, resetLeft: '--', lastUsedAgo: '--', modelLimits: null }
+  }, { noColor: true });
+
+  assert.match(line, /CODEX/);
+  assert.match(line, /mdl:gpt-5.3-codex/);
+  assert.match(line, /258k\/272k/);
+  assert.match(line, /mdl:10/);
+  assert.match(line, /use:6/);
+});

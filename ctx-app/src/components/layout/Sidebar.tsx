@@ -1,6 +1,6 @@
-import { LayoutDashboard, BookOpen, Users, GitBranch, Settings, Terminal, type LucideIcon } from 'lucide-react';
+import { LayoutDashboard, BookOpen, Users, GitBranch, Settings, Terminal, Workflow, Bot, type LucideIcon } from 'lucide-react';
 
-export type AppTab = 'dashboard' | 'knowledge' | 'agents' | 'routing' | 'settings' | 'terminal';
+export type AppTab = 'dashboard' | 'knowledge' | 'agents' | 'routing' | 'devpipeline' | 'settings' | 'terminal' | 'orchestrator';
 
 interface SidebarProps {
   activeTab: AppTab;
@@ -12,6 +12,8 @@ const TABS: Array<{ id: AppTab; label: string; icon: LucideIcon }> = [
   { id: 'knowledge', label: 'База знаний', icon: BookOpen },
   { id: 'agents', label: 'Агенты', icon: Users },
   { id: 'routing', label: 'Роутинг', icon: GitBranch },
+  { id: 'devpipeline', label: 'Dev Pipeline', icon: Workflow },
+  { id: 'orchestrator', label: 'Оркестратор', icon: Bot },
   { id: 'settings', label: 'Настройки', icon: Settings },
   { id: 'terminal', label: 'Терминал', icon: Terminal }
 ];
