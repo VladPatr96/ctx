@@ -28,3 +28,6 @@ agents/generated/
 
 # Worktrees (agent isolation)
 .worktrees/
+
+# Auto Claude data directory
+.auto-claude/
