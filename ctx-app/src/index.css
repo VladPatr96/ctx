@@ -290,6 +290,26 @@ button:hover {
   font-size: 11px;
 }
 
+.log-stage {
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 500;
+  background: var(--surface-alt);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.session-activity-list li {
+  grid-template-columns: 140px 90px 100px 1fr;
+}
+
+@media (max-width: 768px) {
+  .session-activity-list li {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+}
+
 .kb-results {
   display: grid;
   gap: 8px;
