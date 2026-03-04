@@ -5,6 +5,7 @@ import { useAppStore } from './store/useAppStore';
 import { Sidebar } from './components/layout/Sidebar';
 import { ErrorBoundary } from './components/layout/ErrorBoundary';
 
+
 // Lazy load page components for code-splitting
 const DashboardPage = lazy(() => import('./pages/Dashboard').then(m => ({ default: m.DashboardPage })));
 const KnowledgePage = lazy(() => import('./pages/Knowledge').then(m => ({ default: m.KnowledgePage })));
@@ -14,6 +15,7 @@ const TerminalPage = lazy(() => import('./pages/Terminal').then(m => ({ default:
 const RoutingPage = lazy(() => import('./pages/Routing').then(m => ({ default: m.RoutingPage })));
 const DevPipelinePage = lazy(() => import('./pages/DevPipeline').then(m => ({ default: m.DevPipelinePage })));
 const OrchestratorPage = lazy(() => import('./pages/Orchestrator').then(m => ({ default: m.OrchestratorPage })));
+const DebatesPage = lazy(() => import('./pages/Debates').then(m => ({ default: m.DebatesPage })));
 
 function App() {
   const client = useMemo(() => createApiClient(), []);
@@ -94,6 +96,7 @@ function App() {
               {activeTab === 'routing' ? <RoutingPage client={client} /> : null}
               {activeTab === 'devpipeline' ? <DevPipelinePage client={client} /> : null}
               {activeTab === 'orchestrator' ? <OrchestratorPage client={client} /> : null}
+              {activeTab === 'debates' ? <DebatesPage client={client} /> : null}
               {activeTab === 'settings' ? (
                 <SettingsPage client={client} onRefresh={refresh} />
               ) : null}

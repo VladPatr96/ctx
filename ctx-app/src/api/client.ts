@@ -1,4 +1,4 @@
-import { KBEntrySchema, KBStatsSchema, StateSchema, type AppState, type KBEntry, type KBStats, type RoutingHealthData } from './types';
+import { KBEntrySchema, KBStatsSchema, ClaimGraphSchema, StateSchema, type AppState, type KBEntry, type KBStats, type RoutingHealthData, type ClaimGraphData } from './types';
 
 export interface ApiClient {
   getState(): Promise<AppState>;
@@ -19,6 +19,9 @@ export interface ApiClient {
   killTerminalSession(sessionId: string): Promise<void>;
   deleteTerminalSession(sessionId: string): Promise<void>;
   getTerminalStreamUrl(sessionId: string): string;
+  // Claim graph
+  getClaimGraph(): Promise<ClaimGraphData | null>;
+  setClaimVerdict(claimId: string, verdict: 'true' | 'false' | null): Promise<void>;
 }
 
 export interface DevPipelineSpec {
@@ -295,6 +298,27 @@ function createHttpApiClient(tokenInput?: string): ApiClient {
 
     getTerminalStreamUrl(sessionId: string) {
       return withToken(`/api/terminal/session/${encodeURIComponent(sessionId)}/stream`, token);
+    },
+
+    async getClaimGraph() {
+      const response = await fetch(withToken('/api/claims/graph', token), {
+        headers: authHeaders
+      });
+      const payload = await readJson<{ graph?: unknown }>(response);
+      if (!payload.graph) return null;
+      return ClaimGraphSchema.parse(payload.graph);
+    },
+
+    async setClaimVerdict(claimId: string, verdict: 'true' | 'false' | null) {
+      const response = await fetch(withToken('/api/claims/verdict', token), {
+        method: 'POST',
+        headers: {
+          ...authHeaders,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ claimId, verdict })
+      });
+      await readJson<unknown>(response);
     }
   };
 }
