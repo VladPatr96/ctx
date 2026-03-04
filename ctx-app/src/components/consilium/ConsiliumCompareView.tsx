@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import type { ConsiliumResult } from '../../api/types';
+import ConfidenceGauge from './ConfidenceGauge';
 
 interface ConsiliumCompareViewProps {
   results: ConsiliumResult[];
@@ -48,12 +49,6 @@ export function ConsiliumCompareView({ results }: ConsiliumCompareViewProps) {
     (item) => (item.provider ?? '').toLowerCase() !== 'synthesis'
   );
 
-  const getConfidenceColor = (confidence: number) => {
-    if (confidence > 0.7) return '#16a34a';
-    if (confidence >= 0.4) return '#eab308';
-    return '#dc2626';
-  };
-
   return (
     <div className="panel" style={{ display: 'grid', gap: 16 }}>
       <div
@@ -88,76 +83,44 @@ export function ConsiliumCompareView({ results }: ConsiliumCompareViewProps) {
           gap: 16,
         }}
       >
-        {providerResults.map((item, index) => {
-          const rawConfidence = item.confidence;
-          const normalizedConfidence =
-            typeof rawConfidence === 'number'
-              ? Math.max(0, Math.min(1, rawConfidence))
-              : null;
-          const confidenceWidth =
-            normalizedConfidence !== null ? `${normalizedConfidence * 100}%` : '0%';
-          const confidenceColor =
-            normalizedConfidence !== null
-              ? getConfidenceColor(normalizedConfidence)
-              : '#94a3b8';
-
-          return (
-            <article
-              key={`${item.provider ?? 'provider'}-${item.runId ?? 'na'}-${index}`}
-              className="telemetry-card"
-              style={{ display: 'grid', gap: 10, padding: 12 }}
+        {providerResults.map((item, index) => (
+          <article
+            key={`${item.provider ?? 'provider'}-${item.runId ?? 'na'}-${index}`}
+            className="telemetry-card"
+            style={{ display: 'grid', gap: 10, padding: 12 }}
+          >
+            <header
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                gap: 12,
+                alignItems: 'baseline',
+              }}
             >
-              <header
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  gap: 12,
-                  alignItems: 'baseline',
-                }}
-              >
-                <strong>{item.provider ?? 'Неизвестный провайдер'}</strong>
-                <span style={{ opacity: 0.8, fontSize: 12 }}>{item.time ?? '-'}</span>
-              </header>
+              <strong>{item.provider ?? 'Неизвестный провайдер'}</strong>
+              <span style={{ opacity: 0.8, fontSize: 12 }}>{item.time ?? '-'}</span>
+            </header>
 
-              <div
-                style={{
-                  height: 8,
-                  background: 'var(--surface-alt, #e2e8f0)',
-                  borderRadius: 999,
-                  overflow: 'hidden',
-                }}
-                title={
-                  normalizedConfidence !== null
-                    ? `${Math.round(normalizedConfidence * 100)}%`
-                    : 'Нет оценки'
-                }
-              >
-                <div
-                  style={{
-                    width: confidenceWidth,
-                    height: '100%',
-                    background: `linear-gradient(90deg, ${confidenceColor}, ${confidenceColor}cc)`,
-                    transition: 'width 0.2s ease',
-                  }}
-                />
-              </div>
+            <ConfidenceGauge
+              value={item.confidence}
+              label="Уверенность"
+            />
 
-              <pre
-                style={{
-                  margin: 0,
-                  whiteSpace: 'pre-wrap',
-                  maxHeight: 300,
-                  overflowY: 'auto',
-                  background: 'var(--surface, #f8fafc)',
-                  padding: 10,
-                  borderRadius: 8,
-                }}
-              >
-                {item.result ?? ''}
-              </pre>
-            </article>
-          );
-        })}
+            <pre
+              style={{
+                margin: 0,
+                whiteSpace: 'pre-wrap',
+                maxHeight: 300,
+                overflowY: 'auto',
+                background: 'var(--surface, #f8fafc)',
+                padding: 10,
+                borderRadius: 8,
+              }}
+            >
+              {item.result ?? ''}
+            </pre>
+          </article>
+        ))}
       </div>
 
       {synthesisResult ? (

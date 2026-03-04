@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 export const StageSchema = z.enum([
+  'idle',
   'detect',
   'context',
   'task',
@@ -125,7 +126,7 @@ export const ProviderHealthEntrySchema = z.object({
 }).passthrough();
 
 export const StateSchema = z.object({
-  pipeline: PipelineSchema.default({ stage: 'detect', lead: 'codex', task: null }),
+  pipeline: PipelineSchema.default({ stage: 'idle', lead: 'codex', task: null }),
   log: z.array(LogEntrySchema).default([]),
   agents: z.array(AgentSchema).default([]),
   consilium: z.array(ConsiliumPresetSchema).default([]),
