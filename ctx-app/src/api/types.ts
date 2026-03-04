@@ -124,6 +124,38 @@ export const ProviderHealthEntrySchema = z.object({
   updatedAt: z.string().optional()
 }).passthrough();
 
+export const ClaimNodeSchema = z.object({
+  id: z.string(),
+  text: z.string(),
+  type: z.enum(['fact', 'opinion', 'risk', 'requirement']),
+});
+
+export const ClaimPositionSchema = z.object({
+  alias: z.string(),
+  stance: z.enum(['accept', 'challenge']),
+  argument: z.string().optional(),
+});
+
+export const ClaimGraphSchema = z.object({
+  consensus: z.array(ClaimNodeSchema.extend({
+    supportedBy: z.array(z.string()),
+  })),
+  contested: z.array(ClaimNodeSchema.extend({
+    positions: z.array(ClaimPositionSchema),
+  })),
+  unique: z.array(ClaimNodeSchema.extend({
+    from: z.string(),
+  })),
+  stats: z.object({
+    total: z.number(),
+    consensus_count: z.number(),
+    contested_count: z.number(),
+    unique_count: z.number(),
+    contention_ratio: z.number(),
+  }),
+  userVerdicts: z.record(z.enum(['true', 'false'])).optional(),
+});
+
 export const StateSchema = z.object({
   pipeline: PipelineSchema.default({ stage: 'detect', lead: 'codex', task: null }),
   log: z.array(LogEntrySchema).default([]),
@@ -132,7 +164,8 @@ export const StateSchema = z.object({
   results: z.array(ConsiliumResultSchema).default([]),
   storageHealth: z.any().nullable().optional(),
   providerHealth: z.record(ProviderHealthEntrySchema).default({}),
-  project: z.any().optional()
+  project: z.any().optional(),
+  claimGraph: ClaimGraphSchema.nullable().optional()
 }).passthrough();
 
 export type PipelineState = z.infer<typeof PipelineSchema>;
@@ -145,3 +178,5 @@ export type ConsiliumResult = z.infer<typeof ConsiliumResultSchema>;
 export type ProviderHealthEntry = z.infer<typeof ProviderHealthEntrySchema>;
 export type RoutingDecision = z.infer<typeof RoutingDecisionSchema>;
 export type RoutingAnomaly = z.infer<typeof RoutingAnomalySchema>;
+export type ClaimGraphData = z.infer<typeof ClaimGraphSchema>;
+export type ClaimPosition = z.infer<typeof ClaimPositionSchema>;

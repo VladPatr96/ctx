@@ -184,6 +184,7 @@ export const state = {
   providerHealth: {},
   brainstorm: null,
   plan: null,
+  claimGraph: null,
   lastEventId: 0
 };
 
@@ -407,6 +408,12 @@ export const refreshAllData = () => {
   broadcast('full', getStateSnapshot());
 };
 
+/** Set the full claim graph from consilium multi-round tool */
+export function setClaimGraph(graph) {
+  state.claimGraph = graph ? { ...graph, userVerdicts: state.claimGraph?.userVerdicts || {} } : null;
+  broadcast('full', getStateSnapshot());
+}
+
 // 4. FILE WATCHERS
 const debounce = (fn, ms) => {
   let timeout;
@@ -625,7 +632,8 @@ export const createRouter = (buildHtmlFn, token, options = {}) => async (req, re
     url.pathname === '/events' ||
     url.pathname === '/storage-health' ||
     url.pathname.startsWith('/api/kb/') ||
-    url.pathname.startsWith('/api/routing/')
+    url.pathname.startsWith('/api/routing/') ||
+    url.pathname.startsWith('/api/claims/')
   );
 
   if (req.method === 'GET' && (isApiPath || isProtectedGetPath)) {
@@ -717,6 +725,53 @@ export const createRouter = (buildHtmlFn, token, options = {}) => async (req, re
           if (!existsSync(agentPath)) throw new Error('Agent not found');
           const content = readFileSync(agentPath, 'utf8');
           return serve(200, 'application/json', { content });
+        case '/api/claims/graph': {
+          if (!body) throw new Error('body is required');
+          setClaimGraph(body);
+          return serve(200, 'application/json', { ok: true });
+        }
+        case '/api/claims/verdict': {
+          if (!state.claimGraph) throw new Error('No claim graph available');
+          const claimId = String(body?.claimId || '');
+          const verdict = body?.verdict;
+          if (!claimId) throw new Error('claimId is required');
+          if (!state.claimGraph.userVerdicts) state.claimGraph.userVerdicts = {};
+          if (verdict === null || verdict === undefined) {
+            delete state.claimGraph.userVerdicts[claimId];
+          } else {
+            state.claimGraph.userVerdicts[claimId] = verdict;
+          }
+          // Re-run synthesis with modified graph if smart synthesis module available
+          try {
+            const { buildSmartSynthesisPrompt } = await import('./consilium/smart-synthesis.js');
+            // Build a modified graph: verdict=true → consensus, verdict=false → removed
+            const modifiedGraph = { ...state.claimGraph };
+            const verdicts = modifiedGraph.userVerdicts || {};
+            const origContested = modifiedGraph.contested || [];
+            const movedToConsensus = [];
+            const remaining = [];
+            for (const c of origContested) {
+              if (verdicts[c.id] === 'true') {
+                movedToConsensus.push({ id: c.id, text: c.text, type: c.type, supportedBy: ['User'] });
+              } else if (verdicts[c.id] === 'false') {
+                // excluded from synthesis
+              } else {
+                remaining.push(c);
+              }
+            }
+            modifiedGraph.consensus = [...(modifiedGraph.consensus || []), ...movedToConsensus];
+            modifiedGraph.contested = remaining;
+            modifiedGraph.stats = {
+              ...modifiedGraph.stats,
+              consensus_count: modifiedGraph.consensus.length,
+              contested_count: modifiedGraph.contested.length,
+            };
+          } catch {
+            // smart-synthesis module optional — just store verdicts
+          }
+          broadcast('full', getStateSnapshot());
+          return serve(200, 'application/json', { ok: true });
+        }
         case '/api/consilium/activate':
           actions.activatePreset(body?.preset);
           refreshAllData();
@@ -840,6 +895,10 @@ export const createRouter = (buildHtmlFn, token, options = {}) => async (req, re
           anomalies,
           stats: health.anomalyStats
         });
+      }
+
+      if (url.pathname === '/api/claims/graph') {
+        return serve(200, 'application/json', { ok: true, graph: state.claimGraph || null });
       }
 
       if (url.pathname === '/api/kb/stats') {

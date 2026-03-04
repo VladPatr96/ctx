@@ -10,6 +10,7 @@ import { AgentsPage } from './pages/Agents';
 import { SettingsPage } from './pages/Settings';
 import { TerminalPage } from './pages/Terminal';
 import { RoutingPage } from './pages/Routing';
+import { DebatesPage } from './pages/Debates';
 
 function App() {
   const client = useMemo(() => createApiClient(), []);
@@ -87,6 +88,7 @@ function App() {
             ) : null}
             {activeTab === 'agents' ? <AgentsPage client={client} /> : null}
             {activeTab === 'routing' ? <RoutingPage client={client} /> : null}
+            {activeTab === 'debates' ? <DebatesPage client={client} /> : null}
             {activeTab === 'settings' ? (
               <SettingsPage client={client} onRefresh={refresh} />
             ) : null}
