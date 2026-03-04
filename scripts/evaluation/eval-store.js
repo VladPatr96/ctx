@@ -46,6 +46,9 @@ export function createEvalStore(dataDir = '.data') {
 
   // Idempotent schema migration: add task_type column
   try { db.exec('ALTER TABLE provider_responses ADD COLUMN task_type TEXT;'); } catch { /* already exists */ }
+  // Idempotent schema migrations: add cost and quality columns
+  try { db.exec('ALTER TABLE provider_responses ADD COLUMN cost_usd REAL;'); } catch { /* already exists */ }
+  try { db.exec('ALTER TABLE provider_responses ADD COLUMN quality_rating INTEGER;'); } catch { /* already exists */ }
 
   // ---- Prepared statements ----
 
@@ -55,8 +58,8 @@ export function createEvalStore(dataDir = '.data') {
   `);
 
   const insertProviderStmt = db.prepare(`
-    INSERT INTO provider_responses(run_id, provider, model, status, response_ms, confidence, key_idea, error_message, task_type)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO provider_responses(run_id, provider, model, status, response_ms, confidence, key_idea, error_message, task_type, cost_usd, quality_rating)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   const completeRunStmt = db.prepare(`
@@ -147,6 +150,23 @@ export function createEvalStore(dataDir = '.data') {
     SELECT COUNT(*) as total FROM consilium_runs WHERE ended_at IS NOT NULL
   `);
 
+  const providerAnalyticsStmt = db.prepare(`
+    SELECT
+      provider,
+      COUNT(*) as total_responses,
+      SUM(CASE WHEN was_chosen = 1 THEN 1 ELSE 0 END) as wins,
+      AVG(response_ms) as avg_response_ms,
+      AVG(confidence) as avg_confidence,
+      AVG(cost_usd) as avg_cost_usd,
+      SUM(cost_usd) as total_cost_usd,
+      AVG(quality_rating) as avg_quality_rating,
+      model
+    FROM provider_responses
+    WHERE status = 'completed'
+    GROUP BY provider
+    ORDER BY total_responses DESC
+  `);
+
   // Metrics caching via external cache-store (if provided), with local fallback
   let _cacheStore = null;
   const _localCache = new Map(); // fallback: key → { value, time }
@@ -201,6 +221,36 @@ export function createEvalStore(dataDir = '.data') {
     DELETE FROM routing_decisions WHERE timestamp < ?
   `);
 
+  const taskTypeBreakdownStmt = db.prepare(`
+    SELECT
+      task_type,
+      COUNT(*) as total_responses,
+      SUM(CASE WHEN was_chosen = 1 THEN 1 ELSE 0 END) as wins,
+      AVG(response_ms) as avg_response_ms,
+      AVG(confidence) as avg_confidence,
+      AVG(cost_usd) as avg_cost_usd,
+      SUM(cost_usd) as total_cost_usd
+    FROM provider_responses
+    WHERE status = 'completed' AND task_type IS NOT NULL
+    GROUP BY task_type
+    ORDER BY total_responses DESC
+  `);
+
+  const costAnalyticsStmt = db.prepare(`
+    SELECT
+      provider,
+      COUNT(*) as total_responses,
+      SUM(CASE WHEN was_chosen = 1 THEN 1 ELSE 0 END) as wins,
+      AVG(cost_usd) as avg_cost_usd,
+      SUM(cost_usd) as total_cost_usd,
+      MIN(cost_usd) as min_cost_usd,
+      MAX(cost_usd) as max_cost_usd
+    FROM provider_responses
+    WHERE status = 'completed' AND cost_usd IS NOT NULL
+    GROUP BY provider
+    ORDER BY total_cost_usd DESC
+  `);
+
   // ---- Round responses prepared statements ----
 
   const insertRoundResponseStmt = db.prepare(`
@@ -248,12 +298,13 @@ export function createEvalStore(dataDir = '.data') {
     addProviderResponse(runId, {
       provider, model = null, status = 'completed',
       response_ms = null, confidence = null, key_idea = null,
-      error_message = null, task_type = null
+      error_message = null, task_type = null, cost_usd = null, quality_rating = null
     }) {
       try {
         insertProviderStmt.run(
           runId, provider, model, status,
-          response_ms, confidence, key_idea, error_message, task_type
+          response_ms, confidence, key_idea, error_message, task_type,
+          cost_usd, quality_rating
         );
       } catch (err) {
         console.error('[eval-store] addProviderResponse failed:', err.message);
@@ -618,6 +669,127 @@ export function createEvalStore(dataDir = '.data') {
       } catch (err) {
         console.error('[eval-store] getRoundSummary failed:', err.message);
         return [];
+      }
+    },
+
+    /**
+     * Get comprehensive per-provider analytics with metrics.
+     * @returns {Array<object>} Array of provider metrics including quality, latency, cost, usage count
+     */
+    getProviderAnalytics() {
+      try {
+        const rows = providerAnalyticsStmt.all();
+        return rows.map(row => ({
+          provider: row.provider,
+          model: row.model,
+          total_responses: row.total_responses,
+          wins: row.wins,
+          win_rate: row.total_responses > 0
+            ? (row.wins / row.total_responses * 100).toFixed(1) + '%'
+            : '0%',
+          avg_response_ms: row.avg_response_ms ? Math.round(row.avg_response_ms) : null,
+          avg_confidence: row.avg_confidence ? +row.avg_confidence.toFixed(2) : null,
+          avg_cost_usd: row.avg_cost_usd ? +row.avg_cost_usd.toFixed(4) : null,
+          total_cost_usd: row.total_cost_usd ? +row.total_cost_usd.toFixed(2) : null,
+          avg_quality_rating: row.avg_quality_rating ? +row.avg_quality_rating.toFixed(2) : null
+        }));
+      } catch (err) {
+        console.error('[eval-store] getProviderAnalytics failed:', err.message);
+        return [];
+      }
+    },
+
+    /**
+     * Get task type breakdown with aggregated metrics.
+     * @returns {Array<object>} Array of task type metrics including response count, wins, latency, cost
+     */
+    getTaskTypeBreakdown() {
+      try {
+        const rows = taskTypeBreakdownStmt.all();
+        return rows.map(row => ({
+          task_type: row.task_type,
+          total_responses: row.total_responses,
+          wins: row.wins,
+          win_rate: row.total_responses > 0
+            ? (row.wins / row.total_responses * 100).toFixed(1) + '%'
+            : '0%',
+          avg_response_ms: row.avg_response_ms ? Math.round(row.avg_response_ms) : null,
+          avg_confidence: row.avg_confidence ? +row.avg_confidence.toFixed(2) : null,
+          avg_cost_usd: row.avg_cost_usd ? +row.avg_cost_usd.toFixed(4) : null,
+          total_cost_usd: row.total_cost_usd ? +row.total_cost_usd.toFixed(2) : null
+        }));
+      } catch (err) {
+        console.error('[eval-store] getTaskTypeBreakdown failed:', err.message);
+        return [];
+      }
+    },
+
+    /**
+     * Get cost analytics with savings calculations.
+     * @returns {object} Cost breakdown by provider with total costs and potential savings
+     */
+    getCostAnalytics() {
+      try {
+        const rows = costAnalyticsStmt.all();
+
+        if (rows.length === 0) {
+          return {
+            by_provider: [],
+            total_cost_usd: 0,
+            total_responses: 0,
+            cheapest_provider: null,
+            cheapest_avg_cost: null,
+            potential_savings_usd: null,
+            savings_percentage: null
+          };
+        }
+
+        const providers = rows.map(row => ({
+          provider: row.provider,
+          total_responses: row.total_responses,
+          total_cost_usd: row.total_cost_usd ? +row.total_cost_usd.toFixed(2) : 0,
+          avg_cost_per_response: (row.avg_cost_usd && row.total_responses > 0)
+            ? +row.avg_cost_usd.toFixed(4)
+            : null
+        }));
+
+        const totalCost = rows.reduce((sum, row) => sum + (row.total_cost_usd || 0), 0);
+        const totalResponses = rows.reduce((sum, row) => sum + row.total_responses, 0);
+
+        // Find cheapest provider by average cost
+        const cheapest = rows.reduce((min, row) =>
+          !min || (row.avg_cost_usd && row.avg_cost_usd < min.avg_cost_usd) ? row : min
+        , null);
+
+        // Calculate potential savings if all requests used cheapest provider
+        const potentialSavings = cheapest
+          ? totalCost - (cheapest.avg_cost_usd * totalResponses)
+          : 0;
+
+        const savingsPercentage = totalCost > 0
+          ? (potentialSavings / totalCost * 100)
+          : 0;
+
+        return {
+          by_provider: providers,
+          total_cost_usd: +totalCost.toFixed(2),
+          total_responses: totalResponses,
+          cheapest_provider: cheapest ? cheapest.provider : null,
+          cheapest_avg_cost: cheapest && cheapest.avg_cost_usd ? +cheapest.avg_cost_usd.toFixed(4) : null,
+          potential_savings_usd: +potentialSavings.toFixed(2),
+          savings_percentage: +savingsPercentage.toFixed(1)
+        };
+      } catch (err) {
+        console.error('[eval-store] getCostAnalytics failed:', err.message);
+        return {
+          by_provider: [],
+          total_cost_usd: 0,
+          total_responses: 0,
+          cheapest_provider: null,
+          cheapest_avg_cost: null,
+          potential_savings_usd: null,
+          savings_percentage: null
+        };
       }
     },
 

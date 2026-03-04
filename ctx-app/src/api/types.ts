@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 export const StageSchema = z.enum([
+  'idle',
   'detect',
   'context',
   'task',
@@ -124,8 +125,49 @@ export const ProviderHealthEntrySchema = z.object({
   updatedAt: z.string().optional()
 }).passthrough();
 
+export const ProviderAnalyticsSchema = z.object({
+  provider: z.string(),
+  total_responses: z.number().default(0),
+  wins: z.number().default(0),
+  win_rate: z.union([z.number(), z.string()]).default(0),
+  avg_response_ms: z.number().nullable().default(null),
+  avg_confidence: z.number().nullable().default(null),
+  avg_cost_usd: z.number().nullable().default(null),
+  total_cost_usd: z.number().nullable().default(null),
+  avg_quality_rating: z.number().nullable().default(null)
+}).passthrough();
+
+export const TaskTypeBreakdownSchema = z.object({
+  task_type: z.string(),
+  provider: z.string().optional(),
+  total_responses: z.number().default(0),
+  wins: z.number().default(0),
+  win_rate: z.union([z.number(), z.string()]).default(0),
+  avg_response_ms: z.number().nullable().default(null),
+  avg_confidence: z.number().nullable().default(null),
+  avg_cost_usd: z.number().nullable().default(null),
+  total_cost_usd: z.number().nullable().default(null)
+}).passthrough();
+
+export const CostByProviderSchema = z.object({
+  provider: z.string(),
+  total_cost_usd: z.number().default(0),
+  total_responses: z.number().default(0),
+  avg_cost_per_response: z.number().nullable().default(null)
+}).passthrough();
+
+export const CostAnalyticsSchema = z.object({
+  total_cost_usd: z.number().default(0),
+  total_responses: z.number().default(0),
+  by_provider: z.array(CostByProviderSchema).default([]),
+  cheapest_provider: z.string().nullable().default(null),
+  cheapest_avg_cost: z.number().nullable().default(null),
+  potential_savings_usd: z.number().nullable().default(null),
+  savings_percentage: z.number().nullable().default(null)
+}).passthrough();
+
 export const StateSchema = z.object({
-  pipeline: PipelineSchema.default({ stage: 'detect', lead: 'codex', task: null }),
+  pipeline: PipelineSchema.default({ stage: 'idle', lead: 'codex', task: null }),
   log: z.array(LogEntrySchema).default([]),
   agents: z.array(AgentSchema).default([]),
   consilium: z.array(ConsiliumPresetSchema).default([]),
@@ -145,3 +187,7 @@ export type ConsiliumResult = z.infer<typeof ConsiliumResultSchema>;
 export type ProviderHealthEntry = z.infer<typeof ProviderHealthEntrySchema>;
 export type RoutingDecision = z.infer<typeof RoutingDecisionSchema>;
 export type RoutingAnomaly = z.infer<typeof RoutingAnomalySchema>;
+export type ProviderAnalytics = z.infer<typeof ProviderAnalyticsSchema>;
+export type TaskTypeBreakdown = z.infer<typeof TaskTypeBreakdownSchema>;
+export type CostByProvider = z.infer<typeof CostByProviderSchema>;
+export type CostAnalytics = z.infer<typeof CostAnalyticsSchema>;

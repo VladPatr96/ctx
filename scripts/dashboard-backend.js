@@ -12,6 +12,7 @@
 
 import { readFileSync, readdirSync, watch, existsSync, mkdirSync, appendFileSync, writeFileSync } from 'node:fs';
 import { join, basename, resolve, sep, relative } from 'node:path';
+import { readJsonFile, writeJsonAtomic } from './utils/state-io.js';
 import { URL } from 'node:url';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import * as actions from './dashboard-actions.js';
@@ -56,6 +57,18 @@ let authToken = '';
 export function initAuthToken() {
   if (authToken) return authToken;   // idempotent — only generate once
   if (!existsSync(DATA_DIR)) mkdirSync(DATA_DIR, { recursive: true });
+
+  // Try to read existing token first
+  if (existsSync(TOKEN_FILE)) {
+    try {
+      authToken = readFileSync(TOKEN_FILE, 'utf8').trim();
+      if (authToken) return authToken;  // Use existing token
+    } catch (err) {
+      console.warn('[dashboard] Failed to read existing token, generating new one');
+    }
+  }
+
+  // Generate new token only if no existing token
   authToken = randomBytes(24).toString('hex');
   writeFileSync(TOKEN_FILE, authToken, 'utf8');
   return authToken;
@@ -625,7 +638,8 @@ export const createRouter = (buildHtmlFn, token, options = {}) => async (req, re
     url.pathname === '/events' ||
     url.pathname === '/storage-health' ||
     url.pathname.startsWith('/api/kb/') ||
-    url.pathname.startsWith('/api/routing/')
+    url.pathname.startsWith('/api/routing/') ||
+    url.pathname.startsWith('/api/analytics/')
   );
 
   if (req.method === 'GET' && (isApiPath || isProtectedGetPath)) {
@@ -725,6 +739,14 @@ export const createRouter = (buildHtmlFn, token, options = {}) => async (req, re
           actions.setPlanSelected(body?.selected);
           refreshAllData();
           return serve(200, 'application/json', { ok: true });
+        case '/api/routing/config': {
+          const configFile = join(DATA_DIR, 'routing-config.json');
+          const config = readJsonFile(configFile, {});
+          if (body?.enabled !== undefined) config.enabled = Boolean(body.enabled);
+          if (body?.threshold !== undefined) config.threshold = Number(body.threshold);
+          writeJsonAtomic(configFile, config);
+          return serve(200, 'application/json', { ok: true, config });
+        }
         case '/api/kb/save': {
           const runtime = await getKnowledgeRuntime();
           if (!runtime?.store) {
@@ -840,6 +862,141 @@ export const createRouter = (buildHtmlFn, token, options = {}) => async (req, re
           anomalies,
           stats: health.anomalyStats
         });
+      }
+
+      if (url.pathname === '/api/routing/config') {
+        const configFile = join(DATA_DIR, 'routing-config.json');
+        const config = readJsonFile(configFile, {});
+        const evalStore = await getDashboardEvalStore();
+        const readiness = evalStore ? evalStore.getReadiness() : { totalRuns: 0, isReady: false, alpha: 0, adaptiveEnabled: false };
+        const envForced = process.env.CTX_ADAPTIVE_ROUTING === '0';
+
+        let mode = 'static';
+        if (envForced) mode = 'forced_off';
+        else if (config.enabled === false) mode = 'config_off';
+        else if (readiness.adaptiveEnabled) mode = 'adaptive';
+
+        return serve(200, 'application/json', {
+          ok: true,
+          mode,
+          readiness,
+          config: {
+            enabled: config.enabled ?? null,
+            threshold: config.threshold ?? null,
+          },
+          env_override: envForced ? 'CTX_ADAPTIVE_ROUTING=0 (forced off)' : null
+        });
+      }
+
+      if (url.pathname === '/api/analytics/providers') {
+        const evalStore = await getDashboardEvalStore();
+        if (!evalStore) {
+          return serve(503, 'application/json', { error: 'Eval store unavailable' });
+        }
+        const analytics = evalStore.getProviderAnalytics();
+        return serve(200, 'application/json', {
+          ok: true,
+          providers: analytics
+        });
+      }
+
+      if (url.pathname === '/api/analytics/task-types') {
+        const evalStore = await getDashboardEvalStore();
+        if (!evalStore) {
+          return serve(503, 'application/json', { error: 'Eval store unavailable' });
+        }
+        const taskTypes = evalStore.getTaskTypeBreakdown();
+        return serve(200, 'application/json', {
+          ok: true,
+          task_types: taskTypes
+        });
+      }
+
+      if (url.pathname === '/api/analytics/costs') {
+        const evalStore = await getDashboardEvalStore();
+        if (!evalStore) {
+          return serve(503, 'application/json', { error: 'Eval store unavailable' });
+        }
+        const costs = evalStore.getCostAnalytics();
+        return serve(200, 'application/json', {
+          ok: true,
+          costs: costs
+        });
+      }
+
+      if (url.pathname === '/api/analytics/export') {
+        const evalStore = await getDashboardEvalStore();
+        if (!evalStore) {
+          return serve(503, 'application/json', { error: 'Eval store unavailable' });
+        }
+        const format = String(url.searchParams.get('format') || 'csv').toLowerCase();
+
+        const providers = evalStore.getProviderAnalytics();
+        const taskTypes = evalStore.getTaskTypeBreakdown();
+        const costs = evalStore.getCostAnalytics();
+
+        const exportData = {
+          providers,
+          taskTypes,
+          costs
+        };
+
+        if (format === 'json') {
+          const json = JSON.stringify(exportData, null, 2);
+          const headers = {
+            'Content-Disposition': 'attachment; filename="analytics-export.json"'
+          };
+          return serve(200, 'application/json; charset=utf-8', json, headers);
+        }
+
+        // CSV export
+        const csvLines = [];
+        csvLines.push('Category,Provider/Type,Metric,Value');
+
+        // Provider metrics
+        providers.forEach(p => {
+          const name = String(p.provider || 'unknown').replace(/,/g, ';');
+          csvLines.push(`Provider,${name},Total Responses,${p.total_responses || 0}`);
+          csvLines.push(`Provider,${name},Wins,${p.wins || 0}`);
+          csvLines.push(`Provider,${name},Win Rate,${p.win_rate || '0%'}`);
+          csvLines.push(`Provider,${name},Avg Response Time (ms),${p.avg_response_ms || 0}`);
+          csvLines.push(`Provider,${name},Avg Confidence,${p.avg_confidence || 0}`);
+          csvLines.push(`Provider,${name},Avg Cost (USD),${p.avg_cost_usd || 0}`);
+          csvLines.push(`Provider,${name},Total Cost (USD),${p.total_cost_usd || 0}`);
+          csvLines.push(`Provider,${name},Avg Quality Rating,${p.avg_quality_rating || 0}`);
+        });
+
+        // Task type breakdown
+        taskTypes.forEach(t => {
+          const type = String(t.task_type || 'unknown').replace(/,/g, ';');
+          csvLines.push(`Task Type,${type},Total Responses,${t.total_responses || 0}`);
+          csvLines.push(`Task Type,${type},Wins,${t.wins || 0}`);
+          csvLines.push(`Task Type,${type},Win Rate,${t.win_rate || '0%'}`);
+          csvLines.push(`Task Type,${type},Avg Response Time (ms),${t.avg_response_ms || 0}`);
+          csvLines.push(`Task Type,${type},Avg Cost (USD),${t.avg_cost_usd || 0}`);
+        });
+
+        // Cost analytics
+        csvLines.push(`Cost Summary,Total,Total Cost (USD),${costs.total_cost_usd || 0}`);
+        csvLines.push(`Cost Summary,Total,Total Responses,${costs.total_responses || 0}`);
+        csvLines.push(`Cost Summary,Cheapest,Provider,${costs.cheapest_provider || 'N/A'}`);
+        csvLines.push(`Cost Summary,Savings,Potential Savings (USD),${costs.potential_savings_usd || 0}`);
+        csvLines.push(`Cost Summary,Savings,Savings Percentage,${costs.savings_percentage || 0}%`);
+
+        if (costs.by_provider && Array.isArray(costs.by_provider)) {
+          costs.by_provider.forEach(c => {
+            const provider = String(c.provider || 'unknown').replace(/,/g, ';');
+            csvLines.push(`Cost by Provider,${provider},Total Cost (USD),${c.total_cost_usd || 0}`);
+            csvLines.push(`Cost by Provider,${provider},Total Responses,${c.total_responses || 0}`);
+            csvLines.push(`Cost by Provider,${provider},Avg Cost (USD),${c.avg_cost_per_response || 0}`);
+          });
+        }
+
+        const csv = csvLines.join('\n');
+        const headers = {
+          'Content-Disposition': 'attachment; filename="analytics-export.csv"'
+        };
+        return serve(200, 'text/csv; charset=utf-8', csv, headers);
       }
 
       if (url.pathname === '/api/kb/stats') {

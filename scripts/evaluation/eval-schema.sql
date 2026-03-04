@@ -32,7 +32,9 @@ CREATE TABLE IF NOT EXISTS provider_responses (
   model TEXT,
   status TEXT DEFAULT 'completed',
   response_ms INTEGER,
+  cost_usd REAL,
   confidence REAL,
+  quality_rating INTEGER,
   key_idea TEXT,
   was_chosen INTEGER DEFAULT 0,
   error_message TEXT

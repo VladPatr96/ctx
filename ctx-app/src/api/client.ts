@@ -1,4 +1,12 @@
-import { KBEntrySchema, KBStatsSchema, StateSchema, type AppState, type KBEntry, type KBStats, type RoutingHealthData } from './types';
+import { KBEntrySchema, KBStatsSchema, StateSchema, ProviderAnalyticsSchema, TaskTypeBreakdownSchema, CostAnalyticsSchema, type AppState, type KBEntry, type KBStats, type RoutingHealthData, type ProviderAnalytics, type TaskTypeBreakdown, type CostAnalytics } from './types';
+
+export interface RoutingConfigResponse {
+  ok: boolean;
+  mode: string;
+  readiness: { totalRuns: number; isReady: boolean; alpha: number; adaptiveEnabled: boolean };
+  config: { enabled: boolean | null; threshold: number | null };
+  env_override: string | null;
+}
 
 export interface ApiClient {
   getState(): Promise<AppState>;
@@ -10,6 +18,66 @@ export interface ApiClient {
   getTerminalAllowlist(): Promise<string[]>;
   runTerminalCommand(command: string): Promise<TerminalCommandResult>;
   getRoutingHealth(last?: number, sinceDays?: number): Promise<RoutingHealthData>;
+  getProviderAnalytics(): Promise<ProviderAnalytics[]>;
+  getTaskTypeBreakdown(): Promise<TaskTypeBreakdown[]>;
+  getCostAnalytics(): Promise<CostAnalytics>;
+  exportAnalytics(format: 'csv' | 'json'): Promise<string>;
+  getRoutingConfig(): Promise<RoutingConfigResponse>;
+  setRoutingConfig(config: { enabled?: boolean; threshold?: number }): Promise<void>;
+  devPipelineRun(specs: DevPipelineSpec[], opts?: DevPipelineOpts): Promise<DevPipelineReport>;
+  devPipelineStatus(pipelineId?: string): Promise<DevPipelineReport | DevPipelineReport[]>;
+  // Orchestrator terminal sessions
+  listTerminalSessions(): Promise<TerminalSession[]>;
+  createTerminalSession(opts: CreateSessionOpts): Promise<string>;
+  sendSessionInput(sessionId: string, text: string): Promise<void>;
+  killTerminalSession(sessionId: string): Promise<void>;
+  deleteTerminalSession(sessionId: string): Promise<void>;
+  getTerminalStreamUrl(sessionId: string): string;
+}
+
+export interface DevPipelineSpec {
+  agentId: string;
+  task: string;
+  provider: string;
+  priority?: number;
+}
+
+export interface DevPipelineOpts {
+  baseBranch?: string;
+  testCommand?: string | string[];
+  testTimeout?: number;
+  stopOnTestFail?: boolean;
+  conflictResolution?: boolean;
+  conflictProvider?: string;
+}
+
+export interface DevPipelineReport {
+  pipelineId: string;
+  status: string;
+  startedAt: string;
+  completedAt: string | null;
+  durationMs: number;
+  integrationBranch: string;
+  error?: string;
+  phases: {
+    execute: { status: string; durationMs: number; summary: Record<string, number> } | null;
+    merges: Array<{ agentId: string; success: boolean; conflicts: boolean; mergedCommits: number; reverted?: boolean }>;
+    verify: { success: boolean; skipped: boolean; output: string; durationMs: number } | null;
+  };
+  agents: Record<string, {
+    execution?: { status: string; durationMs: number };
+    merge?: { success: boolean; conflicts: boolean; mergedCommits: number; reverted?: boolean };
+    tests?: { success: boolean; skipped: boolean; output: string; durationMs: number };
+    conflictResolution?: { success: boolean; filesResolved: string[]; reasoning: string };
+  }>;
+  summary: {
+    total: number;
+    executed: number;
+    merged: number;
+    skipped: number;
+    failed: number;
+    testsPassed: boolean;
+  };
 }
 
 export interface TerminalCommandResult {
@@ -22,6 +90,32 @@ export interface TerminalCommandResult {
   error?: string;
 }
 
+export interface TerminalSession {
+  id: string;
+  provider: string;
+  model: string;
+  label: string;
+  branch: string;
+  status: 'starting' | 'running' | 'idle' | 'done' | 'error';
+  startedAt: number;
+  ringSize: number;
+}
+
+export interface CreateSessionOpts {
+  provider: string;
+  model?: string;
+  task?: string;
+  label?: string;
+  branch?: string;
+  cwd?: string;
+}
+
+export type TerminalLine = {
+  ts: string;
+  type: 'stdout' | 'stderr' | 'system';
+  text: string;
+};
+
 
 function readTokenFromEnv(): string {
   const query = new URLSearchParams(window.location.search);
@@ -32,6 +126,9 @@ function readTokenFromEnv(): string {
   }
   const fromStorage = localStorage.getItem('ctx-dashboard-token');
   if (fromStorage) return fromStorage;
+  // Token injected by dashboard-backend into index.html
+  const fromWindow = (window as unknown as Record<string, string>).__CTX_TOKEN__;
+  if (fromWindow) return fromWindow;
   return ((import.meta as ImportMeta & { env?: Record<string, string> }).env?.VITE_CTX_TOKEN as string | undefined) || '';
 }
 
@@ -148,6 +245,124 @@ function createHttpApiClient(tokenInput?: string): ApiClient {
         headers: authHeaders
       });
       return readJson<RoutingHealthData>(response);
+    },
+
+    async getProviderAnalytics() {
+      const response = await fetch(withToken('/api/analytics/providers', token), {
+        headers: authHeaders
+      });
+      const payload = await readJson<{ providers?: unknown[] }>(response);
+      return (payload.providers || []).map((p) => ProviderAnalyticsSchema.parse(p));
+    },
+
+    async getTaskTypeBreakdown() {
+      const response = await fetch(withToken('/api/analytics/task-types', token), {
+        headers: authHeaders
+      });
+      const payload = await readJson<{ task_types?: unknown[] }>(response);
+      return (payload.task_types || []).map((t) => TaskTypeBreakdownSchema.parse(t));
+    },
+
+    async getCostAnalytics() {
+      const response = await fetch(withToken('/api/analytics/costs', token), {
+        headers: authHeaders
+      });
+      const payload = await readJson<{ costs?: unknown }>(response);
+      return CostAnalyticsSchema.parse(payload.costs);
+    },
+
+    async getRoutingConfig() {
+      const response = await fetch(withToken('/api/routing/config', token), {
+        headers: authHeaders
+      });
+      return readJson<RoutingConfigResponse>(response);
+    },
+
+    async setRoutingConfig(config: { enabled?: boolean; threshold?: number }) {
+      const response = await fetch(withToken('/api/routing/config', token), {
+        method: 'POST',
+        headers: {
+          ...authHeaders,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(config)
+      });
+      await readJson<unknown>(response);
+    },
+
+    async exportAnalytics(format: 'csv' | 'json') {
+      const params = new URLSearchParams({ format });
+      const response = await fetch(withToken(`/api/analytics/export?${params.toString()}`, token), {
+        headers: authHeaders
+      });
+      if (!response.ok) {
+        throw new Error(`${response.status} ${response.statusText}`);
+      }
+      return response.text();
+    },
+
+    async devPipelineRun(specs: DevPipelineSpec[], opts: DevPipelineOpts = {}) {
+      const response = await fetch(withToken('/api/dev-pipeline/run', token), {
+        method: 'POST',
+        headers: { ...authHeaders, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ specs, ...opts })
+      });
+      return readJson<DevPipelineReport>(response);
+    },
+
+    async devPipelineStatus(pipelineId?: string) {
+      const url = pipelineId
+        ? `/api/dev-pipeline/status?pipelineId=${encodeURIComponent(pipelineId)}`
+        : '/api/dev-pipeline/status';
+      const response = await fetch(withToken(url, token), { headers: authHeaders });
+      return readJson<DevPipelineReport | DevPipelineReport[]>(response);
+    },
+
+    async listTerminalSessions() {
+      const response = await fetch(withToken('/api/terminal/sessions', token), { headers: authHeaders });
+      const payload = await readJson<{ sessions?: TerminalSession[] }>(response);
+      return payload.sessions || [];
+    },
+
+    async createTerminalSession(opts: CreateSessionOpts) {
+      const response = await fetch(withToken('/api/terminal/session/create', token), {
+        method: 'POST',
+        headers: { ...authHeaders, 'Content-Type': 'application/json' },
+        body: JSON.stringify(opts)
+      });
+      const payload = await readJson<{ sessionId: string }>(response);
+      return payload.sessionId;
+    },
+
+    async sendSessionInput(sessionId: string, text: string) {
+      const response = await fetch(withToken('/api/terminal/session/input', token), {
+        method: 'POST',
+        headers: { ...authHeaders, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId, text })
+      });
+      await readJson<unknown>(response);
+    },
+
+    async killTerminalSession(sessionId: string) {
+      const response = await fetch(withToken('/api/terminal/session/kill', token), {
+        method: 'POST',
+        headers: { ...authHeaders, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId })
+      });
+      await readJson<unknown>(response);
+    },
+
+    async deleteTerminalSession(sessionId: string) {
+      const response = await fetch(withToken('/api/terminal/session/delete', token), {
+        method: 'POST',
+        headers: { ...authHeaders, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId })
+      });
+      await readJson<unknown>(response);
+    },
+
+    getTerminalStreamUrl(sessionId: string) {
+      return withToken(`/api/terminal/session/${encodeURIComponent(sessionId)}/stream`, token);
     }
   };
 }
