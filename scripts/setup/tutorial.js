@@ -186,9 +186,39 @@ async function demoSessionManagement(rl) {
   console.log('  4. Later: Resume with full context restored');
   console.log('');
 
+  // Demonstrate session capture
   const projectName = process.env.CLAUDE_PROJECT_DIR
     ? process.env.CLAUDE_PROJECT_DIR.split(/[/\\]/).pop()
     : 'your-project';
+
+  console.log('  Demo: What gets captured in a session');
+  console.log('  ──────────────────────────────────────');
+
+  // Check for existing session logs
+  const sessionsDir = join(process.cwd(), '.sessions');
+  if (existsSync(sessionsDir)) {
+    const { readdirSync } = await import('node:fs');
+    const sessionFiles = readdirSync(sessionsDir)
+      .filter(f => f.endsWith('.md'))
+      .length;
+
+    if (sessionFiles > 0) {
+      log(`  Found ${sessionFiles} session log(s) in .sessions/`, '✓');
+      console.log('  ');
+      console.log('  Each session captures:');
+      console.log('    • Actions taken during session');
+      console.log('    • Errors encountered and solutions');
+      console.log('    • Decisions made with reasoning');
+      console.log('    • Files modified');
+      console.log('    • Git status and recent commits');
+      console.log('    • Pending tasks');
+    } else {
+      log('  No session logs yet (.sessions/ is empty)', 'ℹ');
+    }
+  } else {
+    log('  Session logs will be created in .sessions/', 'ℹ');
+  }
+  console.log('');
 
   console.log('  Session saved to:');
   console.log(`  • Project issues: ${projectName}/issues`);
