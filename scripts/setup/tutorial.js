@@ -72,6 +72,25 @@ async function demoKnowledgeSearch(rl) {
   if (existsSync(kbDir)) {
     log(`Knowledge base found at: ${kbDir}`);
     console.log('');
+
+    // Demonstrate knowledge sync
+    try {
+      const { KbSync } = await import('../knowledge/kb-sync.js');
+      const kb = new KbSync({ repoDir: kbDir });
+
+      console.log('  Checking knowledge base status...');
+      const isClean = await kb.isClean();
+      if (isClean) {
+        log('  Knowledge base is up to date', '✓');
+      } else {
+        log('  Knowledge base has uncommitted changes', '⚠');
+      }
+      console.log('');
+    } catch (err) {
+      log(`  Demo skipped: ${err.message}`, 'ℹ');
+      console.log('');
+    }
+
     console.log('  Try these commands:');
     console.log('  • ctx search "authentication"  — Search knowledge base');
     console.log('  • ctx kb sync                  — Manual sync with remote');
@@ -117,6 +136,25 @@ async function demoConsilium(rl) {
   console.log('');
   console.log('  5. Synthesis: Balanced recommendation with trade-offs');
   console.log('');
+
+  // Demonstrate alias mapping (core consilium feature)
+  try {
+    const { createAliasMap } = await import('../consilium/round-orchestrator.js');
+    const testProviders = ['claude', 'gemini', 'codex'];
+    const aliasMap = createAliasMap(testProviders);
+
+    console.log('  Demo: Anonymous alias mapping');
+    console.log('  ─────────────────────────────');
+    for (const [provider, alias] of aliasMap) {
+      console.log(`  ${provider} → ${alias}`);
+    }
+    console.log('');
+    log('  Providers are anonymized for unbiased discussion', '✓');
+    console.log('');
+  } catch (err) {
+    log(`  Demo skipped: ${err.message}`, 'ℹ');
+    console.log('');
+  }
 
   console.log('  Try it:');
   console.log('  • ctx consilium "Your complex question here"');
