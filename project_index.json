@@ -1,0 +1,49 @@
+{
+  "project_type": "single",
+  "services": {
+    "backend": {
+      "path": ".",
+      "tech_stack": ["node", "javascript", "esm"],
+      "entry_point": "scripts/ctx-cli.js",
+      "dev_command": "node scripts/ctx-cli.js",
+      "test_command": "npm test"
+    },
+    "webapp": {
+      "path": "./ctx-app",
+      "tech_stack": ["typescript", "react", "vite", "electron"],
+      "port": 5173,
+      "dev_command": "npm run dev",
+      "test_command": "npm test"
+    }
+  },
+  "infrastructure": {
+    "docker": false,
+    "database": "none",
+    "storage": "file-based (JSON)"
+  },
+  "conventions": {
+    "module_system": "ESM",
+    "imports": "import/export",
+    "file_operations": "node:fs",
+    "cli_style": "simple console output (no frameworks)",
+    "testing": "node --test"
+  },
+  "providers": {
+    "claude": {
+      "config_file": ".mcp.json",
+      "setup_function": "setupClaude"
+    },
+    "codex": {
+      "config_dir": ".codex/skills/ctx",
+      "setup_function": "setupCodex"
+    },
+    "gemini": {
+      "config_dir": "~/.config/gemini-cli/skills",
+      "setup_function": "setupGemini"
+    },
+    "opencode": {
+      "config_dir": "~/.config/opencode",
+      "setup_function": "setupOpenCode"
+    }
+  }
+}
