@@ -18,6 +18,7 @@ import { spawnSync } from 'node:child_process';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { hasState, loadState, saveState, clearState } from './setup/state-manager.js';
+import { runTutorial } from './setup/tutorial.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -388,6 +389,16 @@ async function runWizard() {
     console.log('\n' + '='.repeat(50));
     console.log(`✓ Setup complete! Configured ${configuredCount} provider(s).`);
     console.log('='.repeat(50) + '\n');
+
+    // Ask if user wants to run tutorial
+    const wantsTutorial = await askYesNo(rl, 'Would you like to run the interactive tutorial?');
+
+    // Close readline before running tutorial (tutorial creates its own)
+    if (wantsTutorial) {
+      rl.close();
+      console.log('');
+      await runTutorial({ skipPrompt: true });
+    }
 
     // Clear state on successful completion
     if (!isDryRun) {
