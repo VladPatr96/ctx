@@ -14,6 +14,13 @@
 import { createInterface } from 'node:readline';
 import { stdin as input, stdout as output } from 'node:process';
 import { detectProviders } from './setup/provider-detector.js';
+import { spawnSync } from 'node:child_process';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const ROOT_DIR = join(__dirname, '..');
 
 const isDryRun = process.argv.includes('--dry-run');
 
@@ -36,6 +43,38 @@ function askYesNo(rl, question) {
     rl.question(`${question} (y/n): `, (answer) => {
       const normalized = answer.trim().toLowerCase();
       resolve(normalized === 'y' || normalized === 'yes');
+    });
+  });
+}
+
+/**
+ * Prompt user to select a provider from a numbered list.
+ * @param {readline.Interface} rl - Readline interface
+ * @param {Array} providers - Array of available provider objects
+ * @returns {Promise<Object|null>} Selected provider or null if cancelled
+ */
+function askSelectProvider(rl, providers) {
+  return new Promise((resolve) => {
+    console.log('\n📋 Available providers:\n');
+    providers.forEach((p, idx) => {
+      console.log(`  ${idx}. ${p.name} (${p.reason})`);
+    });
+    console.log('');
+
+    rl.question('Select a provider by number (or press Enter to skip): ', (answer) => {
+      const trimmed = answer.trim();
+      if (trimmed === '') {
+        resolve(null);
+        return;
+      }
+
+      const index = parseInt(trimmed, 10);
+      if (isNaN(index) || index < 0 || index >= providers.length) {
+        console.log('⚠️  Invalid selection. Please try again.\n');
+        resolve(askSelectProvider(rl, providers));
+      } else {
+        resolve(providers[index]);
+      }
     });
   });
 }
@@ -81,6 +120,35 @@ function showProvidersDetected(providers) {
 }
 
 /**
+ * Configure a selected provider by running ctx-setup.js.
+ * @param {Object} provider - Provider object to configure
+ * @returns {boolean} True if configuration succeeded
+ */
+function configureProvider(provider) {
+  console.log(`\n⚙️  Configuring ${provider.name}...\n`);
+
+  if (isDryRun) {
+    console.log(`✓ [DRY RUN] Would configure ${provider.name}\n`);
+    return true;
+  }
+
+  const setupScript = join(ROOT_DIR, 'scripts', 'ctx-setup.js');
+  const result = spawnSync('node', [setupScript, provider.id], {
+    cwd: ROOT_DIR,
+    stdio: 'inherit',
+    shell: false
+  });
+
+  if (result.status === 0) {
+    console.log(`\n✓ ${provider.name} configured successfully\n`);
+    return true;
+  } else {
+    console.error(`\n✗ Failed to configure ${provider.name}\n`);
+    return false;
+  }
+}
+
+/**
  * Run the interactive wizard.
  */
 async function runWizard() {
@@ -103,7 +171,50 @@ async function runWizard() {
       return;
     }
 
-    console.log('\n✓ Setup wizard will continue in future iterations...\n');
+    // Filter available providers
+    const availableProviders = providers.filter((p) => p.available);
+
+    if (availableProviders.length === 0) {
+      console.log('\n⚠️  No providers detected. Please install an AI coding assistant first.\n');
+      rl.close();
+      return;
+    }
+
+    // Provider selection and configuration loop
+    let configuredCount = 0;
+    let shouldConfigureMore = true;
+
+    while (shouldConfigureMore && availableProviders.length > 0) {
+      const selectedProvider = await askSelectProvider(rl, availableProviders);
+
+      if (!selectedProvider) {
+        console.log('\n⏭️  Skipping provider selection.\n');
+        break;
+      }
+
+      const success = configureProvider(selectedProvider);
+      if (success) {
+        configuredCount++;
+      }
+
+      // Remove configured provider from list
+      const idx = availableProviders.findIndex((p) => p.id === selectedProvider.id);
+      if (idx !== -1) {
+        availableProviders.splice(idx, 1);
+      }
+
+      // Ask if user wants to configure another provider
+      if (availableProviders.length > 0) {
+        shouldConfigureMore = await askYesNo(rl, 'Would you like to configure another provider?');
+      } else {
+        shouldConfigureMore = false;
+      }
+    }
+
+    // Summary
+    console.log('\n' + '='.repeat(50));
+    console.log(`✓ Setup complete! Configured ${configuredCount} provider(s).`);
+    console.log('='.repeat(50) + '\n');
 
   } catch (error) {
     console.error('\n✗ Error during setup:', error.message);
