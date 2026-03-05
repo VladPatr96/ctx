@@ -17,6 +17,7 @@ import { detectProviders } from './setup/provider-detector.js';
 import { spawnSync } from 'node:child_process';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { hasState, loadState, saveState, clearState } from './setup/state-manager.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -186,6 +187,28 @@ function askSkipOrRetry(rl) {
 }
 
 /**
+ * Prompt user to resume from saved state or start fresh.
+ * @param {readline.Interface} rl - Readline interface
+ * @returns {Promise<boolean>} True if user wants to resume
+ */
+function askResume(rl) {
+  return new Promise((resolve) => {
+    console.log('💾 Previous wizard session detected!\n');
+    rl.question('Would you like to (r)esume or start (f)resh? (r/f): ', (answer) => {
+      const normalized = answer.trim().toLowerCase();
+      if (normalized === 'r' || normalized === 'resume') {
+        resolve(true);
+      } else if (normalized === 'f' || normalized === 'fresh') {
+        resolve(false);
+      } else {
+        console.log('⚠️  Invalid choice. Please enter "r" to resume or "f" to start fresh.\n');
+        resolve(askResume(rl));
+      }
+    });
+  });
+}
+
+/**
  * Configure a selected provider by running ctx-setup.js.
  * @param {Object} provider - Provider object to configure
  * @returns {boolean} True if configuration succeeded
@@ -223,10 +246,30 @@ async function runWizard() {
   const rl = createReadline();
 
   try {
+    // Check for existing state and ask to resume
+    let savedState = null;
+    if (hasState() && !isDryRun) {
+      const shouldResume = await askResume(rl);
+      if (shouldResume) {
+        try {
+          savedState = loadState();
+          console.log('✓ Resuming from previous session\n');
+        } catch (error) {
+          console.error('⚠️  Failed to load saved state:', error.message);
+          console.log('Starting fresh...\n');
+          clearState();
+        }
+      } else {
+        console.log('✓ Starting fresh\n');
+        clearState();
+      }
+    }
+
     // Detect providers with retry loop
     let providers = [];
     let availableProviders = [];
     let shouldRetryDetection = true;
+    let configuredProviderIds = savedState?.configuredProviders || [];
 
     while (shouldRetryDetection) {
       // Detect providers
@@ -234,8 +277,8 @@ async function runWizard() {
       providers = detectProviders();
       showProvidersDetected(providers);
 
-      // Filter available providers
-      availableProviders = providers.filter((p) => p.available);
+      // Filter available providers (excluding already configured ones)
+      availableProviders = providers.filter((p) => p.available && !configuredProviderIds.includes(p.id));
 
       // Handle no available providers
       if (availableProviders.length === 0) {
@@ -246,6 +289,19 @@ async function runWizard() {
 
         if (choice === 'skip') {
           console.log('\n👋 Setup skipped. Install a provider and run this wizard again!\n');
+
+          // Save state so user can resume later
+          if (!isDryRun && configuredProviderIds.length > 0) {
+            try {
+              saveState({
+                configuredProviders: configuredProviderIds,
+                lastUpdated: new Date().toISOString()
+              });
+            } catch (error) {
+              console.error('⚠️  Failed to save wizard state:', error.message);
+            }
+          }
+
           rl.close();
           return;
         }
@@ -263,13 +319,30 @@ async function runWizard() {
 
     if (!shouldContinue) {
       console.log('\n👋 Setup cancelled. Run this wizard again when you\'re ready!\n');
+
+      // Save state so user can resume later
+      if (!isDryRun && configuredProviderIds.length > 0) {
+        try {
+          saveState({
+            configuredProviders: configuredProviderIds,
+            lastUpdated: new Date().toISOString()
+          });
+        } catch (error) {
+          console.error('⚠️  Failed to save wizard state:', error.message);
+        }
+      }
+
       rl.close();
       return;
     }
 
     // Provider selection and configuration loop
-    let configuredCount = 0;
+    let configuredCount = configuredProviderIds.length;
     let shouldConfigureMore = true;
+
+    if (savedState && configuredCount > 0) {
+      console.log(`📝 Previously configured ${configuredCount} provider(s)\n`);
+    }
 
     while (shouldConfigureMore && availableProviders.length > 0) {
       const selectedProvider = await askSelectProvider(rl, availableProviders);
@@ -282,6 +355,19 @@ async function runWizard() {
       const success = configureProvider(selectedProvider);
       if (success) {
         configuredCount++;
+        configuredProviderIds.push(selectedProvider.id);
+
+        // Save state after successful configuration
+        if (!isDryRun) {
+          try {
+            saveState({
+              configuredProviders: configuredProviderIds,
+              lastUpdated: new Date().toISOString()
+            });
+          } catch (error) {
+            console.error('⚠️  Failed to save wizard state:', error.message);
+          }
+        }
       }
 
       // Remove configured provider from list
@@ -302,6 +388,15 @@ async function runWizard() {
     console.log('\n' + '='.repeat(50));
     console.log(`✓ Setup complete! Configured ${configuredCount} provider(s).`);
     console.log('='.repeat(50) + '\n');
+
+    // Clear state on successful completion
+    if (!isDryRun) {
+      try {
+        clearState();
+      } catch (error) {
+        console.error('⚠️  Failed to clear wizard state:', error.message);
+      }
+    }
 
   } catch (error) {
     console.error('\n✗ Error during setup:', error.message);
