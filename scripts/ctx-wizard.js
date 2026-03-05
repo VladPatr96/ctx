@@ -120,6 +120,72 @@ function showProvidersDetected(providers) {
 }
 
 /**
+ * Get installation instructions for a provider.
+ * @param {string} providerId - Provider ID
+ * @returns {string} Installation instructions
+ */
+function getInstallInstructions(providerId) {
+  const instructions = {
+    claude: `Claude Code:
+  • Visit: https://claude.ai/download
+  • Install Claude Desktop app
+  • Or set ANTHROPIC_API_KEY environment variable`,
+
+    codex: `Codex CLI:
+  • Install: npm install -g @openai/codex-cli
+  • Or set OPENAI_API_KEY environment variable
+  • Or create ~/.codex config directory`,
+
+    gemini: `Gemini CLI:
+  • Install: npm install -g @google/gemini-cli
+  • Or set GOOGLE_API_KEY environment variable
+  • Or create ~/.config/gemini-cli directory`,
+
+    opencode: `OpenCode:
+  • Visit: https://opencode.dev/download
+  • Install OpenCode editor
+  • Or set OPENCODE_API_KEY environment variable`
+  };
+
+  return instructions[providerId] || 'No installation instructions available.';
+}
+
+/**
+ * Display installation instructions for all unavailable providers.
+ * @param {Array} providers - Array of unavailable provider objects
+ */
+function showInstallInstructions(providers) {
+  console.log('\n📚 Installation Instructions:\n');
+  console.log('To use CTX with these providers, install them first:\n');
+
+  providers.forEach((provider) => {
+    console.log(getInstallInstructions(provider.id));
+    console.log('');
+  });
+}
+
+/**
+ * Prompt user to skip or retry when no providers are available.
+ * @param {readline.Interface} rl - Readline interface
+ * @returns {Promise<'skip'|'retry'>} User choice
+ */
+function askSkipOrRetry(rl) {
+  return new Promise((resolve) => {
+    rl.question('Would you like to (s)kip setup or (r)etry detection? (s/r): ', (answer) => {
+      const normalized = answer.trim().toLowerCase();
+      if (normalized === 's' || normalized === 'skip') {
+        resolve('skip');
+      } else if (normalized === 'r' || normalized === 'retry') {
+        resolve('retry');
+      } else {
+        console.log('⚠️  Invalid choice. Please enter "s" to skip or "r" to retry.\n');
+        resolve(askSkipOrRetry(rl));
+      }
+    });
+  });
+}
+
+/**
  * Configure a selected provider by running ctx-setup.js.
  * @param {Object} provider - Provider object to configure
  * @returns {boolean} True if configuration succeeded
@@ -157,25 +223,46 @@ async function runWizard() {
   const rl = createReadline();
 
   try {
-    // Detect providers
-    console.log('Detecting installed AI providers...\n');
-    const providers = detectProviders();
-    showProvidersDetected(providers);
+    // Detect providers with retry loop
+    let providers = [];
+    let availableProviders = [];
+    let shouldRetryDetection = true;
+
+    while (shouldRetryDetection) {
+      // Detect providers
+      console.log('Detecting installed AI providers...\n');
+      providers = detectProviders();
+      showProvidersDetected(providers);
+
+      // Filter available providers
+      availableProviders = providers.filter((p) => p.available);
+
+      // Handle no available providers
+      if (availableProviders.length === 0) {
+        const unavailableProviders = providers.filter((p) => !p.available);
+        showInstallInstructions(unavailableProviders);
+
+        const choice = await askSkipOrRetry(rl);
+
+        if (choice === 'skip') {
+          console.log('\n👋 Setup skipped. Install a provider and run this wizard again!\n');
+          rl.close();
+          return;
+        }
+
+        // User chose retry, loop will continue
+        console.log('\n🔄 Retrying provider detection...\n');
+      } else {
+        // Providers found, exit retry loop
+        shouldRetryDetection = false;
+      }
+    }
 
     // Ask if user wants to continue with setup
     const shouldContinue = await askYesNo(rl, 'Would you like to continue with setup?');
 
     if (!shouldContinue) {
       console.log('\n👋 Setup cancelled. Run this wizard again when you\'re ready!\n');
-      rl.close();
-      return;
-    }
-
-    // Filter available providers
-    const availableProviders = providers.filter((p) => p.available);
-
-    if (availableProviders.length === 0) {
-      console.log('\n⚠️  No providers detected. Please install an AI coding assistant first.\n');
       rl.close();
       return;
     }
