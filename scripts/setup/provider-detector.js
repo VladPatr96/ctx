@@ -52,40 +52,89 @@ export function hasCtxMcpConfig() {
 }
 
 /**
+ * Check if environment variables contain any of the specified keys.
+ * @param {string[]} keys - Array of environment variable names to check
+ * @returns {boolean} True if any key is set
+ */
+export function hasApiKey(keys) {
+  return keys.some((key) => {
+    const value = process.env[key];
+    return value && value.trim().length > 0;
+  });
+}
+
+/**
+ * Check provider availability with detailed detection logic.
+ * @param {Object} checks - Object with detection methods
+ * @returns {{available: boolean, reason: string, details: Object}} Availability info
+ */
+function checkProviderAvailability(checks) {
+  const details = {
+    cli: checks.cli ? hasCli(checks.cli) : false,
+    configDirs: checks.configDirs ? checks.configDirs.some(existsSync) : false,
+    apiKeys: checks.apiKeys ? hasApiKey(checks.apiKeys) : false,
+    custom: checks.custom ? checks.custom() : false
+  };
+
+  const available = details.cli || details.configDirs || details.apiKeys || details.custom;
+
+  const reasons = [];
+  if (details.custom) reasons.push('MCP configured');
+  if (details.cli) reasons.push('CLI available');
+  if (details.configDirs) reasons.push('config directory found');
+  if (details.apiKeys) reasons.push('API key detected');
+
+  const reason = available
+    ? reasons.join(', ')
+    : 'Not installed (no CLI, config, or API key found)';
+
+  return { available, reason, details };
+}
+
+/**
  * Detect all available AI coding assistant providers.
- * @returns {Array<{id: string, name: string, available: boolean}>} Array of provider objects
+ * @returns {Array<{id: string, name: string, available: boolean, reason: string, details: Object}>} Array of provider objects
  */
 export function detectProviders() {
+  const claude = checkProviderAvailability({
+    cli: 'claude',
+    configDirs: [],
+    apiKeys: ['ANTHROPIC_API_KEY', 'CLAUDE_API_KEY'],
+    custom: hasCtxMcpConfig
+  });
+
+  const codex = checkProviderAvailability({
+    cli: 'codex',
+    configDirs: [join(HOME, '.codex')],
+    apiKeys: ['OPENAI_API_KEY', 'CODEX_API_KEY']
+  });
+
+  const gemini = checkProviderAvailability({
+    cli: 'gemini',
+    configDirs: [
+      join(HOME, '.config', 'gemini-cli'),
+      join(HOME, '.gemini')
+    ],
+    apiKeys: ['GOOGLE_API_KEY', 'GEMINI_API_KEY']
+  });
+
+  const opencode = checkProviderAvailability({
+    cli: 'opencode',
+    configDirs: [join(HOME, '.config', 'opencode')],
+    apiKeys: ['OPENCODE_API_KEY']
+  });
+
   return [
-    {
-      id: 'claude',
-      name: 'Claude Code',
-      available: hasCtxMcpConfig() || hasCli('claude')
-    },
-    {
-      id: 'codex',
-      name: 'Codex CLI',
-      available: hasCli('codex') || existsSync(join(HOME, '.codex'))
-    },
-    {
-      id: 'gemini',
-      name: 'Gemini CLI',
-      available:
-        hasCli('gemini') ||
-        existsSync(join(HOME, '.config', 'gemini-cli')) ||
-        existsSync(join(HOME, '.gemini'))
-    },
-    {
-      id: 'opencode',
-      name: 'OpenCode',
-      available: hasCli('opencode') || existsSync(join(HOME, '.config', 'opencode'))
-    }
+    { id: 'claude', name: 'Claude Code', ...claude },
+    { id: 'codex', name: 'Codex CLI', ...codex },
+    { id: 'gemini', name: 'Gemini CLI', ...gemini },
+    { id: 'opencode', name: 'OpenCode', ...opencode }
   ];
 }
 
 /**
  * Get only available providers.
- * @returns {Array<{id: string, name: string, available: boolean}>} Array of available providers
+ * @returns {Array<{id: string, name: string, available: boolean, reason: string, details: Object}>} Array of available providers
  */
 export function getAvailableProviders() {
   return detectProviders().filter((p) => p.available);
@@ -93,7 +142,7 @@ export function getAvailableProviders() {
 
 /**
  * Get only unavailable providers.
- * @returns {Array<{id: string, name: string, available: boolean}>} Array of unavailable providers
+ * @returns {Array<{id: string, name: string, available: boolean, reason: string, details: Object}>} Array of unavailable providers
  */
 export function getUnavailableProviders() {
   return detectProviders().filter((p) => !p.available);
