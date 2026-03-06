@@ -14,6 +14,7 @@
 
 import { calculateCost, calculateCostBreakdown } from './cost-calculator.js';
 import { createCostStore } from './cost-store.js';
+import { checkBudget } from './budget-alerts.js';
 
 // Singleton instance of cost store
 const costStore = createCostStore();
@@ -61,11 +62,87 @@ export function recordUsage(usage) {
       metadata: usage.metadata || {}
     });
 
+    // Check budget alerts after recording
+    const budgetChecks = [];
+
+    // Check global budget
+    const totalCost = costStore.getTotalCost();
+    const globalCheck = checkBudget(totalCost);
+    if (globalCheck.alert) {
+      budgetChecks.push({
+        type: 'global',
+        ...globalCheck
+      });
+    }
+
+    // Check provider-specific budget
+    const providerCosts = costStore.getCostsByProvider();
+    const providerCost = providerCosts[usage.provider]?.totalCost || 0;
+    const providerCheck = checkBudget(providerCost, { provider: usage.provider });
+    if (providerCheck.alert && providerCheck.budgetType === 'provider') {
+      budgetChecks.push({
+        type: 'provider',
+        provider: usage.provider,
+        ...providerCheck
+      });
+    }
+
+    // Check session-specific budget
+    if (usage.sessionId) {
+      const sessionCost = costStore.getCostsBySession(usage.sessionId);
+      if (sessionCost) {
+        const sessionCheck = checkBudget(sessionCost.totalCost, { sessionId: usage.sessionId });
+        if (sessionCheck.alert && sessionCheck.budgetType === 'session') {
+          budgetChecks.push({
+            type: 'session',
+            sessionId: usage.sessionId,
+            ...sessionCheck
+          });
+        }
+      }
+    }
+
+    // Check project-specific budget
+    if (usage.projectId) {
+      const projectCost = costStore.getCostsByProject(usage.projectId);
+      if (projectCost) {
+        const projectCheck = checkBudget(projectCost.totalCost, { projectId: usage.projectId });
+        if (projectCheck.alert && projectCheck.budgetType === 'project') {
+          budgetChecks.push({
+            type: 'project',
+            projectId: usage.projectId,
+            ...projectCheck
+          });
+        }
+      }
+    }
+
+    // Log budget warnings
+    for (const check of budgetChecks) {
+      const context = check.type === 'global'
+        ? 'Global budget'
+        : check.type === 'provider'
+          ? `Provider '${check.provider}' budget`
+          : check.type === 'session'
+            ? `Session '${check.sessionId}' budget`
+            : `Project '${check.projectId}' budget`;
+
+      const message = check.alert === 'exceeded'
+        ? `⚠️  BUDGET EXCEEDED: ${context} - $${check.currentCost.toFixed(4)} / $${check.budget.toFixed(2)} (${check.percentUsed}%)`
+        : check.alert === 'critical'
+          ? `⚠️  CRITICAL: ${context} - $${check.currentCost.toFixed(4)} / $${check.budget.toFixed(2)} (${check.percentUsed}% used, $${check.remaining.toFixed(4)} remaining)`
+          : `⚠️  WARNING: ${context} - $${check.currentCost.toFixed(4)} / $${check.budget.toFixed(2)} (${check.percentUsed}% used, $${check.remaining.toFixed(4)} remaining)`;
+
+      // Use stderr for warnings so they're visible even when stdout is captured
+      process.stderr.write(message + '\n');
+    }
+
     return {
       status: 'success',
       totalCost: cost,
       inputTokens,
-      outputTokens
+      outputTokens,
+      budgetAlerts: budgetChecks.length > 0 ? budgetChecks : undefined
     };
   } catch (error) {
     return {
