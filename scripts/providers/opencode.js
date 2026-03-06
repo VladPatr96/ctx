@@ -7,6 +7,41 @@
 import { runCommand, runCliWithFallback, buildDetail } from '../utils/shell.js';
 import { discoverModels, getModelIds } from './model-discovery.js';
 
+/**
+ * Extract token usage from CLI response.
+ * OpenCode outputs JSON, so prioritize JSON parsing.
+ */
+function extractTokenUsage(stdout, stderr) {
+  const combined = `${stdout || ''}\n${stderr || ''}`;
+
+  // Try JSON parsing first (opencode uses --format json)
+  try {
+    const jsonMatch = combined.match(/\{[\s\S]*"usage"[\s\S]*\}/);
+    if (jsonMatch) {
+      const parsed = JSON.parse(jsonMatch[0]);
+      if (parsed.usage) {
+        return {
+          inputTokens: parsed.usage.input_tokens || parsed.usage.inputTokens || parsed.usage.prompt_tokens || 0,
+          outputTokens: parsed.usage.output_tokens || parsed.usage.outputTokens || parsed.usage.completion_tokens || 0
+        };
+      }
+    }
+  } catch { /* not JSON */ }
+
+  // Try common text patterns
+  const inputMatch = combined.match(/(\d+)\s*(?:input|prompt)\s*tokens?/i);
+  const outputMatch = combined.match(/(\d+)\s*(?:output|completion|response)\s*tokens?/i);
+
+  if (inputMatch || outputMatch) {
+    return {
+      inputTokens: inputMatch ? parseInt(inputMatch[1], 10) : 0,
+      outputTokens: outputMatch ? parseInt(outputMatch[1], 10) : 0
+    };
+  }
+
+  return null;
+}
+
 const PRIMARY_GLM_MODEL = 'opencode/glm-4.7';
 const FALLBACK_GLM_MODEL = 'zai-coding-plan/glm-4.7';
 const KIMI_MODEL = 'opencode/kimi-k2.5';
@@ -73,10 +108,16 @@ export default {
             detail: response.slice(0, 2000)
           };
         }
+
+        const usage = extractTokenUsage(direct.stdout, direct.stderr);
         return {
           status: 'success',
           response,
-          model: modelUsed || null
+          model: modelUsed || null,
+          ...(usage && {
+            inputTokens: usage.inputTokens,
+            outputTokens: usage.outputTokens
+          })
         };
       }
 
@@ -101,10 +142,18 @@ export default {
         detail: response.slice(0, 2000)
       };
     }
+
+    // Extract token usage from response if available
+    const usage = extractTokenUsage(result.stdout, result.stderr);
+
     return {
       status: 'success',
       response,
-      model: modelUsed || null
+      model: modelUsed || null,
+      ...(usage && {
+        inputTokens: usage.inputTokens,
+        outputTokens: usage.outputTokens
+      })
     };
   },
 
