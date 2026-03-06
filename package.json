@@ -1,6 +1,6 @@
 {
   "name": "ctx-plugin",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Complex Task eXecution (ctx) — Multi-provider context management plugin for Claude Code",
   "type": "module",
   "scripts": {
