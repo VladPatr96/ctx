@@ -17,6 +17,7 @@ import gemini from './gemini.js';
 import opencode from './opencode.js';
 import codex from './codex.js';
 import { discoverModels, discoverAllModels, discoverAllModelsAsync, validateModel } from './model-discovery.js';
+import { recordUsage } from '../cost-tracking/index.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const HEALTH_FILE = join(__dirname, '..', '..', '.data', 'provider-health.json');
@@ -181,6 +182,32 @@ export async function invoke(providerName, prompt, opts = {}) {
 
     if (result.status === 'success') {
       recordSuccess(providerName, latencyMs);
+
+      // Record token usage and cost if available
+      if (result.usage || (result.inputTokens !== undefined && result.outputTokens !== undefined)) {
+        try {
+          const usage = result.usage || {
+            inputTokens: result.inputTokens,
+            outputTokens: result.outputTokens
+          };
+
+          recordUsage({
+            provider: providerName,
+            model: result.model || opts.model || provider.models?.[0] || 'unknown',
+            inputTokens: usage.inputTokens,
+            outputTokens: usage.outputTokens,
+            sessionId: opts.sessionId || null,
+            projectId: opts.projectId || null,
+            metadata: {
+              prompt: typeof prompt === 'string' ? prompt.substring(0, 100) : 'non-string-prompt',
+              latencyMs,
+              timestamp: new Date().toISOString()
+            }
+          });
+        } catch (costErr) {
+          // Don't fail the request if cost tracking fails
+        }
+      }
     } else {
       recordFailure(providerName, latencyMs);
     }
