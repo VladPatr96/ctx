@@ -17,6 +17,9 @@ import { randomBytes, timingSafeEqual } from 'node:crypto';
 import * as actions from './dashboard-actions.js';
 import { createKnowledgeStore } from './knowledge/kb-json-fallback.js';
 import { KbSync } from './knowledge/kb-sync.js';
+import { getCostSummary, getCostsByProvider } from './cost-tracking/index.js';
+import { getRecommendations } from './cost-tracking/optimization-engine.js';
+import { getBudgetConfig, checkAllBudgets } from './cost-tracking/budget-alerts.js';
 
 // 1. CONSTANTS
 const DATA_DIR = '.data';
@@ -855,6 +858,68 @@ export const createRouter = (buildHtmlFn, token, options = {}) => async (req, re
           mode: runtime.mode,
           stats: runtime.store.getStats()
         });
+      }
+
+      if (url.pathname === '/api/cost/summary') {
+        try {
+          const summary = getCostSummary();
+          return serve(200, 'application/json', {
+            ok: true,
+            summary
+          });
+        } catch (err) {
+          return serve(500, 'application/json', {
+            error: `Failed to get cost summary: ${err.message}`
+          });
+        }
+      }
+
+      if (url.pathname === '/api/cost/by-provider') {
+        try {
+          const byProvider = getCostsByProvider();
+          return serve(200, 'application/json', {
+            ok: true,
+            providers: byProvider
+          });
+        } catch (err) {
+          return serve(500, 'application/json', {
+            error: `Failed to get costs by provider: ${err.message}`
+          });
+        }
+      }
+
+      if (url.pathname === '/api/cost/recommendations') {
+        try {
+          const recommendations = getRecommendations();
+          return serve(200, 'application/json', {
+            ok: true,
+            recommendations
+          });
+        } catch (err) {
+          return serve(500, 'application/json', {
+            error: `Failed to get recommendations: ${err.message}`
+          });
+        }
+      }
+
+      if (url.pathname === '/api/cost/budget') {
+        try {
+          const config = getBudgetConfig();
+          const costs = {
+            total: getCostSummary().totalCost || 0,
+            byProvider: getCostsByProvider()
+          };
+          const status = checkAllBudgets(costs);
+          return serve(200, 'application/json', {
+            ok: true,
+            config,
+            status
+          });
+        } catch (err) {
+          return serve(500, 'application/json', {
+            error: `Failed to get budget status: ${err.message}`
+          });
+        }
       }
 
       res.writeHead(404);
