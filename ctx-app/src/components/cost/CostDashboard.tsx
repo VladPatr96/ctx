@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { DollarSign, TrendingUp, Activity } from 'lucide-react';
 import type { ApiClient } from '../../api/client';
 import type { CostSummary } from '../../api/types';
+import { CostChart } from './CostChart';
 
 interface CostDashboardProps {
   client: ApiClient;
@@ -116,6 +117,10 @@ export function CostDashboard({ client }: CostDashboardProps) {
             ${costPerRequest.toFixed(4)}
           </div>
         </div>
+      </div>
+
+      <div style={{ marginBottom: 24 }}>
+        <CostChart data={[]} showRequests={true} />
       </div>
 
       {providersList.length > 0 ? (
