@@ -6,6 +6,7 @@
 
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 const DATA_DIR = process.env.CTX_DATA_DIR || join(process.cwd(), '.data');
 const PIPELINE_FILE = join(DATA_DIR, 'pipeline.json');
@@ -130,7 +131,7 @@ export async function executeStageTriggers(stage, pipeline) {
         `${trigger.command}.js`
       );
       
-      const { default: commandFn } = await import(commandPath);
+      const { default: commandFn } = await import(pathToFileURL(commandPath).href);
       
       // Execute command
       const result = await commandFn(trigger.args, {

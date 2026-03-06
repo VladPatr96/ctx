@@ -17,6 +17,8 @@ import { randomBytes, timingSafeEqual } from 'node:crypto';
 import * as actions from './dashboard-actions.js';
 import { createKnowledgeStore } from './knowledge/kb-json-fallback.js';
 import { KbSync } from './knowledge/kb-sync.js';
+import { runDevelopmentPipeline, createDevelopmentPipeline } from './orchestrator/development-pipeline.js';
+import * as termSessions from './terminal-sessions.js';
 
 // 1. CONSTANTS
 const DATA_DIR = '.data';
@@ -184,6 +186,7 @@ export const state = {
   providerHealth: {},
   brainstorm: null,
   plan: null,
+  claimGraph: null,
   lastEventId: 0
 };
 
@@ -407,6 +410,12 @@ export const refreshAllData = () => {
   broadcast('full', getStateSnapshot());
 };
 
+/** Set the full claim graph from consilium multi-round tool */
+export function setClaimGraph(graph) {
+  state.claimGraph = graph ? { ...graph, userVerdicts: state.claimGraph?.userVerdicts || {} } : null;
+  broadcast('full', getStateSnapshot());
+}
+
 // 4. FILE WATCHERS
 const debounce = (fn, ms) => {
   let timeout;
@@ -625,7 +634,10 @@ export const createRouter = (buildHtmlFn, token, options = {}) => async (req, re
     url.pathname === '/events' ||
     url.pathname === '/storage-health' ||
     url.pathname.startsWith('/api/kb/') ||
-    url.pathname.startsWith('/api/routing/')
+    url.pathname.startsWith('/api/routing/') ||
+    url.pathname.startsWith('/api/dev-pipeline/') ||
+    url.pathname.startsWith('/api/terminal/') ||
+    url.pathname.startsWith('/api/claims/')
   );
 
   if (req.method === 'GET' && (isApiPath || isProtectedGetPath)) {
@@ -653,7 +665,11 @@ export const createRouter = (buildHtmlFn, token, options = {}) => async (req, re
     }
     const indexPath = resolve(staticDir, 'index.html');
     if (existsSync(indexPath)) {
-      return serve(200, 'text/html; charset=utf-8', readFileSync(indexPath, 'utf8'));
+      // Inject auth token so the SPA can authenticate API calls
+      const expectedToken = getExpectedToken(token);
+      let html = readFileSync(indexPath, 'utf8');
+      html = html.replace('</head>', `<script>window.__CTX_TOKEN__="${expectedToken}";</script>\n</head>`);
+      return serve(200, 'text/html; charset=utf-8', html);
     }
   }
 
@@ -717,6 +733,53 @@ export const createRouter = (buildHtmlFn, token, options = {}) => async (req, re
           if (!existsSync(agentPath)) throw new Error('Agent not found');
           const content = readFileSync(agentPath, 'utf8');
           return serve(200, 'application/json', { content });
+        case '/api/claims/graph': {
+          if (!body) throw new Error('body is required');
+          setClaimGraph(body);
+          return serve(200, 'application/json', { ok: true });
+        }
+        case '/api/claims/verdict': {
+          if (!state.claimGraph) throw new Error('No claim graph available');
+          const claimId = String(body?.claimId || '');
+          const verdict = body?.verdict;
+          if (!claimId) throw new Error('claimId is required');
+          if (!state.claimGraph.userVerdicts) state.claimGraph.userVerdicts = {};
+          if (verdict === null || verdict === undefined) {
+            delete state.claimGraph.userVerdicts[claimId];
+          } else {
+            state.claimGraph.userVerdicts[claimId] = verdict;
+          }
+          // Re-run synthesis with modified graph if smart synthesis module available
+          try {
+            const { buildSmartSynthesisPrompt } = await import('./consilium/smart-synthesis.js');
+            // Build a modified graph: verdict=true → consensus, verdict=false → removed
+            const modifiedGraph = { ...state.claimGraph };
+            const verdicts = modifiedGraph.userVerdicts || {};
+            const origContested = modifiedGraph.contested || [];
+            const movedToConsensus = [];
+            const remaining = [];
+            for (const c of origContested) {
+              if (verdicts[c.id] === 'true') {
+                movedToConsensus.push({ id: c.id, text: c.text, type: c.type, supportedBy: ['User'] });
+              } else if (verdicts[c.id] === 'false') {
+                // excluded from synthesis
+              } else {
+                remaining.push(c);
+              }
+            }
+            modifiedGraph.consensus = [...(modifiedGraph.consensus || []), ...movedToConsensus];
+            modifiedGraph.contested = remaining;
+            modifiedGraph.stats = {
+              ...modifiedGraph.stats,
+              consensus_count: modifiedGraph.consensus.length,
+              contested_count: modifiedGraph.contested.length,
+            };
+          } catch {
+            // smart-synthesis module optional — just store verdicts
+          }
+          broadcast('full', getStateSnapshot());
+          return serve(200, 'application/json', { ok: true });
+        }
         case '/api/consilium/activate':
           actions.activatePreset(body?.preset);
           refreshAllData();
@@ -751,6 +814,20 @@ export const createRouter = (buildHtmlFn, token, options = {}) => async (req, re
             result
           });
         }
+        case '/api/dev-pipeline/run': {
+          if (!body?.specs || !Array.isArray(body.specs) || body.specs.length === 0) {
+            throw new Error('specs[] is required');
+          }
+          const pipeResult = await runDevelopmentPipeline(body.specs, {
+            baseBranch: body.baseBranch,
+            testCommand: body.testCommand,
+            testTimeout: body.testTimeout,
+            stopOnTestFail: body.stopOnTestFail,
+            conflictResolution: body.conflictResolution,
+            conflictProvider: body.conflictProvider,
+          });
+          return serve(200, 'application/json', pipeResult);
+        }
         case '/api/kb/sync': {
           const sync = getKbSyncClient();
           const action = String(body?.action || 'pull').toLowerCase();
@@ -773,7 +850,50 @@ export const createRouter = (buildHtmlFn, token, options = {}) => async (req, re
             result
           });
         }
+        // Terminal session management
+        case '/api/terminal/session/create': {
+          const { provider, model, task, label, branch, cwd } = body || {};
+          if (!provider) throw new Error('provider is required');
+          const sessionId = termSessions.createSession({
+            provider: String(provider),
+            model: String(model || ''),
+            task: String(task || ''),
+            label: String(label || ''),
+            branch: String(branch || ''),
+            cwd: String(cwd || process.cwd())
+          });
+          return serve(200, 'application/json', { ok: true, sessionId });
+        }
+        case '/api/terminal/session/kill': {
+          const sid = String(body?.sessionId || '');
+          if (!sid) throw new Error('sessionId is required');
+          const ok = termSessions.killSession(sid, 'user request');
+          return serve(200, 'application/json', { ok });
+        }
+        case '/api/terminal/session/delete': {
+          const sid = String(body?.sessionId || '');
+          if (!sid) throw new Error('sessionId is required');
+          const ok = termSessions.deleteSession(sid);
+          return serve(200, 'application/json', { ok });
+        }
+        case '/api/terminal/session/input': {
+          const sid = String(body?.sessionId || '');
+          const text = String(body?.text || '');
+          if (!sid) throw new Error('sessionId is required');
+          if (!text) throw new Error('text is required');
+          termSessions.sendInput(sid, text);
+          return serve(200, 'application/json', { ok: true });
+        }
         default:
+          // Dynamic path: /api/terminal/session/:id/input  (POST)
+          if (url.pathname.startsWith('/api/terminal/session/') && url.pathname.endsWith('/input')) {
+            const sid = url.pathname.slice('/api/terminal/session/'.length, -'/input'.length);
+            const text = String(body?.text || '');
+            if (!sid) throw new Error('sessionId is required in path');
+            if (!text) throw new Error('text is required');
+            termSessions.sendInput(sid, text);
+            return serve(200, 'application/json', { ok: true });
+          }
           return serve(404, 'application/json', { error: 'Not Found' });
       }
     } catch (err) {
@@ -842,6 +962,20 @@ export const createRouter = (buildHtmlFn, token, options = {}) => async (req, re
         });
       }
 
+      if (url.pathname === '/api/dev-pipeline/status') {
+        const pipeline = createDevelopmentPipeline();
+        const pipelineId = url.searchParams.get('pipelineId') || undefined;
+        const result = pipeline.getStatus(pipelineId);
+        if (pipelineId && !result) {
+          return serve(404, 'application/json', { error: `Pipeline "${pipelineId}" not found` });
+        }
+        return serve(200, 'application/json', result);
+      }
+
+      if (url.pathname === '/api/claims/graph') {
+        return serve(200, 'application/json', { ok: true, graph: state.claimGraph || null });
+      }
+
       if (url.pathname === '/api/kb/stats') {
         const runtime = await getKnowledgeRuntime();
         if (!runtime?.store) {
@@ -855,6 +989,66 @@ export const createRouter = (buildHtmlFn, token, options = {}) => async (req, re
           mode: runtime.mode,
           stats: runtime.store.getStats()
         });
+      }
+
+      // Terminal sessions: list
+      if (url.pathname === '/api/terminal/sessions') {
+        return serve(200, 'application/json', { ok: true, sessions: termSessions.listSessions() });
+      }
+
+      // Terminal session: get single
+      if (url.pathname.startsWith('/api/terminal/session/') && !url.pathname.endsWith('/stream')) {
+        const sid = url.pathname.slice('/api/terminal/session/'.length);
+        if (sid && !sid.includes('/')) {
+          const s = termSessions.getSession(sid);
+          if (!s) return serve(404, 'application/json', { error: 'Session not found' });
+          return serve(200, 'application/json', s);
+        }
+      }
+
+      // Terminal session: SSE stream
+      if (url.pathname.startsWith('/api/terminal/session/') && url.pathname.endsWith('/stream')) {
+        const sid = url.pathname.slice('/api/terminal/session/'.length, -'/stream'.length);
+        if (!sid) {
+          res.writeHead(400);
+          res.end('sessionId required');
+          return;
+        }
+
+        res.writeHead(200, {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+          'Connection': 'keep-alive',
+          'X-Accel-Buffering': 'no',
+          ...SECURE_HEADERS
+        });
+        res.write(`retry: 3000\n\n`);
+
+        let unsubscribe;
+        try {
+          unsubscribe = termSessions.subscribeSession(sid, (line) => {
+            try {
+              res.write(`data: ${JSON.stringify(line)}\n\n`);
+            } catch { /* client disconnected */ }
+          });
+        } catch (err) {
+          res.write(`data: ${JSON.stringify({ ts: new Date().toISOString(), type: 'system', text: `Error: ${err.message}` })}\n\n`);
+          res.end();
+          return;
+        }
+
+        const keepalive = setInterval(() => {
+          try { res.write(':keepalive\n\n'); } catch { cleanup(); }
+        }, SSE_KEEPALIVE_MS);
+
+        const cleanup = () => {
+          clearInterval(keepalive);
+          if (unsubscribe) { unsubscribe(); unsubscribe = null; }
+        };
+
+        req.on('close', cleanup);
+        req.on('error', cleanup);
+        return;
       }
 
       res.writeHead(404);

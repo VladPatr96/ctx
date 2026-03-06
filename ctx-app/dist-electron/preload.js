@@ -1,33 +1,33 @@
-import { contextBridge as o, ipcRenderer as t } from "electron";
-o.exposeInMainWorld("ipcRenderer", {
-  on(...e) {
-    const [n, i] = e;
-    return t.on(n, (a, ...r) => i(a, ...r));
+import { contextBridge, ipcRenderer } from "electron";
+contextBridge.exposeInMainWorld("ipcRenderer", {
+  on(...args) {
+    const [channel, listener] = args;
+    return ipcRenderer.on(channel, (event, ...args2) => listener(event, ...args2));
   },
-  off(...e) {
-    const [n, ...i] = e;
-    return t.off(n, ...i);
+  off(...args) {
+    const [channel, ...omit] = args;
+    return ipcRenderer.off(channel, ...omit);
   },
-  send(...e) {
-    const [n, ...i] = e;
-    return t.send(n, ...i);
+  send(...args) {
+    const [channel, ...omit] = args;
+    return ipcRenderer.send(channel, ...omit);
   },
-  invoke(...e) {
-    const [n, ...i] = e;
-    return t.invoke(n, ...i);
+  invoke(...args) {
+    const [channel, ...omit] = args;
+    return ipcRenderer.invoke(channel, ...omit);
   },
   // Custom APIs
-  getEnv: () => t.invoke("get-env")
+  getEnv: () => ipcRenderer.invoke("get-env")
 });
-o.exposeInMainWorld("ctxApi", {
-  getBaseUrl: () => t.invoke("ctx-api:get-base-url"),
-  getState: () => t.invoke("ctx-api:get-state"),
-  setTask: (e) => t.invoke("ctx-api:set-task", e),
-  setStage: (e) => t.invoke("ctx-api:set-stage", e),
-  searchKb: (e, n, i) => t.invoke("ctx-api:search-kb", e, n, i),
-  getKbStats: () => t.invoke("ctx-api:get-kb-stats"),
-  getAgentDetails: (e) => t.invoke("ctx-api:get-agent-details", e),
-  getTerminalAllowlist: () => t.invoke("ctx-terminal:get-allowlist"),
-  runTerminalCommand: (e) => t.invoke("ctx-terminal:run", e)
+contextBridge.exposeInMainWorld("ctxApi", {
+  getBaseUrl: () => ipcRenderer.invoke("ctx-api:get-base-url"),
+  getState: () => ipcRenderer.invoke("ctx-api:get-state"),
+  setTask: (task) => ipcRenderer.invoke("ctx-api:set-task", task),
+  setStage: (stage) => ipcRenderer.invoke("ctx-api:set-stage", stage),
+  searchKb: (query, limit, project) => ipcRenderer.invoke("ctx-api:search-kb", query, limit, project),
+  getKbStats: () => ipcRenderer.invoke("ctx-api:get-kb-stats"),
+  getAgentDetails: (agentId) => ipcRenderer.invoke("ctx-api:get-agent-details", agentId),
+  getTerminalAllowlist: () => ipcRenderer.invoke("ctx-terminal:get-allowlist"),
+  runTerminalCommand: (command) => ipcRenderer.invoke("ctx-terminal:run", command)
 });
-o.exposeInMainWorld("isElectron", !0);
+contextBridge.exposeInMainWorld("isElectron", true);

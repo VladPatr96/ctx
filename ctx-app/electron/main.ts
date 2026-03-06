@@ -156,7 +156,7 @@ function createWindow() {
     width: 1200,
     height: 800,
     webPreferences: {
-      preload: path.join(__dirname, 'preload.mjs'),
+      preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
     },
@@ -168,15 +168,28 @@ function createWindow() {
     }
   })
 
+  // Open DevTools in development
+  if (VITE_DEV_SERVER_URL) {
+    win.webContents.openDevTools()
+  }
+
   // Test actively push message to the Electron-Renderer
   win.webContents.on('did-finish-load', () => {
     win?.webContents.send('main-process-message', (new Date()).toLocaleString())
   })
 
   if (VITE_DEV_SERVER_URL) {
-    win.loadURL(VITE_DEV_SERVER_URL)
+    const token = readDashboardToken()
+    const sep = VITE_DEV_SERVER_URL.includes('?') ? '&' : '?'
+    const url = token ? `${VITE_DEV_SERVER_URL}${sep}token=${encodeURIComponent(token)}` : VITE_DEV_SERVER_URL
+    win.loadURL(url)
   } else {
-    win.loadFile(path.join(RENDERER_DIST, 'index.html'))
+    const token = readDashboardToken()
+    if (token) {
+      win.loadURL(`file://${path.join(RENDERER_DIST, 'index.html')}?token=${encodeURIComponent(token)}`)
+    } else {
+      win.loadFile(path.join(RENDERER_DIST, 'index.html'))
+    }
   }
 }
 

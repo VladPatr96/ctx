@@ -1,15 +1,21 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, lazy, Suspense } from 'react';
 import { createApiClient } from './api/client';
 import { useCtxConnection } from './api/hooks';
 import { useAppStore } from './store/useAppStore';
 import { Sidebar } from './components/layout/Sidebar';
 import { ErrorBoundary } from './components/layout/ErrorBoundary';
-import { DashboardPage } from './pages/Dashboard';
-import { KnowledgePage } from './pages/Knowledge';
-import { AgentsPage } from './pages/Agents';
-import { SettingsPage } from './pages/Settings';
-import { TerminalPage } from './pages/Terminal';
-import { RoutingPage } from './pages/Routing';
+
+
+// Lazy load page components for code-splitting
+const DashboardPage = lazy(() => import('./pages/Dashboard').then(m => ({ default: m.DashboardPage })));
+const KnowledgePage = lazy(() => import('./pages/Knowledge').then(m => ({ default: m.KnowledgePage })));
+const AgentsPage = lazy(() => import('./pages/Agents').then(m => ({ default: m.AgentsPage })));
+const SettingsPage = lazy(() => import('./pages/Settings').then(m => ({ default: m.SettingsPage })));
+const TerminalPage = lazy(() => import('./pages/Terminal').then(m => ({ default: m.TerminalPage })));
+const RoutingPage = lazy(() => import('./pages/Routing').then(m => ({ default: m.RoutingPage })));
+const DevPipelinePage = lazy(() => import('./pages/DevPipeline').then(m => ({ default: m.DevPipelinePage })));
+const OrchestratorPage = lazy(() => import('./pages/Orchestrator').then(m => ({ default: m.OrchestratorPage })));
+const DebatesPage = lazy(() => import('./pages/Debates').then(m => ({ default: m.DebatesPage })));
 
 function App() {
   const client = useMemo(() => createApiClient(), []);
@@ -79,18 +85,23 @@ function App() {
         <main className="app-content">
           {error ? <div className="error-banner">{error}</div> : null}
           <ErrorBoundary key={activeTab}>
-            {activeTab === 'dashboard' ? (
-              <DashboardPage client={client} onRefresh={refresh} />
-            ) : null}
-            {activeTab === 'knowledge' ? (
-              <KnowledgePage client={client} />
-            ) : null}
-            {activeTab === 'agents' ? <AgentsPage client={client} /> : null}
-            {activeTab === 'routing' ? <RoutingPage client={client} /> : null}
-            {activeTab === 'settings' ? (
-              <SettingsPage client={client} onRefresh={refresh} />
-            ) : null}
-            {activeTab === 'terminal' ? <TerminalPage client={client} /> : null}
+            <Suspense fallback={<div className="loading-spinner">Загрузка...</div>}>
+              {activeTab === 'dashboard' ? (
+                <DashboardPage client={client} onRefresh={refresh} />
+              ) : null}
+              {activeTab === 'knowledge' ? (
+                <KnowledgePage client={client} />
+              ) : null}
+              {activeTab === 'agents' ? <AgentsPage client={client} /> : null}
+              {activeTab === 'routing' ? <RoutingPage client={client} /> : null}
+              {activeTab === 'devpipeline' ? <DevPipelinePage client={client} /> : null}
+              {activeTab === 'orchestrator' ? <OrchestratorPage client={client} /> : null}
+              {activeTab === 'debates' ? <DebatesPage client={client} /> : null}
+              {activeTab === 'settings' ? (
+                <SettingsPage client={client} onRefresh={refresh} />
+              ) : null}
+              {activeTab === 'terminal' ? <TerminalPage client={client} /> : null}
+            </Suspense>
           </ErrorBoundary>
         </main>
       </div>

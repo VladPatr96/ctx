@@ -440,6 +440,11 @@ export function registerConsiliumTools(server, { getResults, saveResults, DATA_D
         }
         if (result.claimGraph) {
           output.claim_graph = result.claimGraph.stats;
+          // Store full claim graph in dashboard state for visualization
+          try {
+            const { setClaimGraph } = await import('../dashboard-backend.js');
+            setClaimGraph(result.claimGraph);
+          } catch { /* dashboard may not be running */ }
         }
         if (result.autoStop) {
           output.auto_stop = result.autoStop;

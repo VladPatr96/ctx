@@ -8,6 +8,7 @@
 import { scheduleJob } from 'node-schedule';
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 const DATA_DIR = process.env.CTX_DATA_DIR || join(process.cwd(), '.data');
 const AUTO_CONFIG = join(DATA_DIR, 'auto-run-config.json');
@@ -78,7 +79,7 @@ async function runSkill(skillName, command, args) {
       throw new Error(`Command not found: ${commandPath}`);
     }
     
-    const { default: commandFn } = await import(commandPath);
+    const { default: commandFn } = await import(pathToFileURL(commandPath).href);
     const result = await commandFn(args, {});
     
     console.log(`[auto-run] ✓ Completed: ${skillName}/${command}`);

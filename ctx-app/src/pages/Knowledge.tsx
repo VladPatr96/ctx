@@ -40,7 +40,7 @@ export function KnowledgePage({ client }: KnowledgePageProps) {
         </ul>
       </section>
 
-      <KBSearch client={client} />
+      <KBSearch client={client} stats={stats} />
     </div>
   );
 }
