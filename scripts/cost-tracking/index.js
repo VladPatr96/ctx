@@ -5,42 +5,18 @@
  * - Запись использования токенов и расчёт стоимости
  * - Агрегация по провайдерам, моделям, сессиям
  * - Получение статистики затрат
+ *
+ * Архитектура:
+ * - Использует CostStore для thread-safe хранения данных
+ * - Использует cost-calculator для расчёта стоимости
+ * - Предоставляет unified API для всех операций с затратами
  */
 
 import { calculateCost, calculateCostBreakdown } from './cost-calculator.js';
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
-import { join, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { createCostStore } from './cost-store.js';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const DATA_DIR = join(__dirname, '..', '..', '.data');
-const COST_TRACKING_FILE = join(DATA_DIR, 'cost-tracking.json');
-
-// Ensure data directory exists
-if (!existsSync(DATA_DIR)) {
-  mkdirSync(DATA_DIR, { recursive: true });
-}
-
-// ---- Data Loading/Saving ----
-
-function loadCostData() {
-  try {
-    if (!existsSync(COST_TRACKING_FILE)) {
-      return { requests: [], sessions: {}, metadata: { createdAt: new Date().toISOString() } };
-    }
-    return JSON.parse(readFileSync(COST_TRACKING_FILE, 'utf-8'));
-  } catch {
-    return { requests: [], sessions: {}, metadata: { createdAt: new Date().toISOString() } };
-  }
-}
-
-function saveCostData(data) {
-  try {
-    data.metadata = data.metadata || {};
-    data.metadata.updatedAt = new Date().toISOString();
-    writeFileSync(COST_TRACKING_FILE, JSON.stringify(data, null, 2));
-  } catch { /* ignore write errors */ }
-}
+// Singleton instance of cost store
+const costStore = createCostStore();
 
 // ---- Usage Recording ----
 
@@ -71,57 +47,32 @@ export function recordUsage(usage) {
 
   // Calculate cost
   const cost = calculateCost(usage.provider, usage.model, { inputTokens, outputTokens });
-  const breakdown = calculateCostBreakdown(usage.provider, usage.model, { inputTokens, outputTokens });
 
-  // Create cost record
-  const record = {
-    timestamp: new Date().toISOString(),
-    provider: usage.provider,
-    model: usage.model,
-    inputTokens,
-    outputTokens,
-    totalTokens: inputTokens + outputTokens,
-    cost,
-    breakdown: {
-      inputCost: breakdown.inputCost,
-      outputCost: breakdown.outputCost,
-      pricing: breakdown.pricing
-    },
-    sessionId: usage.sessionId || null,
-    projectId: usage.projectId || null,
-    metadata: usage.metadata || {}
-  };
+  try {
+    // Record via CostStore (thread-safe, atomic)
+    costStore.recordCost({
+      provider: usage.provider,
+      model: usage.model,
+      inputTokens,
+      outputTokens,
+      cost,
+      sessionId: usage.sessionId || null,
+      projectId: usage.projectId || null,
+      metadata: usage.metadata || {}
+    });
 
-  // Load, append, save
-  const data = loadCostData();
-  data.requests = data.requests || [];
-  data.requests.push(record);
-
-  // Update session totals
-  if (usage.sessionId) {
-    data.sessions = data.sessions || {};
-    if (!data.sessions[usage.sessionId]) {
-      data.sessions[usage.sessionId] = {
-        createdAt: record.timestamp,
-        totalCost: 0,
-        totalTokens: 0,
-        requests: 0
-      };
-    }
-    const session = data.sessions[usage.sessionId];
-    session.totalCost += cost;
-    session.totalTokens += record.totalTokens;
-    session.requests += 1;
-    session.updatedAt = record.timestamp;
+    return {
+      status: 'success',
+      totalCost: cost,
+      inputTokens,
+      outputTokens
+    };
+  } catch (error) {
+    return {
+      status: 'error',
+      error: `Failed to record cost: ${error.message}`
+    };
   }
-
-  saveCostData(data);
-
-  return {
-    status: 'success',
-    record,
-    totalCost: cost
-  };
 }
 
 /**
@@ -130,10 +81,7 @@ export function recordUsage(usage) {
  * @returns {number} Total cost in USD
  */
 export function getTotalCost() {
-  const data = loadCostData();
-  if (!data.requests || data.requests.length === 0) return 0;
-
-  return data.requests.reduce((sum, req) => sum + (req.cost || 0), 0);
+  return costStore.getTotalCost();
 }
 
 /**
@@ -142,41 +90,7 @@ export function getTotalCost() {
  * @returns {Object} Map of provider → cost stats
  */
 export function getCostsByProvider() {
-  const data = loadCostData();
-  if (!data.requests || data.requests.length === 0) return {};
-
-  const byProvider = {};
-
-  for (const req of data.requests) {
-    const provider = req.provider;
-    if (!byProvider[provider]) {
-      byProvider[provider] = {
-        totalCost: 0,
-        requests: 0,
-        totalTokens: 0,
-        models: {}
-      };
-    }
-
-    byProvider[provider].totalCost += req.cost || 0;
-    byProvider[provider].requests += 1;
-    byProvider[provider].totalTokens += req.totalTokens || 0;
-
-    // Track by model
-    const model = req.model;
-    if (!byProvider[provider].models[model]) {
-      byProvider[provider].models[model] = {
-        totalCost: 0,
-        requests: 0,
-        totalTokens: 0
-      };
-    }
-    byProvider[provider].models[model].totalCost += req.cost || 0;
-    byProvider[provider].models[model].requests += 1;
-    byProvider[provider].models[model].totalTokens += req.totalTokens || 0;
-  }
-
-  return byProvider;
+  return costStore.getCostsByProvider();
 }
 
 /**
@@ -186,8 +100,17 @@ export function getCostsByProvider() {
  * @returns {Object|null} Session cost stats or null if not found
  */
 export function getCostsBySession(sessionId) {
-  const data = loadCostData();
-  return data.sessions?.[sessionId] || null;
+  return costStore.getCostsBySession(sessionId);
+}
+
+/**
+ * Get cost summary for a specific project.
+ *
+ * @param {string} projectId - Project identifier
+ * @returns {Object|null} Project cost stats or null if not found
+ */
+export function getCostsByProject(projectId) {
+  return costStore.getCostsByProject(projectId);
 }
 
 /**
@@ -196,17 +119,14 @@ export function getCostsBySession(sessionId) {
  * @returns {Object} Complete cost summary
  */
 export function getCostSummary() {
-  const data = loadCostData();
-  const totalCost = getTotalCost();
-  const byProvider = getCostsByProvider();
+  return costStore.getCostSummary();
+}
 
-  return {
-    totalCost,
-    totalRequests: data.requests?.length || 0,
-    byProvider,
-    sessions: data.sessions || {},
-    lastUpdated: data.metadata?.updatedAt || null
-  };
+/**
+ * Clear all cost tracking data.
+ */
+export function clearCostData() {
+  costStore.clearCostData();
 }
 
 export default {
@@ -214,5 +134,7 @@ export default {
   getTotalCost,
   getCostsByProvider,
   getCostsBySession,
-  getCostSummary
+  getCostsByProject,
+  getCostSummary,
+  clearCostData
 };
