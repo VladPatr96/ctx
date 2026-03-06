@@ -181,3 +181,58 @@ export type RoutingDecision = z.infer<typeof RoutingDecisionSchema>;
 export type RoutingAnomaly = z.infer<typeof RoutingAnomalySchema>;
 export type ClaimGraphData = z.infer<typeof ClaimGraphSchema>;
 export type ClaimPosition = z.infer<typeof ClaimPositionSchema>;
+
+export interface CostSummary {
+  totalCost: number;
+  totalRequests: number;
+  costPerRequest: number;
+  providers: Record<string, {
+    cost: number;
+    requests: number;
+    models?: Record<string, { cost: number; requests: number }>;
+  }>;
+}
+
+export interface ProviderCostData {
+  provider: string;
+  cost: number;
+  requests: number;
+  models?: Record<string, { cost: number; requests: number }>;
+}
+
+export interface Recommendation {
+  type: string;
+  priority: string;
+  title: string;
+  description: string;
+  potentialSavings?: number;
+  currentProvider?: string;
+  suggestedProvider?: string;
+}
+
+export interface BudgetStatus {
+  config: {
+    global?: number;
+    providers?: Record<string, number>;
+    sessions?: Record<string, number>;
+    projects?: Record<string, number>;
+    thresholds?: {
+      warning: number;
+      critical: number;
+    };
+  };
+  status: {
+    global?: {
+      status: string;
+      current: number;
+      budget: number;
+      percentage: number;
+    };
+    providers?: Record<string, {
+      status: string;
+      current: number;
+      budget: number;
+      percentage: number;
+    }>;
+  };
+}

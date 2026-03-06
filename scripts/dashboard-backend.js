@@ -19,6 +19,9 @@ import { createKnowledgeStore } from './knowledge/kb-json-fallback.js';
 import { KbSync } from './knowledge/kb-sync.js';
 import { runDevelopmentPipeline, createDevelopmentPipeline } from './orchestrator/development-pipeline.js';
 import * as termSessions from './terminal-sessions.js';
+import { getCostSummary, getCostsByProvider } from './cost-tracking/index.js';
+import { getRecommendations } from './cost-tracking/optimization-engine.js';
+import { getBudgetConfig, checkAllBudgets } from './cost-tracking/budget-alerts.js';
 
 // 1. CONSTANTS
 const DATA_DIR = '.data';
@@ -28,6 +31,7 @@ const INDEX_FILE = '.data/index.json';
 const PROVIDER_HEALTH_FILE = '.data/provider-health.json';
 const SESSION_FILE = '.data/session.json';
 const LOG_FILE = '.data/log.jsonl';
+const COST_TRACKING_FILE = '.data/cost-tracking.json';
 const AGENTS_DIR = 'agents';
 const CONSILIUM_FILE = 'consilium.presets.json';
 const RESULTS_FILE = '.data/results.json';
@@ -440,12 +444,37 @@ export const startWatchers = (broadcastFn, reloadFrontendFn) => {
       console.error('[dashboard] Reload watcher error:', err.message);
     }
   }, DEBOUNCE_MS);
+  const debouncedCostUpdate = debounce(() => {
+    try {
+      const summary = getCostSummary();
+      const byProvider = getCostsByProvider();
+      const recommendations = getRecommendations();
+      const config = getBudgetConfig();
+      const costs = {
+        total: summary.totalCost || 0,
+        byProvider
+      };
+      const budgetStatus = checkAllBudgets(costs);
+      broadcast('cost-update', {
+        summary,
+        byProvider,
+        recommendations,
+        budget: {
+          config,
+          status: budgetStatus
+        }
+      });
+    } catch (err) {
+      console.error('[dashboard] Cost update error:', err.message);
+    }
+  }, DEBOUNCE_MS);
   try {
     if (existsSync(DATA_DIR)) watch(DATA_DIR, debouncedRefresh);
     if (existsSync(AGENTS_DIR)) watch(AGENTS_DIR, debouncedRefresh);
     if (existsSync(CONSILIUM_FILE)) watch(CONSILIUM_FILE, debouncedRefresh);
     if (existsSync(SKILLS_DIR)) watch(SKILLS_DIR, debouncedRefresh);
     if (existsSync(SCRIPTS_DIR)) watch(SCRIPTS_DIR, debouncedReload);
+    if (existsSync(COST_TRACKING_FILE)) watch(COST_TRACKING_FILE, debouncedCostUpdate);
   } catch {
     setInterval(refreshAllData, POLL_INTERVAL_MS);
   }
@@ -1055,6 +1084,68 @@ export const createRouter = (buildHtmlFn, token, options = {}) => async (req, re
         req.on('close', cleanup);
         req.on('error', cleanup);
         return;
+      }
+
+      if (url.pathname === '/api/cost/summary') {
+        try {
+          const summary = getCostSummary();
+          return serve(200, 'application/json', {
+            ok: true,
+            summary
+          });
+        } catch (err) {
+          return serve(500, 'application/json', {
+            error: `Failed to get cost summary: ${err.message}`
+          });
+        }
+      }
+
+      if (url.pathname === '/api/cost/by-provider') {
+        try {
+          const byProvider = getCostsByProvider();
+          return serve(200, 'application/json', {
+            ok: true,
+            providers: byProvider
+          });
+        } catch (err) {
+          return serve(500, 'application/json', {
+            error: `Failed to get costs by provider: ${err.message}`
+          });
+        }
+      }
+
+      if (url.pathname === '/api/cost/recommendations') {
+        try {
+          const recommendations = getRecommendations();
+          return serve(200, 'application/json', {
+            ok: true,
+            recommendations
+          });
+        } catch (err) {
+          return serve(500, 'application/json', {
+            error: `Failed to get recommendations: ${err.message}`
+          });
+        }
+      }
+
+      if (url.pathname === '/api/cost/budget') {
+        try {
+          const config = getBudgetConfig();
+          const costs = {
+            total: getCostSummary().totalCost || 0,
+            byProvider: getCostsByProvider()
+          };
+          const status = checkAllBudgets(costs);
+          return serve(200, 'application/json', {
+            ok: true,
+            config,
+            status
+          });
+        } catch (err) {
+          return serve(500, 'application/json', {
+            error: `Failed to get budget status: ${err.message}`
+          });
+        }
       }
 
       res.writeHead(404);

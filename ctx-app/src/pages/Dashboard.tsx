@@ -9,6 +9,7 @@ import { CombinedLogView } from '../components/log/CombinedLogView';
 import { AgentActivityWidget } from '../components/dashboard/AgentActivityWidget';
 import { CostAnalyticsWidget } from '../components/dashboard/CostAnalyticsWidget';
 import { TaskCompareModal } from '../components/dashboard/TaskCompareModal';
+import { CostDashboard } from '../components/cost/CostDashboard';
 
 const STAGES = ['detect', 'context', 'task', 'brainstorm', 'plan', 'execute', 'done'];
 
@@ -227,6 +228,7 @@ export function DashboardPage({ client, onRefresh }: DashboardPageProps) {
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
         <CostAnalyticsWidget />
+        <CostDashboard client={client} />
         <AgentActivityWidget />
         <CombinedLogView stageFilter={selectedStage || undefined} onClearStageFilter={() => setSelectedStage(null)} />
       </div>
