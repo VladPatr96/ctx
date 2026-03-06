@@ -5,14 +5,85 @@
  * - Сравнение стоимости разных провайдеров
  * - Расчёт cost-per-request, cost-per-token метрик
  * - Генерация рекомендаций по оптимизации затрат
- * - Учёт quality scores (будет расширено в subtask-4-2)
+ * - Учёт quality scores (success rate и latency)
  */
 
+import { readFileSync } from 'node:fs';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { createCostStore } from './cost-store.js';
 import { getPricing, getProviderPricing } from './pricing.js';
 
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const HEALTH_FILE = join(__dirname, '..', '..', '.data', 'provider-health.json');
+
 // Singleton cost store instance
 const costStore = createCostStore();
+
+// ---- Health & Quality Metrics ----
+
+/**
+ * Load provider health data.
+ *
+ * @returns {Object} Health data by provider
+ */
+function loadHealth() {
+  try {
+    return JSON.parse(readFileSync(HEALTH_FILE, 'utf-8'));
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Calculate quality score for a provider based on success rate and latency.
+ *
+ * Quality score is a weighted combination of:
+ * - Success rate (70% weight): Higher success rate = better quality
+ * - Latency (30% weight): Lower latency = better quality
+ *
+ * @param {string} provider - Provider name
+ * @returns {Object|null} Quality metrics { qualityScore, successRate, avgLatencyMs }
+ */
+function calculateQualityScore(provider) {
+  const health = loadHealth();
+  const entry = health[provider];
+
+  if (!entry || !entry.calls || entry.calls < 3) {
+    return null; // Not enough data
+  }
+
+  const successRate = entry.successRate || 0;
+  const avgLatencyMs = entry.avgLatencyMs || 0;
+
+  // Normalize success rate to 0-100 (already in percentage)
+  const successScore = successRate;
+
+  // Normalize latency to 0-100 scale
+  // Assumptions: <500ms is excellent (100), >5000ms is poor (0)
+  const maxAcceptableLatency = 5000;
+  const minExcellentLatency = 500;
+
+  let latencyScore;
+  if (avgLatencyMs <= minExcellentLatency) {
+    latencyScore = 100;
+  } else if (avgLatencyMs >= maxAcceptableLatency) {
+    latencyScore = 0;
+  } else {
+    // Linear scale between 500ms and 5000ms
+    latencyScore = 100 - ((avgLatencyMs - minExcellentLatency) / (maxAcceptableLatency - minExcellentLatency) * 100);
+  }
+
+  // Weighted combination: 70% success rate, 30% latency
+  const qualityScore = Math.round((successScore * 0.7) + (latencyScore * 0.3));
+
+  return {
+    qualityScore,
+    successRate,
+    avgLatencyMs,
+    calls: entry.calls
+  };
+}
 
 // ---- Cost Efficiency Metrics ----
 
@@ -33,6 +104,9 @@ function calculateEfficiencyMetrics(providerData, provider) {
     ? providerData.totalCost / providerData.totalTokens * 1000
     : 0;
 
+  // Include quality score
+  const quality = calculateQualityScore(provider);
+
   return {
     provider,
     totalCost: providerData.totalCost,
@@ -40,15 +114,16 @@ function calculateEfficiencyMetrics(providerData, provider) {
     totalTokens: providerData.totalTokens,
     avgCostPerRequest,
     avgCostPerToken, // Cost per 1k tokens
-    models: providerData.models
+    models: providerData.models,
+    quality // { qualityScore, successRate, avgLatencyMs } or null
   };
 }
 
 /**
  * Compare two providers and determine if one is more cost-efficient.
  *
- * @param {Object} providerA - Metrics for provider A
- * @param {Object} providerB - Metrics for provider B
+ * @param {Object} providerA - Metrics for provider A (current)
+ * @param {Object} providerB - Metrics for provider B (suggested)
  * @returns {Object|null} Comparison result with recommendation
  */
 function compareProviders(providerA, providerB) {
@@ -67,6 +142,25 @@ function compareProviders(providerA, providerB) {
     return null;
   }
 
+  // Quality gate: Only recommend if suggested provider has comparable or better quality
+  const qualityA = providerA.quality;
+  const qualityB = providerB.quality;
+
+  if (qualityA && qualityB) {
+    // If suggested provider has significantly worse quality (>15 points lower), don't recommend
+    // unless cost savings are very high (>50%)
+    const qualityDiff = qualityB.qualityScore - qualityA.qualityScore;
+
+    if (qualityDiff < -15 && savingsPercentRequest < 50) {
+      return null; // Quality degradation too high for the cost savings
+    }
+
+    // If success rate is significantly lower (>10% lower), don't recommend
+    if (qualityB.successRate < qualityA.successRate - 10) {
+      return null; // Success rate too low
+    }
+  }
+
   return {
     currentProvider: providerA.provider,
     suggestedProvider: providerB.provider,
@@ -74,7 +168,15 @@ function compareProviders(providerA, providerB) {
     savingsPercent: Math.abs(savingsPercentRequest),
     currentCost: providerA.avgCostPerRequest,
     suggestedCost: providerB.avgCostPerRequest,
-    estimatedMonthlySavings: calculateMonthlySavings(providerA, providerB)
+    estimatedMonthlySavings: calculateMonthlySavings(providerA, providerB),
+    qualityComparison: qualityA && qualityB ? {
+      currentQuality: qualityA.qualityScore,
+      suggestedQuality: qualityB.qualityScore,
+      currentSuccessRate: qualityA.successRate,
+      suggestedSuccessRate: qualityB.successRate,
+      currentLatency: qualityA.avgLatencyMs,
+      suggestedLatency: qualityB.avgLatencyMs
+    } : null
   };
 }
 
@@ -138,11 +240,23 @@ export function getRecommendations() {
     const comparison = compareProviders(metrics[i], cheapest);
 
     if (comparison) {
+      // Build description with quality info if available
+      let description = `Save ${comparison.savingsPercent.toFixed(0)}% per request (${formatCurrency(comparison.savingsPerRequest)} per request)`;
+
+      if (comparison.qualityComparison) {
+        const qc = comparison.qualityComparison;
+        if (qc.suggestedQuality >= qc.currentQuality) {
+          description += ` with equal or better quality (${qc.suggestedSuccessRate}% success rate, ${qc.suggestedLatency}ms avg latency)`;
+        } else {
+          description += ` (quality: ${qc.currentQuality} → ${qc.suggestedQuality})`;
+        }
+      }
+
       recommendations.push({
         type: 'provider_switch',
         priority: comparison.savingsPercent > 40 ? 'high' : 'medium',
         title: `Switch from ${comparison.currentProvider} to ${comparison.suggestedProvider}`,
-        description: `Save ${comparison.savingsPercent.toFixed(0)}% per request (${formatCurrency(comparison.savingsPerRequest)} per request)`,
+        description,
         impact: {
           savingsPerRequest: comparison.savingsPerRequest,
           savingsPercent: comparison.savingsPercent,
@@ -150,6 +264,7 @@ export function getRecommendations() {
         },
         currentProvider: comparison.currentProvider,
         suggestedProvider: comparison.suggestedProvider,
+        quality: comparison.qualityComparison,
         confidence: calculateConfidence(metrics[i].requests)
       });
     }
@@ -301,14 +416,25 @@ export function getProviderComparison() {
   for (const provider of providers) {
     const metric = calculateEfficiencyMetrics(costsByProvider[provider], provider);
     if (metric) {
-      comparisons.push({
+      const comparison = {
         provider: metric.provider,
         totalCost: metric.totalCost,
         requests: metric.requests,
         avgCostPerRequest: metric.avgCostPerRequest,
         avgCostPerToken: metric.avgCostPerToken,
         efficiency: calculateEfficiencyScore(metric)
-      });
+      };
+
+      // Include quality metrics if available
+      if (metric.quality) {
+        comparison.quality = {
+          score: metric.quality.qualityScore,
+          successRate: metric.quality.successRate,
+          avgLatencyMs: metric.quality.avgLatencyMs
+        };
+      }
+
+      comparisons.push(comparison);
     }
   }
 
@@ -320,7 +446,7 @@ export function getProviderComparison() {
 
 /**
  * Calculate efficiency score (0-100).
- * Higher score means better cost efficiency.
+ * Higher score means better overall efficiency (cost + quality).
  *
  * @param {Object} metric - Provider metrics
  * @returns {number} Efficiency score
@@ -334,9 +460,16 @@ function calculateEfficiencyScore(metric) {
   if (metric.avgCostPerToken === 0) return 50; // Neutral score
 
   const normalizedCost = Math.max(minReasonableCost, Math.min(maxReasonableCost, metric.avgCostPerToken));
-  const score = 100 - ((normalizedCost - minReasonableCost) / (maxReasonableCost - minReasonableCost) * 100);
+  const costScore = 100 - ((normalizedCost - minReasonableCost) / (maxReasonableCost - minReasonableCost) * 100);
 
-  return Math.round(score);
+  // If quality data is available, combine cost score with quality score
+  // Weight: 60% cost efficiency, 40% quality
+  if (metric.quality && metric.quality.qualityScore !== undefined) {
+    const combinedScore = (costScore * 0.6) + (metric.quality.qualityScore * 0.4);
+    return Math.round(combinedScore);
+  }
+
+  return Math.round(costScore);
 }
 
 // ---- Export API ----
