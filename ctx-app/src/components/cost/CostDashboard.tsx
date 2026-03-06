@@ -3,6 +3,7 @@ import { DollarSign, TrendingUp, Activity } from 'lucide-react';
 import type { ApiClient } from '../../api/client';
 import type { CostSummary } from '../../api/types';
 import { CostChart } from './CostChart';
+import { BudgetAlert } from './BudgetAlert';
 
 interface CostDashboardProps {
   client: ApiClient;
@@ -65,6 +66,10 @@ export function CostDashboard({ client }: CostDashboardProps) {
   return (
     <section className="panel">
       <h3>Стоимость API</h3>
+
+      <div style={{ marginBottom: 24 }}>
+        <BudgetAlert currentCost={totalCost} budgetLimit={1.0} warningThreshold={80} />
+      </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16, marginBottom: 24 }}>
         <div style={{
