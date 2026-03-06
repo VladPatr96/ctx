@@ -4,11 +4,12 @@
  * ctx-setup.js — Setup script for CTX on different providers
  *
  * Usage:
- *   node ctx-setup.js claude     — Setup for Claude Code
- *   node ctx-setup.js codex      — Setup for Codex CLI
- *   node ctx-setup.js gemini     — Setup for Gemini CLI
- *   node ctx-setup.js opencode   — Setup for OpenCode
- *   node ctx-setup.js all        — Setup for all providers
+ *   node ctx-setup.js claude       — Setup for Claude Code
+ *   node ctx-setup.js codex        — Setup for Codex CLI
+ *   node ctx-setup.js gemini       — Setup for Gemini CLI
+ *   node ctx-setup.js opencode     — Setup for OpenCode
+ *   node ctx-setup.js all          — Setup for all providers
+ *   node ctx-setup.js --interactive — Run interactive setup wizard
  */
 
 import { existsSync, copyFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -156,28 +157,52 @@ function setupOpenCode() {
 
 function main() {
   const args = process.argv.slice(2);
-  
+
   if (args.length === 0 || args[0] === '--help' || args[0] === '-h') {
     console.log(`
 CTX Setup Tool
 
 Usage:
   node ctx-setup.js <provider>
+  node ctx-setup.js --interactive
 
- Providers:
+Providers:
   claude   - Claude Code (MCP native)
   codex    - Codex CLI (CLI wrapper)
   gemini   - Gemini CLI (copy skill files)
   opencode - OpenCode (auto-setup with auto-update)
   all      - Setup for all providers
 
+Interactive Mode:
+  --interactive, --wizard  - Run interactive setup wizard with auto-detection
+
 Example:
   node ctx-setup.js all
+  node ctx-setup.js --interactive
 `);
     process.exit(0);
   }
-  
+
   const providerArg = args[0];
+
+  // Handle interactive wizard mode
+  if (providerArg === '--interactive' || providerArg === '--wizard') {
+    const wizardScript = join(ROOT_DIR, 'scripts', 'ctx-wizard.js');
+
+    if (!existsSync(wizardScript)) {
+      error(`Interactive wizard not found: ${wizardScript}`);
+    }
+
+    console.log('Launching interactive setup wizard...\n');
+
+    const result = spawnSync('node', [wizardScript], {
+      cwd: ROOT_DIR,
+      stdio: 'inherit',
+      shell: false
+    });
+
+    process.exit(result.status || 0);
+  }
   
   if (providerArg === 'all') {
     console.log('Setting up CTX for all providers...\n');

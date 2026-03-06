@@ -1,0 +1,25 @@
+{
+  "active": true,
+  "spec": "003-guided-onboarding-wizard",
+  "state": "building",
+  "subtasks": {
+    "completed": 14,
+    "total": 15,
+    "in_progress": 1,
+    "failed": 0
+  },
+  "phase": {
+    "current": "Integration & Command Setup",
+    "id": null,
+    "total": 3
+  },
+  "workers": {
+    "active": 0,
+    "max": 1
+  },
+  "session": {
+    "number": 16,
+    "started_at": "2026-03-05T16:04:09.303023"
+  },
+  "last_update": "2026-03-05T16:49:55.617095"
+}
