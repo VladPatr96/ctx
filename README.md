@@ -269,6 +269,56 @@ node --test tests/adaptive-weight.test.mjs  # Adaptive routing scoring
 - [Claude Code](https://claude.com/claude-code) v1.0.33+ (for MCP integration)
 - Gemini CLI / OpenCode / Codex CLI — optional, for multi-provider features
 
+## Versioning and Releases
+
+### Versioning Strategy
+
+This project follows **Semantic Versioning** (SemVer):
+
+- **Major** (`x.0.0`) — Breaking changes, incompatible API changes
+- **Minor** (`0.x.0`) — New features, backward-compatible additions
+- **Patch** (`0.0.x`) — Bug fixes, backward-compatible fixes
+
+**Version Sources:**
+- `package.json` — Source of truth for current version
+- Git tags — Each release is tagged as `vX.Y.Z`
+
+### CHANGELOG
+
+All notable changes are documented in [CHANGELOG.md](./CHANGELOG.md):
+
+- **Added** — New features
+- **Changed** — Changes to existing functionality
+- **Deprecated** — Soon-to-be removed features
+- **Removed** — Removed features
+- **Fixed** — Bug fixes
+- **Security** — Security updates
+
+### Release Process
+
+1. **Update version** in `package.json`:
+   ```bash
+   npm version major|minor|patch
+   ```
+
+2. **Update CHANGELOG.md** with release notes for the new version
+
+3. **Commit and tag**:
+   ```bash
+   git add package.json CHANGELOG.md
+   git commit -m "chore: release vX.Y.Z"
+   git tag vX.Y.Z
+   git push origin main --tags
+   ```
+
+4. **Automated publishing** — GitHub Actions publishes to npm automatically on tag push
+
+### Check Current Version
+
+```bash
+node -p "require('./package.json').version"
+```
+
 ## npm publish on push
 
 Repository includes GitHub Actions workflow that publishes package to npm on each push to `master`/`main` if:
