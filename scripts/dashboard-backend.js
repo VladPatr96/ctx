@@ -29,6 +29,7 @@ const INDEX_FILE = '.data/index.json';
 const PROVIDER_HEALTH_FILE = '.data/provider-health.json';
 const SESSION_FILE = '.data/session.json';
 const LOG_FILE = '.data/log.jsonl';
+const COST_TRACKING_FILE = '.data/cost-tracking.json';
 const AGENTS_DIR = 'agents';
 const CONSILIUM_FILE = 'consilium.presets.json';
 const RESULTS_FILE = '.data/results.json';
@@ -434,12 +435,37 @@ export const startWatchers = (broadcastFn, reloadFrontendFn) => {
       console.error('[dashboard] Reload watcher error:', err.message);
     }
   }, DEBOUNCE_MS);
+  const debouncedCostUpdate = debounce(() => {
+    try {
+      const summary = getCostSummary();
+      const byProvider = getCostsByProvider();
+      const recommendations = getRecommendations();
+      const config = getBudgetConfig();
+      const costs = {
+        total: summary.totalCost || 0,
+        byProvider
+      };
+      const budgetStatus = checkAllBudgets(costs);
+      broadcast('cost-update', {
+        summary,
+        byProvider,
+        recommendations,
+        budget: {
+          config,
+          status: budgetStatus
+        }
+      });
+    } catch (err) {
+      console.error('[dashboard] Cost update error:', err.message);
+    }
+  }, DEBOUNCE_MS);
   try {
     if (existsSync(DATA_DIR)) watch(DATA_DIR, debouncedRefresh);
     if (existsSync(AGENTS_DIR)) watch(AGENTS_DIR, debouncedRefresh);
     if (existsSync(CONSILIUM_FILE)) watch(CONSILIUM_FILE, debouncedRefresh);
     if (existsSync(SKILLS_DIR)) watch(SKILLS_DIR, debouncedRefresh);
     if (existsSync(SCRIPTS_DIR)) watch(SCRIPTS_DIR, debouncedReload);
+    if (existsSync(COST_TRACKING_FILE)) watch(COST_TRACKING_FILE, debouncedCostUpdate);
   } catch {
     setInterval(refreshAllData, POLL_INTERVAL_MS);
   }
