@@ -1,0 +1,25 @@
+{
+  "active": true,
+  "spec": "005-version-strategy-release-process",
+  "state": "building",
+  "subtasks": {
+    "completed": 7,
+    "total": 15,
+    "in_progress": 1,
+    "failed": 0
+  },
+  "phase": {
+    "current": "Release Automation",
+    "id": null,
+    "total": 4
+  },
+  "workers": {
+    "active": 0,
+    "max": 1
+  },
+  "session": {
+    "number": 9,
+    "started_at": "2026-03-06T14:19:15.624793"
+  },
+  "last_update": "2026-03-06T14:39:43.849467"
+}

@@ -1,0 +1,39 @@
+{
+  "sandbox": {
+    "enabled": true,
+    "autoAllowBashIfSandboxed": true
+  },
+  "permissions": {
+    "defaultMode": "acceptEdits",
+    "allow": [
+      "Read(./**)",
+      "Write(./**)",
+      "Edit(./**)",
+      "Glob(./**)",
+      "Grep(./**)",
+      "Read(C:\\Users\\\u041f\u0430\u0442\u0440\u0430\u0432\u0430\u0435\u0432\\projects\\claude_ctx\\.auto-claude\\worktrees\\tasks\\005-version-strategy-release-process/**)",
+      "Write(C:\\Users\\\u041f\u0430\u0442\u0440\u0430\u0432\u0430\u0435\u0432\\projects\\claude_ctx\\.auto-claude\\worktrees\\tasks\\005-version-strategy-release-process/**)",
+      "Edit(C:\\Users\\\u041f\u0430\u0442\u0440\u0430\u0432\u0430\u0435\u0432\\projects\\claude_ctx\\.auto-claude\\worktrees\\tasks\\005-version-strategy-release-process/**)",
+      "Glob(C:\\Users\\\u041f\u0430\u0442\u0440\u0430\u0432\u0430\u0435\u0432\\projects\\claude_ctx\\.auto-claude\\worktrees\\tasks\\005-version-strategy-release-process/**)",
+      "Grep(C:\\Users\\\u041f\u0430\u0442\u0440\u0430\u0432\u0430\u0435\u0432\\projects\\claude_ctx\\.auto-claude\\worktrees\\tasks\\005-version-strategy-release-process/**)",
+      "Read(C:\\Users\\\u041f\u0430\u0442\u0440\u0430\u0432\u0430\u0435\u0432\\projects\\claude_ctx\\.auto-claude\\worktrees\\tasks\\005-version-strategy-release-process\\.auto-claude\\specs\\005-version-strategy-release-process/**)",
+      "Write(C:\\Users\\\u041f\u0430\u0442\u0440\u0430\u0432\u0430\u0435\u0432\\projects\\claude_ctx\\.auto-claude\\worktrees\\tasks\\005-version-strategy-release-process\\.auto-claude\\specs\\005-version-strategy-release-process/**)",
+      "Edit(C:\\Users\\\u041f\u0430\u0442\u0440\u0430\u0432\u0430\u0435\u0432\\projects\\claude_ctx\\.auto-claude\\worktrees\\tasks\\005-version-strategy-release-process\\.auto-claude\\specs\\005-version-strategy-release-process/**)",
+      "Read(C:\\Users\\\u041f\u0430\u0442\u0440\u0430\u0432\u0430\u0435\u0432\\projects\\claude_ctx\\.auto-claude/**)",
+      "Write(C:\\Users\\\u041f\u0430\u0442\u0440\u0430\u0432\u0430\u0435\u0432\\projects\\claude_ctx\\.auto-claude/**)",
+      "Edit(C:\\Users\\\u041f\u0430\u0442\u0440\u0430\u0432\u0430\u0435\u0432\\projects\\claude_ctx\\.auto-claude/**)",
+      "Glob(C:\\Users\\\u041f\u0430\u0442\u0440\u0430\u0432\u0430\u0435\u0432\\projects\\claude_ctx\\.auto-claude/**)",
+      "Grep(C:\\Users\\\u041f\u0430\u0442\u0440\u0430\u0432\u0430\u0435\u0432\\projects\\claude_ctx\\.auto-claude/**)",
+      "Bash(*)",
+      "WebFetch(*)",
+      "WebSearch(*)",
+      "mcp__context7__resolve-library-id(*)",
+      "mcp__context7__query-docs(*)",
+      "mcp__graphiti-memory__search_nodes(*)",
+      "mcp__graphiti-memory__search_facts(*)",
+      "mcp__graphiti-memory__add_episode(*)",
+      "mcp__graphiti-memory__get_episodes(*)",
+      "mcp__graphiti-memory__get_entity_edge(*)"
+    ]
+  }
+}
