@@ -5,9 +5,10 @@ import type { KBEntry } from '../../api/types';
 interface KBDetailProps {
   entry: KBEntry | null;
   onClose: () => void;
+  onEdit?: (entry: KBEntry) => void;
 }
 
-export function KBDetail({ entry, onClose }: KBDetailProps) {
+export function KBDetail({ entry, onClose, onEdit }: KBDetailProps) {
   if (!entry) return null;
 
   const createdAt = entry.created_at ? new Date(entry.created_at).toLocaleString('ru-RU') : '—';
@@ -37,19 +38,38 @@ export function KBDetail({ entry, onClose }: KBDetailProps) {
           <h3 style={{ margin: 0, fontSize: 16, lineHeight: 1.3, paddingRight: 8 }}>
             {entry.title}
           </h3>
-          <button
-            type="button"
-            onClick={onClose}
-            style={{
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-              color: 'var(--muted)',
-              flexShrink: 0,
-            }}
-          >
-            <X size={16} />
-          </button>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            {onEdit && (
+              <button
+                type="button"
+                onClick={() => onEdit(entry)}
+                style={{
+                  background: 'var(--primary)',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  padding: '4px 8px',
+                  fontSize: '12px',
+                  cursor: 'pointer',
+                }}
+              >
+                Редактировать
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onClose}
+              style={{
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                color: 'var(--muted)',
+                flexShrink: 0,
+              }}
+            >
+              <X size={16} />
+            </button>
+          </div>
         </div>
 
         <div style={{ fontSize: 12, color: 'var(--muted)', display: 'grid', gap: 8, marginBottom: 16 }}>

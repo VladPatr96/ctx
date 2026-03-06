@@ -4,7 +4,12 @@ import { useAppStore } from '../store/useAppStore';
 
 function readTokenForEvents(): string {
   const query = new URLSearchParams(window.location.search);
-  return query.get('token') || localStorage.getItem('ctx-dashboard-token') || '';
+  const fromUrl = query.get('token');
+  if (fromUrl) return fromUrl;
+  const fromStorage = localStorage.getItem('ctx-dashboard-token');
+  if (fromStorage) return fromStorage;
+  const fromWindow = (window as unknown as Record<string, string>).__CTX_TOKEN__;
+  return fromWindow || '';
 }
 
 function makeEventsUrl(): string {

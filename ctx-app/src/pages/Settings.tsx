@@ -23,6 +23,20 @@ export function SettingsPage({ client, onRefresh }: SettingsPageProps) {
   const [kbStats, setKbStats] = useState<KBStats>(EMPTY_STATS);
   const [error, setError] = useState('');
 
+  // Webhooks mock state
+  interface Webhook { id: string; url: string; event: string; }
+  const [webhooks, setWebhooks] = useState<Webhook[]>([]);
+  const [newWebhookUrl, setNewWebhookUrl] = useState('');
+  const [newWebhookEvent, setNewWebhookEvent] = useState('pipeline.done');
+
+  // Team mock state
+  interface TeamMember { id: string; email: string; role: string; }
+  const [team, setTeam] = useState<TeamMember[]>([
+    { id: '1', email: 'admin@ctx.local', role: 'Admin' }
+  ]);
+  const [newMemberEmail, setNewMemberEmail] = useState('');
+  const [newMemberRole, setNewMemberRole] = useState('Viewer');
+
   useEffect(() => {
     client.getKbStats()
       .then((stats) => {
@@ -31,6 +45,20 @@ export function SettingsPage({ client, onRefresh }: SettingsPageProps) {
       })
       .catch((err) => setError(err instanceof Error ? err.message : String(err)));
   }, [client, state?.pipeline?.updatedAt]);
+
+  const addWebhook = () => {
+    if (!newWebhookUrl) return;
+    setWebhooks(prev => [...prev, { id: Date.now().toString(), url: newWebhookUrl, event: newWebhookEvent }]);
+    setNewWebhookUrl('');
+  };
+  const removeWebhook = (id: string) => setWebhooks(prev => prev.filter(w => w.id !== id));
+
+  const inviteMember = () => {
+    if (!newMemberEmail) return;
+    setTeam(prev => [...prev, { id: Date.now().toString(), email: newMemberEmail, role: newMemberRole }]);
+    setNewMemberEmail('');
+  };
+  const removeMember = (id: string) => setTeam(prev => prev.filter(m => m.id !== id));
 
   const models = ((state?.pipeline as Record<string, unknown> | null)?.models as Record<string, string> | undefined) || {};
   const storageHealth = state?.storageHealth || {};
@@ -56,6 +84,85 @@ export function SettingsPage({ client, onRefresh }: SettingsPageProps) {
 
   return (
     <div className="page-grid">
+      {/* Webhooks Section */}
+      <section className="panel">
+        <h3>Webhooks Интеграция</h3>
+        <p className="muted" style={{ fontSize: 12, margin: '0 0 16px' }}>
+          Настройте внешние хуки для получения уведомлений о событиях.
+        </p>
+        <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+          <select value={newWebhookEvent} onChange={(e) => setNewWebhookEvent(e.target.value)} style={{ padding: '6px' }}>
+            <option value="pipeline.done">pipeline.done</option>
+            <option value="consilium.finished">consilium.finished</option>
+            <option value="task.failed">task.failed</option>
+          </select>
+          <input
+            type="url"
+            placeholder="https://yourapp.com/hook"
+            value={newWebhookUrl}
+            onChange={(e) => setNewWebhookUrl(e.target.value)}
+            style={{ flex: 1 }}
+          />
+          <button type="button" onClick={addWebhook}>Добавить</button>
+        </div>
+
+        {webhooks.length > 0 ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {webhooks.map(w => (
+              <div key={w.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--surface-alt)', padding: '8px 12px', borderRadius: '4px', border: '1px solid var(--border)' }}>
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                  <strong>{w.event}</strong>
+                  <span style={{ fontSize: 12, color: 'var(--muted)' }}>{w.url}</span>
+                </div>
+                <button type="button" onClick={() => removeWebhook(w.id)} style={{ padding: '4px 8px', fontSize: 11, border: '1px solid var(--danger)', color: 'var(--danger)', background: 'transparent' }}>Удалить</button>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="muted" style={{ fontSize: 12 }}>Нет настроенных webhook'ов.</p>
+        )}
+      </section>
+
+      {/* Team & Access Section */}
+      <section className="panel">
+        <h3>Управление Командой</h3>
+        <p className="muted" style={{ fontSize: 12, margin: '0 0 16px' }}>
+          Пригласите коллег для совместной работы в оркестраторе.
+        </p>
+        <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+          <input
+            type="email"
+            placeholder="colleague@example.com"
+            value={newMemberEmail}
+            onChange={(e) => setNewMemberEmail(e.target.value)}
+            style={{ flex: 1 }}
+          />
+          <select value={newMemberRole} onChange={(e) => setNewMemberRole(e.target.value)} style={{ padding: '6px' }}>
+            <option value="Admin">Admin</option>
+            <option value="Editor">Editor</option>
+            <option value="Viewer">Viewer</option>
+          </select>
+          <button type="button" onClick={inviteMember}>Пригласить</button>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          {team.map(member => (
+            <div key={member.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--surface-alt)', padding: '8px 12px', borderRadius: '4px', border: '1px solid var(--border)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <div style={{ background: 'var(--primary)', color: 'white', width: 24, height: 24, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 'bold' }}>
+                  {member.email[0].toUpperCase()}
+                </div>
+                <span>{member.email}</span>
+                <span style={{ fontSize: 11, background: 'var(--surface)', padding: '2px 6px', borderRadius: '10px', border: '1px solid var(--border)' }}>{member.role}</span>
+              </div>
+              {member.role !== 'Admin' && (
+                <button type="button" onClick={() => removeMember(member.id)} style={{ padding: '4px 8px', fontSize: 11, border: '1px solid var(--danger)', color: 'var(--danger)', background: 'transparent' }}>Исключить</button>
+              )}
+            </div>
+          ))}
+        </div>
+      </section>
+
       <section className="panel">
         <h3>Возможности провайдеров</h3>
         <div className="cap-grid">

@@ -13,24 +13,29 @@ export interface ClaimNodeData {
   onOpenVerdict?: (claimId: string) => void;
 }
 
-const STATUS_STYLES: Record<string, { border: string; bg: string }> = {
+const STATUS_STYLES: Record<string, { border: string; bgVar: string }> = {
   consensus: {
     border: 'var(--success)',
-    bg: 'color-mix(in srgb, var(--success), transparent 88%)',
+    bgVar: 'var(--success)',
   },
   contested: {
     border: 'var(--warning)',
-    bg: 'color-mix(in srgb, var(--warning), transparent 88%)',
+    bgVar: 'var(--warning)',
   },
   unique: {
     border: 'var(--border-soft)',
-    bg: 'var(--surface-alt)',
+    bgVar: 'var(--muted)',
   },
 };
 
 function ClaimNodeInner({ data }: NodeProps<ClaimNodeData>) {
   const style = STATUS_STYLES[data.status] || STATUS_STYLES.unique;
-  const isContested = data.status === 'contested';
+  const supportCount = data.supportedBy?.length || 0;
+
+  // Calculate dynamic opacity based on consensus level.
+  // Base opacity 12%. Increase by 15% per supporter, cap at 70% opacity.
+  const opacityPercent = Math.min(70, 12 + supportCount * 15);
+  const bg = `color-mix(in srgb, ${style.bgVar}, transparent ${100 - opacityPercent}%)`;
 
   return (
     <div
@@ -38,15 +43,15 @@ function ClaimNodeInner({ data }: NodeProps<ClaimNodeData>) {
         width: 260,
         borderRadius: 10,
         border: `2px solid ${style.border}`,
-        background: style.bg,
+        background: bg,
         color: 'var(--text)',
         padding: '10px 12px',
-        cursor: isContested ? 'pointer' : 'default',
+        cursor: data.onOpenVerdict ? 'pointer' : 'default',
         transition: 'transform 0.15s ease',
         fontSize: 12,
       }}
       onClick={() => {
-        if (isContested && data.onOpenVerdict) {
+        if (data.onOpenVerdict) {
           data.onOpenVerdict(data.claimId);
         }
       }}
@@ -70,6 +75,11 @@ function ClaimNodeInner({ data }: NodeProps<ClaimNodeData>) {
         <span style={{ fontSize: 10, color: 'var(--muted)', textTransform: 'uppercase' }}>
           {data.claimType}
         </span>
+        {supportCount > 0 && (
+          <span style={{ marginLeft: 'auto', fontSize: 10, color: style.border, fontWeight: 'bold' }}>
+            +{supportCount}
+          </span>
+        )}
       </div>
 
       <div style={{ lineHeight: 1.4, maxHeight: 60, overflow: 'hidden', textOverflow: 'ellipsis' }}>

@@ -105,9 +105,11 @@ export function ClaimGraphExplorer({ data, onVerdictChange }: ClaimGraphExplorer
     return { nodes: graphNodes, edges: graphEdges };
   }, [data, handleOpenVerdict]);
 
-  // Find the contested claim for the active popover
-  const activeContestedClaim = activePopover
-    ? data.contested.find((c) => c.id === activePopover)
+  // Find the claim for the active popover
+  const activeClaim = activePopover
+    ? data.contested.find((c) => c.id === activePopover) ||
+    data.consensus.find((c) => c.id === activePopover) ||
+    data.unique.find((c) => c.id === activePopover)
     : null;
 
   return (
@@ -152,12 +154,12 @@ export function ClaimGraphExplorer({ data, onVerdictChange }: ClaimGraphExplorer
       </ReactFlowProvider>
 
       {/* Verdict popover */}
-      {activeContestedClaim && (
+      {activeClaim && (
         <VerdictPopover
-          claimId={activeContestedClaim.id}
-          claimText={activeContestedClaim.text}
-          positions={activeContestedClaim.positions as ClaimPosition[]}
-          currentVerdict={data.userVerdicts?.[activeContestedClaim.id] ?? null}
+          claimId={activeClaim.id}
+          claimText={activeClaim.text}
+          positions={(activeClaim as any).positions as ClaimPosition[] || []}
+          currentVerdict={data.userVerdicts?.[activeClaim.id] ?? null}
           onVerdict={(claimId, verdict) => {
             onVerdictChange(claimId, verdict);
             setActivePopover(null);

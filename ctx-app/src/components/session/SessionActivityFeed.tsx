@@ -4,9 +4,10 @@ import { useAppStore } from '../../store/useAppStore';
 interface SessionActivityFeedProps {
   limit?: number;
   showFilters?: boolean;
+  standalone?: boolean;
 }
 
-export function SessionActivityFeed({ limit = 50, showFilters = true }: SessionActivityFeedProps) {
+export function SessionActivityFeed({ limit = 50, showFilters = true, standalone = true }: SessionActivityFeedProps) {
   const state = useAppStore((s) => s.state);
   const [stageFilter, setStageFilter] = useState('all');
   const [actionFilter, setActionFilter] = useState('all');
@@ -50,9 +51,11 @@ export function SessionActivityFeed({ limit = 50, showFilters = true }: SessionA
 
   const hasActiveFilters = stageFilter !== 'all' || actionFilter !== 'all' || search.trim() !== '';
 
+  const ComponentName = standalone ? 'section' : 'div';
+
   return (
-    <section className="panel">
-      <h3>Активность сессии</h3>
+    <ComponentName className={standalone ? "panel" : ""}>
+      {standalone && <h3>Активность сессии</h3>}
       {showFilters ? (
         <div className="log-toolbar">
           <select value={stageFilter} onChange={(event) => setStageFilter(event.target.value)}>
@@ -95,6 +98,6 @@ export function SessionActivityFeed({ limit = 50, showFilters = true }: SessionA
           </li>
         ))}
       </ul>
-    </section>
+    </ComponentName>
   );
 }

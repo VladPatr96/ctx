@@ -395,9 +395,9 @@ export const refreshAllData = () => {
   state.log = buildLog();
 
   // Results, progress, skills
-  state.results   = readResultsJson();
-  state.progress  = buildProgress();
-  state.skills    = readSkillsList();
+  state.results = readResultsJson();
+  state.progress = buildProgress();
+  state.skills = readSkillsList();
   state.storageHealth = typeof actions.getStorageHealth === 'function'
     ? actions.getStorageHealth()
     : null;
@@ -405,7 +405,7 @@ export const refreshAllData = () => {
 
   // Brainstorm + Plan from pipeline.json
   state.brainstorm = pipeData ? (pipeData.brainstorm || null) : null;
-  state.plan       = pipeData ? (pipeData.plan || null)       : null;
+  state.plan = pipeData ? (pipeData.plan || null) : null;
 
   broadcast('full', getStateSnapshot());
 };
@@ -659,6 +659,12 @@ export const createRouter = (buildHtmlFn, token, options = {}) => async (req, re
   if (req.method === 'GET' && staticDir && !isInternalPath) {
     const filePath = safeResolveStaticFile(staticDir, url.pathname);
     if (filePath && existsSync(filePath)) {
+      if (filePath.endsWith('index.html')) {
+        const expectedToken = getExpectedToken(token);
+        let html = readFileSync(filePath, 'utf8');
+        html = html.replace('</head>', `<script>window.__CTX_TOKEN__="${expectedToken}";</script>\n</head>`);
+        return serve(200, 'text/html; charset=utf-8', html);
+      }
       const asBuffer = !filePath.endsWith('.html');
       const data = asBuffer ? readFileSync(filePath) : readFileSync(filePath, 'utf8');
       return serve(200, contentTypeForPath(filePath), data);

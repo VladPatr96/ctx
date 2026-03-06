@@ -4,9 +4,10 @@ import { useAppStore } from '../../store/useAppStore';
 interface LogStreamProps {
   stageFilter?: string;
   onClearStageFilter?: () => void;
+  standalone?: boolean;
 }
 
-export function LogStream({ stageFilter, onClearStageFilter }: LogStreamProps) {
+export function LogStream({ stageFilter, onClearStageFilter, standalone = true }: LogStreamProps) {
   const state = useAppStore((s) => s.state);
   const [actionFilter, setActionFilter] = useState('all');
   const [search, setSearch] = useState('');
@@ -32,9 +33,11 @@ export function LogStream({ stageFilter, onClearStageFilter }: LogStreamProps) {
     });
   }, [entries, actionFilter, search, stageFilter]);
 
+  const ComponentName = standalone ? 'section' : 'div';
+
   return (
-    <section className="panel">
-      <h3>Журнал событий</h3>
+    <ComponentName className={standalone ? "panel" : ""}>
+      {standalone && <h3>Журнал событий</h3>}
       <div className="log-toolbar">
         <select value={actionFilter} onChange={(event) => setActionFilter(event.target.value)}>
           <option value="all">Все действия</option>
@@ -66,6 +69,6 @@ export function LogStream({ stageFilter, onClearStageFilter }: LogStreamProps) {
           </li>
         ))}
       </ul>
-    </section>
+    </ComponentName>
   );
 }

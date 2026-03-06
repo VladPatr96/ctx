@@ -6,9 +6,10 @@ import { KBDetail } from './KBDetail';
 interface KBSearchProps {
   client: ApiClient;
   stats: KBStats;
+  onEdit?: (entry: KBEntry) => void;
 }
 
-export function KBSearch({ client, stats }: KBSearchProps) {
+export function KBSearch({ client, stats, onEdit }: KBSearchProps) {
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -115,7 +116,7 @@ export function KBSearch({ client, stats }: KBSearchProps) {
           </article>
         ))}
       </div>
-      <KBDetail entry={selectedEntry} onClose={() => setSelectedEntry(null)} />
+      <KBDetail entry={selectedEntry} onClose={() => setSelectedEntry(null)} onEdit={onEdit} />
     </section>
   );
 }

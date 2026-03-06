@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line, CartesianGrid } from 'recharts';
 import type { ApiClient } from '../api/client';
 import type { RoutingHealthData, RoutingDecision, RoutingAnomaly } from '../api/types';
+import { RoutingRuleBuilder } from '../components/routing/RoutingRuleBuilder';
 
 interface RoutingPageProps {
   client: ApiClient;
@@ -136,6 +137,7 @@ export function RoutingPage({ client }: RoutingPageProps) {
   const [data, setData] = useState<RoutingHealthData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'analytics' | 'rules'>('rules');
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -156,25 +158,50 @@ export function RoutingPage({ client }: RoutingPageProps) {
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <h2 style={{ margin: 0 }}>Адаптивный роутинг</h2>
-        <button type="button" className="nav-btn" onClick={fetchData} disabled={loading}>
-          {loading ? 'Загрузка...' : 'Обновить'}
+        {activeTab === 'analytics' && (
+          <button type="button" className="nav-btn" onClick={fetchData} disabled={loading}>
+            {loading ? 'Загрузка...' : 'Обновить'}
+          </button>
+        )}
+      </div>
+
+      <div style={{ display: 'flex', gap: '16px', borderBottom: '1px solid var(--border)', marginBottom: '24px' }}>
+        <button
+          type="button"
+          style={{ background: 'transparent', borderBottom: activeTab === 'rules' ? '2px solid var(--primary)' : '2px solid transparent', padding: '8px 4px', borderRadius: 0, color: activeTab === 'rules' ? 'var(--text)' : 'var(--muted)' }}
+          onClick={() => setActiveTab('rules')}
+        >
+          Движок правил
+        </button>
+        <button
+          type="button"
+          style={{ background: 'transparent', borderBottom: activeTab === 'analytics' ? '2px solid var(--primary)' : '2px solid transparent', padding: '8px 4px', borderRadius: 0, color: activeTab === 'analytics' ? 'var(--text)' : 'var(--muted)' }}
+          onClick={() => setActiveTab('analytics')}
+        >
+          Аналитика
         </button>
       </div>
 
       {error ? <div className="error-banner">{error}</div> : null}
 
-      {data ? (
-        <>
-          <AnomalyAlerts anomalies={data.anomalies} />
-          <ProviderDistribution distribution={data.distribution} total={data.total_decisions} />
-          <ScoreTimeline decisions={data.recent_decisions} />
-          <ScoreStats stats={data.stats} total={data.total_decisions} />
-          <h3>Последние решения</h3>
-          <RecentDecisions decisions={data.recent_decisions} />
-        </>
-      ) : !loading && !error ? (
-        <p style={{ opacity: 0.6 }}>Данных нет. Включите CTX_ADAPTIVE_ROUTING=1 для сбора решений по роутингу.</p>
-      ) : null}
+      {activeTab === 'rules' && (
+        <RoutingRuleBuilder />
+      )}
+
+      {activeTab === 'analytics' && (
+        data ? (
+          <>
+            <AnomalyAlerts anomalies={data.anomalies} />
+            <ProviderDistribution distribution={data.distribution} total={data.total_decisions} />
+            <ScoreTimeline decisions={data.recent_decisions} />
+            <ScoreStats stats={data.stats} total={data.total_decisions} />
+            <h3>Последние решения</h3>
+            <RecentDecisions decisions={data.recent_decisions} />
+          </>
+        ) : !loading && !error ? (
+          <p style={{ opacity: 0.6 }}>Данных нет. Включите CTX_ADAPTIVE_ROUTING=1 для сбора решений по роутингу.</p>
+        ) : null
+      )}
     </div>
   );
 }

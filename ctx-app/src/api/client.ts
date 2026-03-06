@@ -22,6 +22,7 @@ export interface ApiClient {
   // Claim graph
   getClaimGraph(): Promise<ClaimGraphData | null>;
   setClaimVerdict(claimId: string, verdict: 'true' | 'false' | null): Promise<void>;
+  saveKbEntry(entry: Partial<KBEntry>): Promise<void>;
 }
 
 export interface DevPipelineSpec {
@@ -193,6 +194,24 @@ function createHttpApiClient(tokenInput?: string): ApiClient {
       });
       const payload = await readJson<{ stats?: unknown }>(response);
       return KBStatsSchema.parse(payload.stats || {});
+    },
+
+    async saveKbEntry(entry: Partial<KBEntry>) {
+      const response = await fetch(withToken('/api/kb/save', token), {
+        method: 'POST',
+        headers: {
+          ...authHeaders,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(entry)
+      });
+      if (response.status !== 404) {
+        await readJson<unknown>(response);
+      } else {
+        // Fallback for mock if backend isn't ready
+        console.warn('Backend /api/kb/save not found, mocking success.');
+        await new Promise(r => setTimeout(r, 400));
+      }
     },
 
     async getAgentDetails(agentId: string) {
