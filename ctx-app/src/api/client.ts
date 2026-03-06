@@ -1,4 +1,4 @@
-import { KBEntrySchema, KBStatsSchema, StateSchema, type AppState, type KBEntry, type KBStats, type RoutingHealthData, type CostSummary } from './types';
+import { KBEntrySchema, KBStatsSchema, StateSchema, type AppState, type KBEntry, type KBStats, type RoutingHealthData, type CostSummary, type ProviderCostData, type Recommendation, type BudgetStatus } from './types';
 
 export interface ApiClient {
   getState(): Promise<AppState>;
@@ -11,6 +11,9 @@ export interface ApiClient {
   runTerminalCommand(command: string): Promise<TerminalCommandResult>;
   getRoutingHealth(last?: number, sinceDays?: number): Promise<RoutingHealthData>;
   getCostSummary(): Promise<CostSummary>;
+  getCostsByProvider(): Promise<Record<string, ProviderCostData>>;
+  getRecommendations(): Promise<Recommendation[]>;
+  getBudgetStatus(): Promise<BudgetStatus>;
 }
 
 export interface TerminalCommandResult {
@@ -155,7 +158,35 @@ function createHttpApiClient(tokenInput?: string): ApiClient {
       const response = await fetch(withToken('/api/cost/summary', token), {
         headers: authHeaders
       });
-      return readJson<CostSummary>(response);
+      const payload = await readJson<{ summary?: CostSummary }>(response);
+      return payload.summary || { totalCost: 0, totalRequests: 0, costPerRequest: 0, providers: {} };
+    },
+
+    async getCostsByProvider() {
+      const response = await fetch(withToken('/api/cost/by-provider', token), {
+        headers: authHeaders
+      });
+      const payload = await readJson<{ providers?: Record<string, ProviderCostData> }>(response);
+      return payload.providers || {};
+    },
+
+    async getRecommendations() {
+      const response = await fetch(withToken('/api/cost/recommendations', token), {
+        headers: authHeaders
+      });
+      const payload = await readJson<{ recommendations?: Recommendation[] }>(response);
+      return payload.recommendations || [];
+    },
+
+    async getBudgetStatus() {
+      const response = await fetch(withToken('/api/cost/budget', token), {
+        headers: authHeaders
+      });
+      const payload = await readJson<{ config?: BudgetStatus['config']; status?: BudgetStatus['status'] }>(response);
+      return {
+        config: payload.config || {},
+        status: payload.status || {}
+      };
     }
   };
 }

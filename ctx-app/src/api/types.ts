@@ -163,3 +163,40 @@ export interface ProviderCostData {
   requests: number;
   models?: Record<string, { cost: number; requests: number }>;
 }
+
+export interface Recommendation {
+  type: string;
+  priority: string;
+  title: string;
+  description: string;
+  potentialSavings?: number;
+  currentProvider?: string;
+  suggestedProvider?: string;
+}
+
+export interface BudgetStatus {
+  config: {
+    global?: number;
+    providers?: Record<string, number>;
+    sessions?: Record<string, number>;
+    projects?: Record<string, number>;
+    thresholds?: {
+      warning: number;
+      critical: number;
+    };
+  };
+  status: {
+    global?: {
+      status: string;
+      current: number;
+      budget: number;
+      percentage: number;
+    };
+    providers?: Record<string, {
+      status: string;
+      current: number;
+      budget: number;
+      percentage: number;
+    }>;
+  };
+}
