@@ -7,6 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0] - 2025-01-15
+
+### Added
+- Production-ready stable release with comprehensive testing
+- Enhanced performance optimizations for large-scale projects
+- Advanced caching mechanisms for knowledge base queries
+- Automated backup and recovery system for session data
+- Comprehensive API documentation with interactive examples
+- Enterprise-grade security hardening and audit logging
+- Multi-language support for international users
+- Plugin ecosystem foundation for community extensions
+
+### Changed
+- Stabilized all public APIs with versioning guarantees
+- Improved error messages with actionable troubleshooting steps
+- Enhanced provider selection algorithm with machine learning insights
+- Optimized memory usage and startup performance
+- Refined UI/UX based on community feedback
+- Upgraded dependencies to latest stable versions
+- Streamlined onboarding flow for faster setup
+
+### Fixed
+- Critical performance bottlenecks in large repository indexing
+- Race conditions in concurrent provider operations
+- Memory leaks in long-running sessions
+- Edge cases in multi-round consilium consensus
+- Session restore issues after system crashes
+- Unicode handling in cross-platform file operations
+- Cost calculation accuracy for complex multi-provider workflows
+
+### Security
+- Implemented secure credential storage with encryption
+- Added rate limiting to prevent API abuse
+- Enhanced input validation across all endpoints
+- Improved token refresh mechanisms
+- Added security headers to web dashboard
+
 ## [0.1.0] - 2024-12-15
 
 ### Added
@@ -104,5 +141,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Web-first unified plan documentation
 - Command and skill usage documentation
 
-[Unreleased]: https://github.com/ctx-plugin/ctx/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/ctx-plugin/ctx/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/ctx-plugin/ctx/releases/tag/v1.0.0
 [0.1.0]: https://github.com/ctx-plugin/ctx/releases/tag/v0.1.0
