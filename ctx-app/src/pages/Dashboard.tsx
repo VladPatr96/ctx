@@ -6,6 +6,7 @@ import { PipelineBar } from '../components/pipeline/PipelineBar';
 import { PipelineGraph } from '../components/pipeline/PipelineGraph';
 import { StageDetailPanel } from '../components/pipeline/StageDetailPanel';
 import { LogStream } from '../components/log/LogStream';
+import { CostDashboard } from '../components/cost/CostDashboard';
 
 const STAGES = ['detect', 'context', 'task', 'brainstorm', 'plan', 'execute', 'done'];
 
@@ -105,6 +106,8 @@ export function DashboardPage({ client, onRefresh }: DashboardPageProps) {
         </div>
         {error ? <p className="error-text">{error}</p> : null}
       </section>
+
+      <CostDashboard client={client} />
 
       <LogStream stageFilter={selectedStage || undefined} onClearStageFilter={() => setSelectedStage(null)} />
     </div>

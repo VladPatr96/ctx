@@ -145,3 +145,21 @@ export type ConsiliumResult = z.infer<typeof ConsiliumResultSchema>;
 export type ProviderHealthEntry = z.infer<typeof ProviderHealthEntrySchema>;
 export type RoutingDecision = z.infer<typeof RoutingDecisionSchema>;
 export type RoutingAnomaly = z.infer<typeof RoutingAnomalySchema>;
+
+export interface CostSummary {
+  totalCost: number;
+  totalRequests: number;
+  costPerRequest: number;
+  providers: Record<string, {
+    cost: number;
+    requests: number;
+    models?: Record<string, { cost: number; requests: number }>;
+  }>;
+}
+
+export interface ProviderCostData {
+  provider: string;
+  cost: number;
+  requests: number;
+  models?: Record<string, { cost: number; requests: number }>;
+}

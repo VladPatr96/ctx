@@ -1,4 +1,4 @@
-import { KBEntrySchema, KBStatsSchema, StateSchema, type AppState, type KBEntry, type KBStats, type RoutingHealthData } from './types';
+import { KBEntrySchema, KBStatsSchema, StateSchema, type AppState, type KBEntry, type KBStats, type RoutingHealthData, type CostSummary } from './types';
 
 export interface ApiClient {
   getState(): Promise<AppState>;
@@ -10,6 +10,7 @@ export interface ApiClient {
   getTerminalAllowlist(): Promise<string[]>;
   runTerminalCommand(command: string): Promise<TerminalCommandResult>;
   getRoutingHealth(last?: number, sinceDays?: number): Promise<RoutingHealthData>;
+  getCostSummary(): Promise<CostSummary>;
 }
 
 export interface TerminalCommandResult {
@@ -148,6 +149,13 @@ function createHttpApiClient(tokenInput?: string): ApiClient {
         headers: authHeaders
       });
       return readJson<RoutingHealthData>(response);
+    },
+
+    async getCostSummary() {
+      const response = await fetch(withToken('/api/cost/summary', token), {
+        headers: authHeaders
+      });
+      return readJson<CostSummary>(response);
     }
   };
 }
