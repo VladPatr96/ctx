@@ -1,5 +1,9 @@
 # ctx — Complex Task eXecution
 
+![Version](https://img.shields.io/badge/version-1.0.0-blue) ![Status](https://img.shields.io/badge/status-stable-green)
+
+> **🎉 Version 1.0.0 Released!** — The first stable release of ctx is here! Production-ready multi-provider context management with battle-tested session logging, knowledge base, consilium, and adaptive routing.
+
 **Complex Task eXecution (ctx)** is a multi-provider context management plugin for [Claude Code](https://claude.com/claude-code), [Gemini CLI](https://github.com/google-gemini/gemini-cli), [OpenCode](https://github.com/opencode-ai/opencode), and [Codex CLI](https://github.com/openai/codex).
 
 Session logging, cross-project knowledge base (SQLite FTS5), deep file indexing, adaptive routing, and multi-round anonymous consilium with CBDP (Claim-Based Deliberation Protocol).
