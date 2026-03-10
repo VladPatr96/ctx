@@ -114,7 +114,7 @@ codex exec --ephemeral --skip-git-repo-check "<промпт-шаблон>" 2>&1 
 1. Вызови `ctx_advisor_consilium(topic, advisors?, preset?, projectContext?)` MCP tool
 2. Инструмент сам запустит 4-6 субагентов параллельно и синтезирует результаты
 
-**Доступные советники (14):**
+**Доступные советники (18):**
 
 | ID | Персона | Линза |
 |----|---------|-------|
@@ -132,6 +132,10 @@ codex exec --ephemeral --skip-git-repo-check "<промпт-шаблон>" 2>&1 
 | cmo | CMO | Маркетинг, позиционирование |
 | contrarian | Contrarian | Devil's advocate, worst case |
 | user | End User | Реальный UX нетехнического юзера |
+| premortem | Pre-Mortem Analyst | Риски: Tigers / Paper Tigers / Elephants |
+| lean | Lean Canvas Strategist | Бизнес-гипотезы, problem-solution fit |
+| discovery | Discovery Lead (Torres) | Opportunity Solution Tree, outcome-first |
+| northstar | North Star Strategist | North Star Metric, input metrics |
 
 **Пресеты:**
 - `advisor-product` — Jobs, Victor, Norman, User
@@ -139,12 +143,18 @@ codex exec --ephemeral --skip-git-repo-check "<промпт-шаблон>" 2>&1 
 - `advisor-growth` — Isenberg, Collison, Тиньков, CMO
 - `advisor-full` — Jobs, Karpathy, Contrarian, CMO, User
 - `advisor-stress` — Contrarian, Тиньков, Carmack, User
+- `advisor-pm` — Pre-Mortem, Lean, Discovery, North Star
+- `advisor-risk` — Pre-Mortem + Contrarian
+- `advisor-launch` — Pre-Mortem, North Star, Lean, User
 
 **Примеры:**
 ```
 /ctx-consilium оценить UX нового дашборда --advisors jobs,victor,norman,user
 /ctx-consilium стоит ли переписывать на Rust --preset advisor-architecture
 /ctx-consilium идея SaaS для фрилансеров --preset advisor-full
+/ctx-consilium оценить риски запуска нового API --preset advisor-risk
+/ctx-consilium ревью PRD нового продукта --preset advisor-pm
+/ctx-consilium готовы ли мы к релизу v2.0 --preset advisor-launch
 ```
 
 **Когда использовать Advisors vs Providers:**

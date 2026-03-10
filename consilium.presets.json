@@ -92,5 +92,20 @@
     "mode": "review",
     "providers": ["claude", "codex"],
     "autoScope": true
+  },
+  "advisor-pm": {
+    "description": "Board of Advisors — PM-фреймворки (Pre-Mortem, Lean Canvas, Discovery, North Star)",
+    "mode": "advisor",
+    "advisors": ["premortem", "lean", "discovery", "northstar"]
+  },
+  "advisor-risk": {
+    "description": "Board of Advisors — фокус на рисках (Pre-Mortem + Contrarian)",
+    "mode": "advisor",
+    "advisors": ["premortem", "contrarian"]
+  },
+  "advisor-launch": {
+    "description": "Board of Advisors — готовность к запуску (Pre-Mortem, North Star, Lean, User)",
+    "mode": "advisor",
+    "advisors": ["premortem", "northstar", "lean", "user"]
   }
 }

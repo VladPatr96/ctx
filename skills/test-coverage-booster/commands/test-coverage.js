@@ -85,7 +85,7 @@ function runCoverage(framework, rootDir) {
         command = 'npx nyc --reporter=json mocha --reporter json > coverage/coverage.json';
         break;
       case 'node:test':
-        command = 'node --test --experimental-test-coverage 2>&1 | tee coverage/coverage.txt';
+        command = 'mkdir -p coverage && node --test --experimental-test-coverage tests/*.test.mjs 2>&1 | tee coverage/coverage.txt';
         break;
       default:
         command = 'npm test -- --coverage --json';
@@ -105,27 +105,84 @@ function runCoverage(framework, rootDir) {
 }
 
 /**
+ * Parse node:test text coverage output.
+ * Looks for the summary line: "all files | 50.72 | 68.90 | 55.28 |"
+ */
+function parseNodeTestCoverage(rootDir) {
+  const coverageTxt = join(rootDir, 'coverage', 'coverage.txt');
+  if (!existsSync(coverageTxt)) return null;
+
+  const content = readFileSync(coverageTxt, 'utf-8');
+  const lines = content.split('\n');
+
+  const result = {
+    total: {
+      lines: { total: 0, covered: 0, percentage: 0 },
+      functions: { total: 0, covered: 0, percentage: 0 },
+      branches: { total: 0, covered: 0, percentage: 0 },
+      statements: { total: 0, covered: 0, percentage: 0 }
+    },
+    files: []
+  };
+
+  for (const line of lines) {
+    // Match: "ℹ   filename.js  | 80.60 | 82.35 | 85.71 | uncovered-lines"
+    // or:    "ℹ all files      | 50.72 | 68.90 | 55.28 |"
+    const match = line.match(/ℹ\s+(.+?)\s*\|\s*([\d.]+)\s*\|\s*([\d.]+)\s*\|\s*([\d.]+)\s*\|/);
+    if (!match) continue;
+
+    const name = match[1].trim();
+    const linePct = parseFloat(match[2]);
+    const branchPct = parseFloat(match[3]);
+    const funcPct = parseFloat(match[4]);
+
+    if (name === 'all files') {
+      result.total.lines.percentage = Math.round(linePct);
+      result.total.branches.percentage = Math.round(branchPct);
+      result.total.functions.percentage = Math.round(funcPct);
+      result.total.statements.percentage = Math.round(linePct);
+    } else if (!name.startsWith('-')) {
+      result.files.push({
+        file: name,
+        lines: { percentage: Math.round(linePct), total: 0, covered: 0 },
+        functions: { percentage: Math.round(funcPct), total: 0, covered: 0 },
+        branches: { percentage: Math.round(branchPct), total: 0, covered: 0 }
+      });
+    }
+  }
+
+  // Return null if we didn't find the summary line
+  return result.total.lines.percentage > 0 || result.files.length > 0 ? result : null;
+}
+
+/**
  * Парсинг coverage report
  */
 function parseCoverageReport(rootDir, framework) {
+  // For node:test — parse text output first
+  if (framework === 'node:test') {
+    const nodeTestResult = parseNodeTestCoverage(rootDir);
+    if (nodeTestResult) return nodeTestResult;
+  }
+
   const coverageFile = join(rootDir, 'coverage', 'coverage-final.json');
-  
+
   if (!existsSync(coverageFile)) {
     // Try alternative locations
     const alternatives = [
       join(rootDir, 'coverage', 'coverage.json'),
       join(rootDir, 'coverage', 'lcov-report', 'coverage-final.json')
     ];
-    
+
     for (const alt of alternatives) {
       if (existsSync(alt)) {
         return parseCoverageFile(alt);
       }
     }
-    
+
     return null;
   }
-  
+
   return parseCoverageFile(coverageFile);
 }
 
