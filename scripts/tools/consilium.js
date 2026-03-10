@@ -10,6 +10,7 @@ import { readFileSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readdirSync } from 'node:fs';
+import { execSync } from 'node:child_process';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PLUGIN_ROOT = process.env.CLAUDE_PLUGIN_ROOT || join(__dirname, '..', '..');
@@ -466,6 +467,137 @@ export function registerConsiliumTools(server, { getResults, saveResults, DATA_D
     }
   );
 
+  // --- ctx_advisor_consilium (Board of Advisors) ---
+  server.registerTool(
+    'ctx_advisor_consilium',
+    {
+      description: 'Board of Advisors — совет из 4-6 экспертных персон (Steve Jobs, Karpathy, Carmack и др.). Каждый анализирует задачу через свою уникальную линзу изолированно, затем синтез. Используй для продуктовых, архитектурных и стратегических решений.',
+      inputSchema: z.object({
+        topic: z.string().describe('Задача/вопрос для совета'),
+        advisors: z.array(z.string()).optional().describe('Список советников (jobs, victor, karpathy, carmack, lutke, tufte, norman, isenberg, collison, tinkov, cto, cmo, contrarian, user)'),
+        preset: z.string().optional().describe('Пресет: product, architecture, growth, full-review, stress-test'),
+        projectContext: z.string().optional().describe('Контекст проекта'),
+        timeout: z.number().optional().describe('Таймаут на советника (мс, по умолчанию 60000)')
+      }).shape,
+    },
+    async ({ topic, advisors: advisorIds, preset, projectContext, timeout }) => {
+      try {
+        const { ADVISOR_CATALOG, ADVISOR_PRESETS, buildAdvisorPrompt, resolveAdvisors } = await import('../consilium/advisors.js');
+
+        const resolved = resolveAdvisors(advisorIds, preset);
+        const timeoutMs = timeout || DEFAULT_PROVIDER_TIMEOUT_MS;
+
+        // Build prompts for each advisor
+        const advisorPrompts = resolved.map(id => ({
+          id,
+          name: ADVISOR_CATALOG[id]?.name || id,
+          lens: ADVISOR_CATALOG[id]?.lens || '',
+          prompt: buildAdvisorPrompt(id, topic, projectContext)
+        }));
+
+        // Execute all advisors in parallel via Claude subagents
+        const startTime = Date.now();
+        const results = await Promise.allSettled(
+          advisorPrompts.map(async (adv) => {
+            const advStart = Date.now();
+            const result = await invoke('claude', adv.prompt, {
+              model: 'sonnet',
+              timeout: timeoutMs
+            });
+            return {
+              id: adv.id,
+              name: adv.name,
+              lens: adv.lens,
+              status: result.status || 'success',
+              response: result.response || result.text || '',
+              response_ms: Date.now() - advStart
+            };
+          })
+        );
+
+        const advisorResults = results.map((r, i) =>
+          r.status === 'fulfilled'
+            ? r.value
+            : {
+                id: advisorPrompts[i].id,
+                name: advisorPrompts[i].name,
+                lens: advisorPrompts[i].lens,
+                status: 'error',
+                response: r.reason?.message || 'Unknown error',
+                response_ms: 0
+              }
+        );
+
+        const totalMs = Date.now() - startTime;
+
+        // Build synthesis prompt
+        const advisorBlock = advisorResults
+          .filter(a => a.status !== 'error')
+          .map(a => `--- ${a.name} (${a.lens}) ---\n${a.response}`)
+          .join('\n\n');
+
+        const synthesisPrompt = `Ты главный синтезатор Board of Advisors.
+Задача: ${topic}
+
+Ответы советников:
+
+${advisorBlock}
+
+Проанализируй и синтезируй:
+1. **Консенсус** — в чём советники согласны?
+2. **Уникальные инсайты** — что увидел только один советник (и это ценно)?
+3. **Противоречия** — где советники расходятся и кто прав?
+4. **Слепые зоны** — что НЕ увидел никто?
+5. **Итоговая рекомендация** — синтез лучших идей
+6. **Top-3 action items** — конкретные следующие шаги
+
+Отвечай на русском. Будь конкретен.`;
+
+        // Run synthesis
+        let synthesis = null;
+        try {
+          const synthStart = Date.now();
+          const synthResult = await invoke('claude', synthesisPrompt, {
+            model: 'sonnet',
+            timeout: DEFAULT_SYNTHESIS_TIMEOUT_MS
+          });
+          synthesis = {
+            status: 'success',
+            response: synthResult.response || synthResult.text || '',
+            response_ms: Date.now() - synthStart
+          };
+        } catch (err) {
+          synthesis = { status: 'error', response: err.message, response_ms: 0 };
+        }
+
+        const output = {
+          topic,
+          mode: 'advisor',
+          preset: preset || null,
+          advisors_count: resolved.length,
+          total_duration_ms: totalMs,
+          advisors: advisorResults.map(a => ({
+            id: a.id,
+            name: a.name,
+            lens: a.lens,
+            status: a.status,
+            response: a.response?.slice(0, 3000),
+            response_ms: a.response_ms
+          })),
+          synthesis
+        };
+
+        return {
+          content: [{ type: 'text', text: JSON.stringify(output, null, 2) }]
+        };
+      } catch (err) {
+        return {
+          content: [{ type: 'text', text: `Error: ${err.message}` }]
+        };
+      }
+    }
+  );
+
   server.registerTool(
     'ctx_agent_consilium',
     {
@@ -503,6 +635,229 @@ export function registerConsiliumTools(server, { getResults, saveResults, DATA_D
           text: JSON.stringify({ topic, agents: prompts }, null, 2)
         }]
       };
+    }
+  );
+
+  // --- ctx_adversarial_review ---
+  server.registerTool(
+    'ctx_adversarial_review',
+    {
+      description: 'Adversarial code review: авто-определение scope по git diff, запуск ревьюеров (skeptic/architect/minimalist) с кросс-провайдерным режимом, финальный вердикт PASS/CONTESTED/REJECT.',
+      inputSchema: z.object({
+        target: z.string().optional().describe('Что ревьюить: "staged", "HEAD", "HEAD~N..HEAD", ветка, или путь к файлам. По умолчанию: staged changes, если нет — HEAD'),
+        preset: z.string().optional().describe('Пресет: review-adversarial (full), review-quick (skeptic only), review-cross (кросс-провайдеры)'),
+        agents: z.array(z.string()).optional().describe('Явный список ревьюеров (skeptic, architect, minimalist). Если не задан — авто-scope'),
+        crossProvider: z.boolean().optional().default(false).describe('Запустить ревьюеров на разных провайдерах (Claude vs Codex/Gemini)'),
+        timeout: z.number().optional().describe('Таймаут на ревьюера (мс, по умолчанию 60000)')
+      }).shape,
+    },
+    async ({ target, preset, agents: explicitAgents, crossProvider, timeout }) => {
+      try {
+        const timeoutMs = timeout || DEFAULT_PROVIDER_TIMEOUT_MS;
+
+        // --- Step 1: Get diff ---
+        let diff = '';
+        let diffTarget = target || 'auto';
+        try {
+          if (diffTarget === 'auto' || diffTarget === 'staged') {
+            diff = execSync('git diff --cached', { encoding: 'utf-8', timeout: 10000 }).trim();
+            if (!diff) {
+              diff = execSync('git diff HEAD~1..HEAD', { encoding: 'utf-8', timeout: 10000 }).trim();
+              diffTarget = 'HEAD~1..HEAD';
+            } else {
+              diffTarget = 'staged';
+            }
+          } else if (diffTarget === 'HEAD') {
+            diff = execSync('git diff HEAD~1..HEAD', { encoding: 'utf-8', timeout: 10000 }).trim();
+          } else {
+            diff = execSync(`git diff ${diffTarget}`, { encoding: 'utf-8', timeout: 10000 }).trim();
+          }
+        } catch (err) {
+          diff = '';
+        }
+
+        if (!diff) {
+          return {
+            content: [{ type: 'text', text: JSON.stringify({ error: 'No diff found. Stage changes or specify target.' }, null, 2) }]
+          };
+        }
+
+        // --- Step 2: Auto-scope ---
+        const addedLines = diff.split('\n').filter(l => l.startsWith('+') && !l.startsWith('+++')).length;
+        const removedLines = diff.split('\n').filter(l => l.startsWith('-') && !l.startsWith('---')).length;
+        const totalChangedLines = addedLines + removedLines;
+
+        let scope;
+        let reviewAgents;
+        if (explicitAgents && explicitAgents.length > 0) {
+          reviewAgents = explicitAgents;
+          scope = 'explicit';
+        } else if (preset) {
+          // Load from preset
+          let presetConfig = null;
+          if (existsSync(PRESETS_FILE)) {
+            const presets = JSON.parse(readFileSync(PRESETS_FILE, 'utf-8'));
+            presetConfig = presets[preset];
+          }
+          if (presetConfig?.agents) {
+            reviewAgents = presetConfig.agents;
+          } else {
+            reviewAgents = ['skeptic', 'architect', 'minimalist'];
+          }
+          scope = preset;
+        } else {
+          // Auto-scope by diff size
+          if (totalChangedLines < 50) {
+            reviewAgents = ['skeptic'];
+            scope = 'small';
+          } else if (totalChangedLines <= 200) {
+            reviewAgents = ['skeptic', 'architect'];
+            scope = 'medium';
+          } else {
+            reviewAgents = ['skeptic', 'architect', 'minimalist'];
+            scope = 'large';
+          }
+        }
+
+        // Truncate diff for prompt (max 8000 chars to fit in context)
+        const maxDiffLen = 8000;
+        const truncatedDiff = diff.length > maxDiffLen
+          ? diff.slice(0, maxDiffLen) + `\n\n... [truncated, ${diff.length - maxDiffLen} chars omitted]`
+          : diff;
+
+        // --- Step 3: Build review prompts ---
+        const reviewPrompts = [];
+        for (const agentName of reviewAgents) {
+          const agentFile = join(AGENTS_DIR, `${agentName}.md`);
+          let agentInstructions = '';
+          if (existsSync(agentFile)) {
+            agentInstructions = readFileSync(agentFile, 'utf-8');
+          }
+
+          const prompt = `${agentInstructions}
+
+---
+REVIEW TARGET: ${diffTarget}
+CHANGED LINES: +${addedLines} / -${removedLines} (total: ${totalChangedLines})
+
+DIFF:
+\`\`\`diff
+${truncatedDiff}
+\`\`\`
+
+Review this diff STRICTLY from your role's perspective.
+End with a verdict: PASS, CONCERNS, or REJECT with one-sentence reason.
+Respond in Russian. Be specific — cite file:line where possible.`;
+
+          reviewPrompts.push({ agent: agentName, prompt });
+        }
+
+        // --- Step 4: Execute reviews ---
+        const startTime = Date.now();
+
+        // Assign providers for cross-provider mode
+        const crossProviders = crossProvider
+          ? ['claude', 'codex', 'gemini'].slice(0, reviewAgents.length)
+          : reviewAgents.map(() => 'claude');
+
+        const reviewResults = await Promise.allSettled(
+          reviewPrompts.map(async (rp, idx) => {
+            const provider = crossProviders[idx] || 'claude';
+            const rpStart = Date.now();
+            const result = await invoke(provider, rp.prompt, {
+              model: provider === 'claude' ? 'sonnet' : undefined,
+              timeout: timeoutMs
+            });
+            return {
+              agent: rp.agent,
+              provider,
+              status: 'success',
+              response: result.response || result.text || '',
+              response_ms: Date.now() - rpStart
+            };
+          })
+        );
+
+        const results = reviewResults.map((r, i) =>
+          r.status === 'fulfilled'
+            ? r.value
+            : {
+                agent: reviewPrompts[i].agent,
+                provider: crossProviders[i],
+                status: 'error',
+                response: r.reason?.message || 'Unknown error',
+                response_ms: 0
+              }
+        );
+
+        // --- Step 5: Synthesize verdict ---
+        const successResults = results.filter(r => r.status === 'success');
+        let verdict = 'PASS';
+        let verdictReason = '';
+
+        if (successResults.length === 0) {
+          verdict = 'ERROR';
+          verdictReason = 'All reviewers failed';
+        } else {
+          // Parse individual verdicts from responses
+          const individualVerdicts = successResults.map(r => {
+            const response = r.response.toUpperCase();
+            // Search for verdict pattern at the end
+            if (response.includes('REJECT')) return { agent: r.agent, verdict: 'REJECT' };
+            if (response.includes('CONCERNS')) return { agent: r.agent, verdict: 'CONCERNS' };
+            return { agent: r.agent, verdict: 'PASS' };
+          });
+
+          const rejects = individualVerdicts.filter(v => v.verdict === 'REJECT');
+          const concerns = individualVerdicts.filter(v => v.verdict === 'CONCERNS');
+
+          if (rejects.length > 0 && rejects.length >= Math.ceil(successResults.length / 2)) {
+            verdict = 'REJECT';
+            verdictReason = `Consensus reject from: ${rejects.map(r => r.agent).join(', ')}`;
+          } else if (rejects.length > 0) {
+            verdict = 'CONTESTED';
+            verdictReason = `Reject by ${rejects.map(r => r.agent).join(', ')}, others disagree`;
+          } else if (concerns.length > 0) {
+            verdict = 'PASS_WITH_CONCERNS';
+            verdictReason = `Concerns from: ${concerns.map(r => r.agent).join(', ')}`;
+          } else {
+            verdict = 'PASS';
+            verdictReason = 'All reviewers approve';
+          }
+        }
+
+        const totalMs = Date.now() - startTime;
+
+        const output = {
+          verdict,
+          verdict_reason: verdictReason,
+          scope,
+          target: diffTarget,
+          stats: {
+            added_lines: addedLines,
+            removed_lines: removedLines,
+            total_changed: totalChangedLines,
+            reviewers_count: reviewAgents.length,
+            cross_provider: crossProvider || false
+          },
+          duration_ms: totalMs,
+          reviews: results.map(r => ({
+            agent: r.agent,
+            provider: r.provider,
+            status: r.status,
+            response: r.response?.slice(0, 5000),
+            response_ms: r.response_ms
+          }))
+        };
+
+        return {
+          content: [{ type: 'text', text: JSON.stringify(output, null, 2) }]
+        };
+      } catch (err) {
+        return {
+          content: [{ type: 'text', text: `Error: ${err.message}` }]
+        };
+      }
     }
   );
 }

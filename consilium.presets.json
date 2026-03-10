@@ -49,5 +49,48 @@
     "enableClaimExtraction": true,
     "enableStructuredResponse": true,
     "enableSmartSynthesis": true
+  },
+  "advisor-product": {
+    "description": "Board of Advisors — продуктовый совет (Jobs, Victor, Norman, User)",
+    "mode": "advisor",
+    "advisors": ["jobs", "victor", "norman", "user"]
+  },
+  "advisor-architecture": {
+    "description": "Board of Advisors — архитектурный совет (Karpathy, Carmack, Lütke, CTO)",
+    "mode": "advisor",
+    "advisors": ["karpathy", "carmack", "lutke", "cto"]
+  },
+  "advisor-growth": {
+    "description": "Board of Advisors — growth & бизнес (Isenberg, Collison, Тиньков, CMO)",
+    "mode": "advisor",
+    "advisors": ["isenberg", "collison", "tinkov", "cmo"]
+  },
+  "advisor-full": {
+    "description": "Board of Advisors — полный review (Jobs, Karpathy, Contrarian, CMO, User)",
+    "mode": "advisor",
+    "advisors": ["jobs", "karpathy", "contrarian", "cmo", "user"]
+  },
+  "advisor-stress": {
+    "description": "Board of Advisors — стресс-тест (Contrarian, Тиньков, Carmack, User)",
+    "mode": "advisor",
+    "advisors": ["contrarian", "tinkov", "carmack", "user"]
+  },
+  "review-adversarial": {
+    "description": "Adversarial code review — skeptic + architect + minimalist (авто-scope по размеру diff)",
+    "mode": "review",
+    "agents": ["skeptic", "architect", "minimalist"],
+    "autoScope": true
+  },
+  "review-quick": {
+    "description": "Быстрый adversarial review — только skeptic",
+    "mode": "review",
+    "agents": ["skeptic"],
+    "autoScope": false
+  },
+  "review-cross": {
+    "description": "Кросс-провайдерный adversarial review — Claude vs Codex",
+    "mode": "review",
+    "providers": ["claude", "codex"],
+    "autoScope": true
   }
 }

@@ -26,7 +26,8 @@ description: >
 ### Флаги
 - `--providers p1,p2` — выбрать конкретных провайдеров
 - `--agents a1,a2` — внутренний агентный консилиум
-- `--preset <name>` — пресет из `consilium.presets.json` (full, fast, code-only, agents-core, agents-full, debate-full, debate-fast)
+- `--advisors a1,a2` — Board of Advisors (персоны экспертов)
+- `--preset <name>` — пресет из `consilium.presets.json`
 - `--rounds N` — многораундовый режим (N = 1..4, по умолчанию 1 = однораундовый)
 - (без флагов) → интерактивный выбор через AskUserQuestion
 
@@ -106,6 +107,87 @@ codex exec --ephemeral --skip-git-repo-check "<промпт-шаблон>" 2>&1 
    - **tester** → тестируемость, покрытие
    - **implementer** → сложность, практичность
 
+### Режим: Board of Advisors (--advisors)
+
+Вместо разных провайдеров — параллельные субагенты с персонами экспертов. Каждый анализирует задачу через уникальную "линзу".
+
+1. Вызови `ctx_advisor_consilium(topic, advisors?, preset?, projectContext?)` MCP tool
+2. Инструмент сам запустит 4-6 субагентов параллельно и синтезирует результаты
+
+**Доступные советники (14):**
+
+| ID | Персона | Линза |
+|----|---------|-------|
+| jobs | Steve Jobs | Минимализм, фокус, UX |
+| victor | Bret Victor | Immediacy, обратная связь |
+| tufte | Edward Tufte | Визуализация данных |
+| norman | Don Norman | Юзабилити, ментальные модели |
+| karpathy | Andrej Karpathy | Простота, прагматизм |
+| carmack | John Carmack | Производительность, тех. долг |
+| lutke | Tobi Lütke | Developer experience, масштаб |
+| isenberg | Greg Isenberg | Community, виральность |
+| collison | Patrick Collison | API-first, платформа |
+| tinkov | Олег Тиньков | Unit-экономика, скорость |
+| cto | CTO | Архитектура, стек, риски |
+| cmo | CMO | Маркетинг, позиционирование |
+| contrarian | Contrarian | Devil's advocate, worst case |
+| user | End User | Реальный UX нетехнического юзера |
+
+**Пресеты:**
+- `advisor-product` — Jobs, Victor, Norman, User
+- `advisor-architecture` — Karpathy, Carmack, Lütke, CTO
+- `advisor-growth` — Isenberg, Collison, Тиньков, CMO
+- `advisor-full` — Jobs, Karpathy, Contrarian, CMO, User
+- `advisor-stress` — Contrarian, Тиньков, Carmack, User
+
+**Примеры:**
+```
+/ctx-consilium оценить UX нового дашборда --advisors jobs,victor,norman,user
+/ctx-consilium стоит ли переписывать на Rust --preset advisor-architecture
+/ctx-consilium идея SaaS для фрилансеров --preset advisor-full
+```
+
+**Когда использовать Advisors vs Providers:**
+- **Providers** (Claude/Gemini/Codex) → разные модели, технические вопросы, code review
+- **Advisors** (персоны) → продуктовые развилки, стратегия, оценка идей
+
+### Режим: Adversarial Review (--preset review-*)
+
+Кросс-ролевой code review с авто-масштабированием по размеру изменений. Вдохновлён [poteto/noodle adversarial-review](https://skills.sh/poteto/noodle/adversarial-review).
+
+1. Вызови `ctx_adversarial_review({ target?, preset?, agents?, crossProvider? })`
+2. Инструмент автоматически:
+   - Получает diff из git (staged → HEAD → custom target)
+   - Определяет scope по размеру: <50 строк → skeptic, 50-200 → +architect, 200+ → +minimalist
+   - Запускает ревьюеров параллельно (опционально на разных провайдерах)
+   - Синтезирует вердикт: **PASS** / **PASS_WITH_CONCERNS** / **CONTESTED** / **REJECT**
+
+**Роли ревьюеров:**
+
+| Роль | Фокус | Когда включается |
+|------|-------|-----------------|
+| **Skeptic** | Баги, edge cases, security, сломанные допущения | Всегда (>=1 строки) |
+| **Architect** | Структура, API контракты, масштабируемость | Medium+ (>=50 строк) |
+| **Minimalist** | Лишний код, over-engineering, дублирование | Large (>=200 строк) |
+
+**Пресеты:**
+- `review-adversarial` — полный review (skeptic + architect + minimalist)
+- `review-quick` — быстрый (только skeptic)
+- `review-cross` — кросс-провайдерный (Claude vs Codex)
+
+**Примеры:**
+```
+/ctx-consilium ревью последнего коммита --preset review-adversarial
+/ctx-consilium ревью staged changes --preset review-cross
+/ctx-consilium ревью feature/auth..main --preset review-quick
+```
+
+**Вердикты:**
+- **PASS** — нет существенных проблем
+- **PASS_WITH_CONCERNS** — замечания есть, но не критичные
+- **CONTESTED** — ревьюеры не согласны (кто-то reject, кто-то pass)
+- **REJECT** — консенсус: есть критичные проблемы
+
 ### Интерактивный выбор (без флагов)
 
 Вызови AskUserQuestion:
@@ -114,7 +196,9 @@ codex exec --ephemeral --skip-git-repo-check "<промпт-шаблон>" 2>&1 
 [A] Все провайдеры — Claude + Gemini + Codex
 [B] Быстрый — Claude + Gemini
 [C] Агенты — architect + researcher + reviewer
-[D] Выбрать вручную
+[D] Board of Advisors — экспертные персоны (Jobs, Karpathy и др.)
+[E] Adversarial Review — skeptic + architect + minimalist (авто-scope по diff)
+[F] Выбрать вручную
 ```
 
 ### Многораундовый режим (--rounds N)
