@@ -9,16 +9,13 @@
  */
 
 import { readFileSync } from 'node:fs';
-import { join, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
 import { createCostStore } from './cost-store.js';
-import { getPricing, getProviderPricing } from './pricing.js';
+import { resolveDataDir } from '../storage/index.js';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const HEALTH_FILE = join(__dirname, '..', '..', '.data', 'provider-health.json');
-
-// Singleton cost store instance
-const costStore = createCostStore();
+function getHealthFile(options = {}) {
+  return join(resolveDataDir(options), 'provider-health.json');
+}
 
 // ---- Health & Quality Metrics ----
 
@@ -27,9 +24,9 @@ const costStore = createCostStore();
  *
  * @returns {Object} Health data by provider
  */
-function loadHealth() {
+function loadHealth(options = {}) {
   try {
-    return JSON.parse(readFileSync(HEALTH_FILE, 'utf-8'));
+    return JSON.parse(readFileSync(getHealthFile(options), 'utf-8'));
   } catch {
     return {};
   }
@@ -45,8 +42,8 @@ function loadHealth() {
  * @param {string} provider - Provider name
  * @returns {Object|null} Quality metrics { qualityScore, successRate, avgLatencyMs }
  */
-function calculateQualityScore(provider) {
-  const health = loadHealth();
+function calculateQualityScore(provider, options = {}) {
+  const health = loadHealth(options);
   const entry = health[provider];
 
   if (!entry || !entry.calls || entry.calls < 3) {
@@ -94,7 +91,7 @@ function calculateQualityScore(provider) {
  * @param {string} provider - Provider name
  * @returns {Object} Efficiency metrics
  */
-function calculateEfficiencyMetrics(providerData, provider) {
+function calculateEfficiencyMetrics(providerData, provider, options = {}) {
   if (!providerData || providerData.requests === 0) {
     return null;
   }
@@ -105,7 +102,7 @@ function calculateEfficiencyMetrics(providerData, provider) {
     : 0;
 
   // Include quality score
-  const quality = calculateQualityScore(provider);
+  const quality = calculateQualityScore(provider, options);
 
   return {
     provider,
@@ -206,7 +203,8 @@ function calculateMonthlySavings(currentProvider, suggestedProvider) {
  *
  * @returns {Array} Array of recommendation objects
  */
-export function getRecommendations() {
+export function getRecommendations(options = {}) {
+  const costStore = createCostStore(options);
   const costsByProvider = costStore.getCostsByProvider();
 
   // Need at least 2 providers with data to make comparisons
@@ -218,7 +216,7 @@ export function getRecommendations() {
   // Calculate efficiency metrics for each provider
   const metrics = [];
   for (const provider of providers) {
-    const metric = calculateEfficiencyMetrics(costsByProvider[provider], provider);
+    const metric = calculateEfficiencyMetrics(costsByProvider[provider], provider, options);
     if (metric && metric.requests >= 5) { // Need at least 5 requests for reliable data
       metrics.push(metric);
     }
@@ -360,8 +358,8 @@ function formatCurrency(value) {
  * @param {number} [days=30] - Number of days to project
  * @returns {Object} Cost projection
  */
-export function projectCosts(provider = null, days = 30) {
-  const costsByProvider = costStore.getCostsByProvider();
+export function projectCosts(provider = null, days = 30, options = {}) {
+  const costStore = createCostStore(options);
   const costData = costStore.readCostData();
 
   if (!costData.requests || costData.requests.length === 0) {
@@ -403,7 +401,8 @@ export function projectCosts(provider = null, days = 30) {
  *
  * @returns {Array} Array of provider comparison objects
  */
-export function getProviderComparison() {
+export function getProviderComparison(options = {}) {
+  const costStore = createCostStore(options);
   const costsByProvider = costStore.getCostsByProvider();
   const providers = Object.keys(costsByProvider);
 
@@ -414,7 +413,7 @@ export function getProviderComparison() {
   const comparisons = [];
 
   for (const provider of providers) {
-    const metric = calculateEfficiencyMetrics(costsByProvider[provider], provider);
+      const metric = calculateEfficiencyMetrics(costsByProvider[provider], provider, options);
     if (metric) {
       const comparison = {
         provider: metric.provider,

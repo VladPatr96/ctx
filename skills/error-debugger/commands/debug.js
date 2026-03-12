@@ -137,7 +137,7 @@ async function searchSimilarErrors(pattern, ctx) {
 /**
  * Generate fix suggestion
  */
-function generateFix(analysis, stackFrames, code) {
+function generateFix(analysis, stackFrames) {
   const topFrame = stackFrames[0];
   
   if (!topFrame) {

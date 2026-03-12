@@ -22,6 +22,12 @@ class MemoryStore {
     return this.pipeline ?? fallbackValue;
   }
 
+  readLog(limit = 50) {
+    this.readCalls += 1;
+    if (this.failRead) throw new Error('read failed');
+    return this.logs.slice(-limit);
+  }
+
   writePipeline(pipeline) {
     this.writeCalls += 1;
     if (this.failWrite) throw new Error('write failed');
@@ -210,4 +216,19 @@ test('policy override json_rollback forces backup route without touching sqlite'
   assert.equal(snapshot.counters.sqlite_primary_ok, 0);
   assert.equal(snapshot.counters.sqlite_primary_fail, 0);
   assert.equal(snapshot.counters.policy_forced_json_ops, 1);
+});
+
+test('failover store falls back to json backup when sqlite log read fails', () => {
+  const primary = new MemoryStore({ failRead: true });
+  const backup = new MemoryStore();
+  backup.appendLog({ action: 'backup-log', message: 'ok' });
+  const store = new FailoverStore({ primary, backup });
+
+  const logs = store.readLog(10);
+
+  assert.equal(logs.length, 1);
+  assert.equal(logs[0].action, 'backup-log');
+  const stats = store.getFailoverStats();
+  assert.equal(stats.sqlite_primary_fail, 1);
+  assert.equal(stats.rollback_to_json, 1);
 });

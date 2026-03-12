@@ -8,6 +8,10 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { createHash } from 'node:crypto';
+import { buildKnowledgeContinuityDigest } from './continuity.js';
+import { buildKnowledgeProjectExport, buildKnowledgeQualitySummary } from './quality.js';
+import { rankKnowledgeEntries } from './retrieval.js';
+import { buildKnowledgeSuggestionSummary } from './suggestions.js';
 
 function ensureDir(path) {
   if (!existsSync(path)) mkdirSync(path, { recursive: true });
@@ -80,23 +84,16 @@ export class JsonKnowledgeStore {
   }
 
   searchEntries(query, { limit = 10, project = null, category = null, dateFrom = null } = {}) {
-    const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
-    if (!terms.length) return [];
+    if (!String(query || '').trim()) return [];
 
-    let results = this.data.entries
-      .map(e => {
-        const text = `${e.title} ${e.body}`.toLowerCase();
-        const score = terms.reduce((s, t) => s + (text.includes(t) ? 1 : 0), 0);
-        return { ...e, score };
-      })
-      .filter(e => e.score > 0);
+    let results = this.data.entries.map((entry) => ({ ...entry }));
 
     if (project) results = results.filter(r => r.project === project);
     if (category) results = results.filter(r => r.category === category);
     if (dateFrom) results = results.filter(r => r.created_at >= dateFrom);
-
-    results.sort((a, b) => b.score - a.score);
-    results = results.slice(0, limit);
+    results = rankKnowledgeEntries(results, query, {
+      preferredProject: project,
+    }).slice(0, limit);
 
     for (const r of results) {
       const entry = this.data.entries.find(e => e.id === r.id);
@@ -104,7 +101,7 @@ export class JsonKnowledgeStore {
     }
     if (results.length) this._save();
 
-    return results.map(({ score, ...rest }) => rest);
+    return results;
   }
 
   getContextForProject(project, limit = 5) {
@@ -120,6 +117,70 @@ export class JsonKnowledgeStore {
 
     const snapshot = this.getSnapshot(project);
     return { entries, snapshot };
+  }
+
+  getContinuityDigest(project, limit = 5) {
+    const entries = this.data.entries
+      .filter(e => e.project === project)
+      .sort((a, b) => b.updated_at.localeCompare(a.updated_at))
+      .slice(0, Math.max(limit * 6, limit))
+      .map((entry) => ({ ...entry }));
+
+    for (const entry of entries) {
+      const original = this.data.entries.find((item) => item.id === entry.id);
+      if (original) original.access_count++;
+    }
+    if (entries.length) this._save();
+
+    return buildKnowledgeContinuityDigest({
+      project,
+      entries,
+      snapshot: this.getSnapshot(project),
+      limit,
+    });
+  }
+
+  getQualityInsights(staleAfterDays = 30) {
+    const snapshots = Object.entries(this.data.snapshots).map(([project, snapshot]) => ({
+      project,
+      created_at: snapshot?.created_at || null,
+      data: snapshot?.data || null,
+    }));
+    return buildKnowledgeQualitySummary({
+      entries: this.data.entries.map((entry) => ({ ...entry })),
+      snapshots,
+      staleAfterDays,
+    });
+  }
+
+  exportProjectArchive(project, { limit = 5, staleAfterDays = 30 } = {}) {
+    const entries = this.data.entries
+      .filter((entry) => entry.project === project)
+      .sort((left, right) => String(right.updated_at || right.created_at || '').localeCompare(String(left.updated_at || left.created_at || '')))
+      .slice(0, Math.max(limit * 8, limit))
+      .map((entry) => ({ ...entry }));
+
+    for (const entry of entries) {
+      const original = this.data.entries.find((item) => item.id === entry.id);
+      if (original) original.access_count++;
+    }
+    if (entries.length) this._save();
+
+    return buildKnowledgeProjectExport({
+      project,
+      entries,
+      continuity: this.getContinuityDigest(project, limit),
+      limit,
+      staleAfterDays,
+    });
+  }
+
+  getSuggestionTemplates(project, limit = 5) {
+    const exportArtifact = this.exportProjectArchive(project, { limit });
+    return buildKnowledgeSuggestionSummary({
+      project,
+      exportArtifact,
+    });
   }
 
   saveSnapshot(project, state) {

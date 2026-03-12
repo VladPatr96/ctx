@@ -5,11 +5,10 @@
  */
 
 import { z } from 'zod';
-import { existsSync } from 'node:fs';
-import { join } from 'node:path';
 import { explain, loadRoutingConfig, ROUTING_CONFIG_FILE } from '../providers/router.js';
-import { writeJsonAtomic, readJsonFile } from '../utils/state-io.js';
+import { writeJsonAtomic } from '../utils/state-io.js';
 import { createEvalStore } from '../evaluation/eval-store.js';
+import { normalizeRoutingConfig } from '../contracts/config-schemas.js';
 
 export function registerRoutingTools(server, { DATA_DIR }) {
   let evalStore = null;
@@ -21,21 +20,22 @@ export function registerRoutingTools(server, { DATA_DIR }) {
 
   const configFile = ROUTING_CONFIG_FILE;
 
-  // --- ctx_routing_config ---
   server.registerTool(
     'ctx_routing_config',
     {
-      description: 'Получить или установить конфигурацию адаптивного роутинга. Get: показывает readiness, текущий режим, threshold. Set: записывает enabled/threshold в конфиг.',
+      description: 'Get or set adaptive routing config, including readiness, mode, and threshold.',
       inputSchema: z.object({
-        action: z.enum(['get', 'set']).describe('Действие: get или set'),
-        enabled: z.boolean().optional().describe('Включить/выключить адаптивный роутинг (для set)'),
-        threshold: z.number().optional().describe('Минимальный порог score для адаптивного выбора (для set)')
+        action: z.enum(['get', 'set']).describe('Action: get or set'),
+        enabled: z.boolean().optional().describe('Enable or disable adaptive routing'),
+        threshold: z.number().optional().describe('Minimum score threshold for adaptive selection'),
       }).shape,
     },
     async ({ action, enabled, threshold }) => {
       if (action === 'get') {
-        const config = readJsonFile(configFile, {});
-        const readiness = evalStore ? evalStore.getReadiness() : { totalRuns: 0, isReady: false, alpha: 0, adaptiveEnabled: false };
+        const config = loadRoutingConfig();
+        const readiness = evalStore
+          ? evalStore.getReadiness()
+          : { totalRuns: 0, isReady: false, alpha: 0, adaptiveEnabled: false };
         const envForced = process.env.CTX_ADAPTIVE_ROUTING === '0';
 
         let mode = 'static';
@@ -52,18 +52,19 @@ export function registerRoutingTools(server, { DATA_DIR }) {
               config: {
                 enabled: config.enabled ?? null,
                 threshold: config.threshold ?? null,
-                overrides: config.overrides ?? {}
+                overrides: config.overrides ?? {},
               },
-              env_override: envForced ? 'CTX_ADAPTIVE_ROUTING=0 (forced off)' : null
-            }, null, 2)
-          }]
+              env_override: envForced ? 'CTX_ADAPTIVE_ROUTING=0 (forced off)' : null,
+            }, null, 2),
+          }],
         };
       }
 
-      // action === 'set'
-      const config = readJsonFile(configFile, {});
-      if (enabled !== undefined) config.enabled = enabled;
-      if (threshold !== undefined) config.threshold = threshold;
+      const config = normalizeRoutingConfig({
+        ...loadRoutingConfig(),
+        ...(enabled !== undefined ? { enabled } : {}),
+        ...(threshold !== undefined ? { threshold } : {}),
+      });
       writeJsonAtomic(configFile, config);
 
       const envNote = process.env.CTX_ADAPTIVE_ROUTING === '0'
@@ -73,19 +74,18 @@ export function registerRoutingTools(server, { DATA_DIR }) {
       return {
         content: [{
           type: 'text',
-          text: `Routing config updated: enabled=${config.enabled ?? 'auto'}, threshold=${config.threshold ?? 'default'}${envNote}`
-        }]
+          text: `Routing config updated: enabled=${config.enabled ?? 'auto'}, threshold=${config.threshold ?? 'default'}${envNote}`,
+        }],
       };
     }
   );
 
-  // --- ctx_routing_explain ---
   server.registerTool(
     'ctx_routing_explain',
     {
-      description: 'Объяснить выбор провайдера для задачи. Показывает task_type, всех кандидатов с декомпозицией score, readiness gate, итоговый выбор.',
+      description: 'Explain provider selection for a task, including candidates, scoring, and readiness.',
       inputSchema: z.object({
-        task: z.string().describe('Описание задачи для анализа роутинга')
+        task: z.string().describe('Task description to analyze'),
       }).shape,
     },
     async ({ task }) => {
@@ -93,34 +93,39 @@ export function registerRoutingTools(server, { DATA_DIR }) {
       return {
         content: [{
           type: 'text',
-          text: JSON.stringify(result, null, 2)
-        }]
+          text: JSON.stringify(result, null, 2),
+        }],
       };
     }
   );
 
-  // --- ctx_routing_override ---
   server.registerTool(
     'ctx_routing_override',
     {
-      description: 'Ручное переопределение провайдера для task_type на N следующих решений. Провайдер будет выбираться вместо адаптивного/статического роутинга.',
+      description: 'Manually override the provider for a task type for the next N routing decisions.',
       inputSchema: z.object({
-        task_type: z.string().describe('Тип задачи (code_review, codebase_analysis, documentation, etc.)'),
-        provider: z.string().describe('Провайдер для принудительного выбора (claude, gemini, codex, opencode)'),
-        count: z.number().optional().default(10).describe('Количество решений для override (по умолчанию 10)')
+        task_type: z.string().describe('Task type to override'),
+        provider: z.string().describe('Provider to force (claude, gemini, codex, opencode)'),
+        count: z.number().int().positive().optional().default(10)
+          .describe('Number of decisions to apply the override to'),
       }).shape,
     },
     async ({ task_type, provider, count }) => {
-      const config = readJsonFile(configFile, {});
-      if (!config.overrides) config.overrides = {};
-      config.overrides[task_type] = { provider, remaining: count ?? 10 };
+      const currentConfig = loadRoutingConfig();
+      const config = normalizeRoutingConfig({
+        ...currentConfig,
+        overrides: {
+          ...(currentConfig.overrides ?? {}),
+          [task_type]: { provider, remaining: count ?? 10 },
+        },
+      });
       writeJsonAtomic(configFile, config);
 
       return {
         content: [{
           type: 'text',
-          text: `Override set: ${task_type} → ${provider} for next ${count ?? 10} decisions`
-        }]
+          text: `Override set: ${task_type} -> ${provider} for next ${count ?? 10} decisions`,
+        }],
       };
     }
   );

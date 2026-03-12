@@ -1,0 +1,5 @@
+﻿blank_issues_enabled: true
+contact_links:
+  - name: Roadmap + Projects Memory Model
+    url: https://github.com/VladPatr96/my_claude_code/blob/master/.auto-claude/ctx_v1_1_projects_memory_roadmap.md
+    about: Архитектурный roadmap и operating model для GitHub Issues/Projects.

@@ -1,8 +1,31 @@
 {
   "name": "ctx-plugin",
   "version": "0.1.0",
-  "description": "Complex Task eXecution (ctx) — Multi-provider context management plugin for Claude Code",
+  "description": "Complex Task eXecution (ctx) — Multi-provider AI orchestration with consilium (CBDP), knowledge base, and adaptive routing",
   "type": "module",
+  "main": "scripts/ctx-mcp-hub.js",
+  "bin": {
+    "ctx": "scripts/ctx-cli.js"
+  },
+  "exports": {
+    ".": "./scripts/ctx-mcp-hub.js",
+    "./cli": "./scripts/ctx-cli.js",
+    "./consilium": "./scripts/consilium/round-orchestrator.js",
+    "./config": "./scripts/config/resolve-config.js"
+  },
+  "files": [
+    "scripts/",
+    "skills/",
+    "agents/",
+    "commands/",
+    "hooks/",
+    "consilium.presets.json",
+    "LICENSE",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "update:providers": "node scripts/ctx-update-providers.js",
     "setup:all": "node scripts/ctx-setup.js all",
@@ -11,6 +34,20 @@
     "test": "node --test --test-concurrency=1",
     "test:kb": "node --test --test-concurrency=1 --test-reporter=spec --test-reporter=./scripts/testing/kb-reporter.mjs --test-reporter-destination=stdout --test-reporter-destination=stderr",
     "test:mcp": "node scripts/ctx-mcp-hub.js"
+  },
+  "keywords": [
+    "ai",
+    "multi-provider",
+    "consilium",
+    "claude-code",
+    "mcp",
+    "orchestration",
+    "cbdp"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/VladPatr96/my_claude_code.git"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.6.1",

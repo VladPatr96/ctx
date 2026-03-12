@@ -283,7 +283,7 @@ codex exec --ephemeral --skip-git-repo-check "<промпт-шаблон>" 2>&1 
 1. Сохрани решение в GitHub:
 
 ```bash
-gh issue create -R VladPatr96/my_claude_code \
+gh issue create -R {{GITHUB_OWNER}}/{{CTX_CENTRAL_REPO}} \
   --title "Consilium: [краткое описание задачи]" \
   --label "consilium,project:$PROJECT_NAME" \
   --body "[тело решения из шага 4]"

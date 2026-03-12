@@ -222,7 +222,7 @@ async function demoSessionManagement(rl) {
 
   console.log('  Session saved to:');
   console.log(`  • Project issues: ${projectName}/issues`);
-  console.log('  • Central repo: VladPatr96/my_claude_code');
+  console.log('  • Central repo: configured via ctx.config.json');
   console.log('');
 
   console.log('  Useful commands:');
@@ -316,7 +316,7 @@ export async function runTutorial(options = {}) {
     console.log('📚 Documentation:');
     console.log('  • CTX_QUICKSTART.md — Quick reference guide');
     console.log('  • CTX_UNIVERSAL.md — Complete documentation');
-    console.log('  • GitHub: VladPatr96/ctx-knowledge');
+    console.log('  • GitHub: configured via ctx.config.json');
     console.log('');
 
     log('Happy coding with CTX! 🚀', '🎊');

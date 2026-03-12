@@ -1,0 +1,740 @@
+{
+  "generatedAt": "2026-03-12T12:26:57.622Z",
+  "project": "ctx-plugin",
+  "entries": [
+    {
+      "path": "AGENTS.md",
+      "sourceType": "root",
+      "status": "source_material",
+      "category": "agents",
+      "audience": "internal",
+      "targetSurface": "docs/reference/agent-runtime",
+      "notes": [
+        "Source material for host/runtime integration docs rather than end-user docs."
+      ]
+    },
+    {
+      "path": "CTX_ALL_SKILLS_AUTOMATION.md",
+      "sourceType": "root",
+      "status": "migrate",
+      "category": "skills",
+      "audience": "contributor",
+      "targetSurface": "docs/reference/skills",
+      "notes": [
+        "Root markdown surface should migrate into the canonical docs IA."
+      ]
+    },
+    {
+      "path": "CTX_AUTOMATION_COMPLETE.md",
+      "sourceType": "root",
+      "status": "migrate",
+      "category": "workflow",
+      "audience": "contributor",
+      "targetSurface": "docs/contributing/project-memory",
+      "notes": [
+        "Root markdown surface should migrate into the canonical docs IA."
+      ]
+    },
+    {
+      "path": "CTX_PROVIDER_TESTING.md",
+      "sourceType": "root",
+      "status": "migrate",
+      "category": "setup",
+      "audience": "contributor",
+      "targetSurface": "docs/setup/providers",
+      "notes": [
+        "Root markdown surface should migrate into the canonical docs IA."
+      ]
+    },
+    {
+      "path": "CTX_SKILLS_COMPLETE.md",
+      "sourceType": "root",
+      "status": "migrate",
+      "category": "skills",
+      "audience": "contributor",
+      "targetSurface": "docs/reference/skills",
+      "notes": [
+        "Root markdown surface should migrate into the canonical docs IA."
+      ]
+    },
+    {
+      "path": "CTX_SKILLS_ROADMAP.md",
+      "sourceType": "root",
+      "status": "migrate",
+      "category": "skills",
+      "audience": "contributor",
+      "targetSurface": "docs/reference/skills",
+      "notes": [
+        "Root markdown surface should migrate into the canonical docs IA."
+      ]
+    },
+    {
+      "path": "CTX_SKILLS_STATUS.md",
+      "sourceType": "root",
+      "status": "migrate",
+      "category": "skills",
+      "audience": "contributor",
+      "targetSurface": "docs/reference/skills",
+      "notes": [
+        "Root markdown surface should migrate into the canonical docs IA."
+      ]
+    },
+    {
+      "path": "CTX_SKILL_AUTO_DISCOVERY.md",
+      "sourceType": "root",
+      "status": "migrate",
+      "category": "skills",
+      "audience": "contributor",
+      "targetSurface": "docs/reference/skills",
+      "notes": [
+        "Root markdown surface should migrate into the canonical docs IA."
+      ]
+    },
+    {
+      "path": "CTX_UNIFIED_PLAN.md",
+      "sourceType": "root",
+      "status": "migrate",
+      "category": "planning",
+      "audience": "contributor",
+      "targetSurface": "docs/archive/planning-notes",
+      "notes": [
+        "Root markdown surface should migrate into the canonical docs IA."
+      ]
+    },
+    {
+      "path": "CTX_UNIVERSAL.md",
+      "sourceType": "root",
+      "status": "migrate",
+      "category": "setup",
+      "audience": "user",
+      "targetSurface": "docs/setup/providers",
+      "notes": [
+        "Root markdown surface should migrate into the canonical docs IA."
+      ]
+    },
+    {
+      "path": "E2E-VERIFICATION-RESULTS.md",
+      "sourceType": "root",
+      "status": "migrate",
+      "category": "testing",
+      "audience": "contributor",
+      "targetSurface": "docs/contributing/testing",
+      "notes": [
+        "Root markdown surface should migrate into the canonical docs IA."
+      ]
+    },
+    {
+      "path": "OPENCODE_AUTO_SETUP.md",
+      "sourceType": "root",
+      "status": "migrate",
+      "category": "setup",
+      "audience": "user",
+      "targetSurface": "docs/setup/providers",
+      "notes": [
+        "Root markdown surface should migrate into the canonical docs IA."
+      ]
+    },
+    {
+      "path": "OPENCODE_STATUS.md",
+      "sourceType": "root",
+      "status": "migrate",
+      "category": "setup",
+      "audience": "user",
+      "targetSurface": "docs/setup/providers",
+      "notes": [
+        "Root markdown surface should migrate into the canonical docs IA."
+      ]
+    },
+    {
+      "path": "README.md",
+      "sourceType": "root",
+      "status": "canonical",
+      "category": "overview",
+      "audience": "user",
+      "targetSurface": "docs/index",
+      "notes": [
+        "Product landing page and top-level installation surface."
+      ]
+    },
+    {
+      "path": "WORKFLOW.md",
+      "sourceType": "root",
+      "status": "migrate",
+      "category": "workflow",
+      "audience": "contributor",
+      "targetSurface": "docs/contributing/project-memory",
+      "notes": [
+        "Root workflow note should live under contributing/process docs."
+      ]
+    },
+    {
+      "path": "agents/_template.md",
+      "sourceType": "agents",
+      "status": "source_material",
+      "category": "agents",
+      "audience": "contributor",
+      "targetSurface": "docs/reference/agents",
+      "notes": [
+        "Agent role files are runtime/reference inputs, not primary product docs."
+      ]
+    },
+    {
+      "path": "agents/architect.md",
+      "sourceType": "agents",
+      "status": "source_material",
+      "category": "agents",
+      "audience": "contributor",
+      "targetSurface": "docs/reference/agents",
+      "notes": [
+        "Agent role files are runtime/reference inputs, not primary product docs."
+      ]
+    },
+    {
+      "path": "agents/documenter.md",
+      "sourceType": "agents",
+      "status": "source_material",
+      "category": "agents",
+      "audience": "contributor",
+      "targetSurface": "docs/reference/agents",
+      "notes": [
+        "Agent role files are runtime/reference inputs, not primary product docs."
+      ]
+    },
+    {
+      "path": "agents/implementer.md",
+      "sourceType": "agents",
+      "status": "source_material",
+      "category": "agents",
+      "audience": "contributor",
+      "targetSurface": "docs/reference/agents",
+      "notes": [
+        "Agent role files are runtime/reference inputs, not primary product docs."
+      ]
+    },
+    {
+      "path": "agents/minimalist.md",
+      "sourceType": "agents",
+      "status": "source_material",
+      "category": "agents",
+      "audience": "contributor",
+      "targetSurface": "docs/reference/agents",
+      "notes": [
+        "Agent role files are runtime/reference inputs, not primary product docs."
+      ]
+    },
+    {
+      "path": "agents/pipeline-controller.md",
+      "sourceType": "agents",
+      "status": "source_material",
+      "category": "agents",
+      "audience": "contributor",
+      "targetSurface": "docs/reference/agents",
+      "notes": [
+        "Agent role files are runtime/reference inputs, not primary product docs."
+      ]
+    },
+    {
+      "path": "agents/provider-delegate.md",
+      "sourceType": "agents",
+      "status": "source_material",
+      "category": "agents",
+      "audience": "contributor",
+      "targetSurface": "docs/reference/agents",
+      "notes": [
+        "Agent role files are runtime/reference inputs, not primary product docs."
+      ]
+    },
+    {
+      "path": "agents/researcher.md",
+      "sourceType": "agents",
+      "status": "source_material",
+      "category": "agents",
+      "audience": "contributor",
+      "targetSurface": "docs/reference/agents",
+      "notes": [
+        "Agent role files are runtime/reference inputs, not primary product docs."
+      ]
+    },
+    {
+      "path": "agents/reviewer.md",
+      "sourceType": "agents",
+      "status": "source_material",
+      "category": "agents",
+      "audience": "contributor",
+      "targetSurface": "docs/reference/agents",
+      "notes": [
+        "Agent role files are runtime/reference inputs, not primary product docs."
+      ]
+    },
+    {
+      "path": "agents/session-logger.md",
+      "sourceType": "agents",
+      "status": "source_material",
+      "category": "agents",
+      "audience": "contributor",
+      "targetSurface": "docs/reference/agents",
+      "notes": [
+        "Agent role files are runtime/reference inputs, not primary product docs."
+      ]
+    },
+    {
+      "path": "agents/skeptic.md",
+      "sourceType": "agents",
+      "status": "source_material",
+      "category": "agents",
+      "audience": "contributor",
+      "targetSurface": "docs/reference/agents",
+      "notes": [
+        "Agent role files are runtime/reference inputs, not primary product docs."
+      ]
+    },
+    {
+      "path": "agents/tester.md",
+      "sourceType": "agents",
+      "status": "source_material",
+      "category": "agents",
+      "audience": "contributor",
+      "targetSurface": "docs/reference/agents",
+      "notes": [
+        "Agent role files are runtime/reference inputs, not primary product docs."
+      ]
+    },
+    {
+      "path": "docs/ADR_PHASE0_SQLITE_FIRST.md",
+      "sourceType": "docs",
+      "status": "canonical",
+      "category": "architecture",
+      "audience": "contributor",
+      "targetSurface": "docs/architecture/adr",
+      "notes": [
+        "ADR is already in the canonical architecture docs bucket."
+      ]
+    },
+    {
+      "path": "docs/DOCS_INFORMATION_ARCHITECTURE.md",
+      "sourceType": "docs",
+      "status": "canonical",
+      "category": "workflow",
+      "audience": "contributor",
+      "targetSurface": "docs/contributing/project-memory",
+      "notes": []
+    },
+    {
+      "path": "docs/GITHUB_PROJECTS_MEMORY_WORKFLOW.md",
+      "sourceType": "docs",
+      "status": "canonical",
+      "category": "workflow",
+      "audience": "contributor",
+      "targetSurface": "docs/contributing/project-memory",
+      "notes": []
+    },
+    {
+      "path": "docs/TEST_MIGRATION_CLASSIFICATION.md",
+      "sourceType": "docs",
+      "status": "canonical",
+      "category": "testing",
+      "audience": "contributor",
+      "targetSurface": "docs/contributing/testing",
+      "notes": []
+    },
+    {
+      "path": "docs/reference/CLI_MCP_REFERENCE.md",
+      "sourceType": "docs",
+      "status": "canonical",
+      "category": "reference",
+      "audience": "user",
+      "targetSurface": "docs/reference/interfaces",
+      "notes": []
+    },
+    {
+      "path": "docs/reference/dashboard/DASHBOARD_DESKTOP_REFERENCE.md",
+      "sourceType": "docs",
+      "status": "canonical",
+      "category": "reference",
+      "audience": "operator",
+      "targetSurface": "docs/reference/dashboard",
+      "notes": []
+    },
+    {
+      "path": "docs/reference/project-memory/SESSION_DECISION_EXPORTS.md",
+      "sourceType": "docs",
+      "status": "canonical",
+      "category": "reference",
+      "audience": "operator",
+      "targetSurface": "docs/reference/project-memory",
+      "notes": []
+    },
+    {
+      "path": "docs/release/VERSIONING.md",
+      "sourceType": "docs",
+      "status": "canonical",
+      "category": "release",
+      "audience": "contributor",
+      "targetSurface": "docs/release/versioning",
+      "notes": []
+    },
+    {
+      "path": "docs/research/ORCHESTRATION_PROGRAMMABLE_PIPELINES_BOUNDARY.md",
+      "sourceType": "docs",
+      "status": "canonical",
+      "category": "research",
+      "audience": "contributor",
+      "targetSurface": "docs/research",
+      "notes": []
+    },
+    {
+      "path": "docs/research/TEAM_SHARED_KNOWLEDGE_BOUNDARY.md",
+      "sourceType": "docs",
+      "status": "canonical",
+      "category": "research",
+      "audience": "contributor",
+      "targetSurface": "docs/research",
+      "notes": []
+    },
+    {
+      "path": "docs/setup/providers/PROVIDER_MIGRATION_GUIDE.md",
+      "sourceType": "docs",
+      "status": "canonical",
+      "category": "setup",
+      "audience": "user",
+      "targetSurface": "docs/setup/providers",
+      "notes": []
+    },
+    {
+      "path": "skills/AUTO_EXECUTION_PLAN.md",
+      "sourceType": "skills",
+      "status": "source_material",
+      "category": "skills",
+      "audience": "contributor",
+      "targetSurface": "docs/reference/skills",
+      "notes": [
+        "Skill markdown remains source material for generated/reference docs."
+      ]
+    },
+    {
+      "path": "skills/api-designer/SKILL.md",
+      "sourceType": "skills",
+      "status": "source_material",
+      "category": "skills",
+      "audience": "contributor",
+      "targetSurface": "docs/reference/skills",
+      "notes": [
+        "Skill markdown remains source material for generated/reference docs."
+      ]
+    },
+    {
+      "path": "skills/ci-cd-pipeline/SKILL.md",
+      "sourceType": "skills",
+      "status": "source_material",
+      "category": "skills",
+      "audience": "contributor",
+      "targetSurface": "docs/reference/skills",
+      "notes": [
+        "Skill markdown remains source material for generated/reference docs."
+      ]
+    },
+    {
+      "path": "skills/consilium-optimizer/SKILL.md",
+      "sourceType": "skills",
+      "status": "source_material",
+      "category": "skills",
+      "audience": "contributor",
+      "targetSurface": "docs/reference/skills",
+      "notes": [
+        "Skill markdown remains source material for generated/reference docs."
+      ]
+    },
+    {
+      "path": "skills/ctx-consilium/SKILL.md",
+      "sourceType": "skills",
+      "status": "source_material",
+      "category": "skills",
+      "audience": "contributor",
+      "targetSurface": "docs/reference/skills",
+      "notes": [
+        "Skill markdown remains source material for generated/reference docs."
+      ]
+    },
+    {
+      "path": "skills/ctx-delegate/SKILL.md",
+      "sourceType": "skills",
+      "status": "source_material",
+      "category": "skills",
+      "audience": "contributor",
+      "targetSurface": "docs/reference/skills",
+      "notes": [
+        "Skill markdown remains source material for generated/reference docs."
+      ]
+    },
+    {
+      "path": "skills/ctx-gemini/SKILL.md",
+      "sourceType": "skills",
+      "status": "source_material",
+      "category": "skills",
+      "audience": "contributor",
+      "targetSurface": "docs/reference/skills",
+      "notes": [
+        "Skill markdown remains source material for generated/reference docs."
+      ]
+    },
+    {
+      "path": "skills/ctx-opencode/SKILL.md",
+      "sourceType": "skills",
+      "status": "source_material",
+      "category": "skills",
+      "audience": "contributor",
+      "targetSurface": "docs/reference/skills",
+      "notes": [
+        "Skill markdown remains source material for generated/reference docs."
+      ]
+    },
+    {
+      "path": "skills/ctx-premortem/SKILL.md",
+      "sourceType": "skills",
+      "status": "source_material",
+      "category": "skills",
+      "audience": "contributor",
+      "targetSurface": "docs/reference/skills",
+      "notes": [
+        "Skill markdown remains source material for generated/reference docs."
+      ]
+    },
+    {
+      "path": "skills/ctx-search/SKILL.md",
+      "sourceType": "skills",
+      "status": "source_material",
+      "category": "skills",
+      "audience": "contributor",
+      "targetSurface": "docs/reference/skills",
+      "notes": [
+        "Skill markdown remains source material for generated/reference docs."
+      ]
+    },
+    {
+      "path": "skills/ctx-universal-full/SKILL.md",
+      "sourceType": "skills",
+      "status": "source_material",
+      "category": "skills",
+      "audience": "contributor",
+      "targetSurface": "docs/reference/skills",
+      "notes": [
+        "Skill markdown remains source material for generated/reference docs."
+      ]
+    },
+    {
+      "path": "skills/ctx-universal/SKILL.md",
+      "sourceType": "skills",
+      "status": "source_material",
+      "category": "skills",
+      "audience": "contributor",
+      "targetSurface": "docs/reference/skills",
+      "notes": [
+        "Skill markdown remains source material for generated/reference docs."
+      ]
+    },
+    {
+      "path": "skills/ctx/SKILL.md",
+      "sourceType": "skills",
+      "status": "source_material",
+      "category": "skills",
+      "audience": "contributor",
+      "targetSurface": "docs/reference/skills",
+      "notes": [
+        "Skill markdown remains source material for generated/reference docs."
+      ]
+    },
+    {
+      "path": "skills/dockerizer/SKILL.md",
+      "sourceType": "skills",
+      "status": "source_material",
+      "category": "skills",
+      "audience": "contributor",
+      "targetSurface": "docs/reference/skills",
+      "notes": [
+        "Skill markdown remains source material for generated/reference docs."
+      ]
+    },
+    {
+      "path": "skills/documentation-generator/SKILL.md",
+      "sourceType": "skills",
+      "status": "source_material",
+      "category": "skills",
+      "audience": "contributor",
+      "targetSurface": "docs/reference/skills",
+      "notes": [
+        "Skill markdown remains source material for generated/reference docs."
+      ]
+    },
+    {
+      "path": "skills/error-debugger/SKILL.md",
+      "sourceType": "skills",
+      "status": "source_material",
+      "category": "skills",
+      "audience": "contributor",
+      "targetSurface": "docs/reference/skills",
+      "notes": [
+        "Skill markdown remains source material for generated/reference docs."
+      ]
+    },
+    {
+      "path": "skills/provider-health-monitor/SKILL.md",
+      "sourceType": "skills",
+      "status": "source_material",
+      "category": "skills",
+      "audience": "contributor",
+      "targetSurface": "docs/reference/skills",
+      "notes": [
+        "Skill markdown remains source material for generated/reference docs."
+      ]
+    },
+    {
+      "path": "skills/refactoring-assistant/SKILL.md",
+      "sourceType": "skills",
+      "status": "source_material",
+      "category": "skills",
+      "audience": "contributor",
+      "targetSurface": "docs/reference/skills",
+      "notes": [
+        "Skill markdown remains source material for generated/reference docs."
+      ]
+    },
+    {
+      "path": "skills/security-scanner/SKILL.md",
+      "sourceType": "skills",
+      "status": "source_material",
+      "category": "skills",
+      "audience": "contributor",
+      "targetSurface": "docs/reference/skills",
+      "notes": [
+        "Skill markdown remains source material for generated/reference docs."
+      ]
+    },
+    {
+      "path": "skills/superpowers/brainstorming/SKILL.md",
+      "sourceType": "skills",
+      "status": "source_material",
+      "category": "skills",
+      "audience": "contributor",
+      "targetSurface": "docs/reference/skills",
+      "notes": [
+        "Skill markdown remains source material for generated/reference docs."
+      ]
+    },
+    {
+      "path": "skills/superpowers/code-review/SKILL.md",
+      "sourceType": "skills",
+      "status": "source_material",
+      "category": "skills",
+      "audience": "contributor",
+      "targetSurface": "docs/reference/skills",
+      "notes": [
+        "Skill markdown remains source material for generated/reference docs."
+      ]
+    },
+    {
+      "path": "skills/superpowers/executing-plans/SKILL.md",
+      "sourceType": "skills",
+      "status": "source_material",
+      "category": "skills",
+      "audience": "contributor",
+      "targetSurface": "docs/reference/skills",
+      "notes": [
+        "Skill markdown remains source material for generated/reference docs."
+      ]
+    },
+    {
+      "path": "skills/superpowers/subagent-development/SKILL.md",
+      "sourceType": "skills",
+      "status": "source_material",
+      "category": "skills",
+      "audience": "contributor",
+      "targetSurface": "docs/reference/skills",
+      "notes": [
+        "Skill markdown remains source material for generated/reference docs."
+      ]
+    },
+    {
+      "path": "skills/superpowers/test-driven/SKILL.md",
+      "sourceType": "skills",
+      "status": "source_material",
+      "category": "skills",
+      "audience": "contributor",
+      "targetSurface": "docs/reference/skills",
+      "notes": [
+        "Skill markdown remains source material for generated/reference docs."
+      ]
+    },
+    {
+      "path": "skills/superpowers/verification/SKILL.md",
+      "sourceType": "skills",
+      "status": "source_material",
+      "category": "skills",
+      "audience": "contributor",
+      "targetSurface": "docs/reference/skills",
+      "notes": [
+        "Skill markdown remains source material for generated/reference docs."
+      ]
+    },
+    {
+      "path": "skills/superpowers/writing-plans/SKILL.md",
+      "sourceType": "skills",
+      "status": "source_material",
+      "category": "skills",
+      "audience": "contributor",
+      "targetSurface": "docs/reference/skills",
+      "notes": [
+        "Skill markdown remains source material for generated/reference docs."
+      ]
+    },
+    {
+      "path": "skills/test-coverage-booster/SKILL.md",
+      "sourceType": "skills",
+      "status": "source_material",
+      "category": "skills",
+      "audience": "contributor",
+      "targetSurface": "docs/reference/skills",
+      "notes": [
+        "Skill markdown remains source material for generated/reference docs."
+      ]
+    },
+    {
+      "path": "verify-costchart.md",
+      "sourceType": "root",
+      "status": "migrate",
+      "category": "archive",
+      "audience": "contributor",
+      "targetSurface": "docs/archive/root-docs",
+      "notes": [
+        "Root markdown surface should migrate into the canonical docs IA."
+      ]
+    }
+  ],
+  "summary": {
+    "total": 66,
+    "byStatus": {
+      "source_material": 40,
+      "migrate": 14,
+      "canonical": 12
+    },
+    "byCategory": {
+      "agents": 13,
+      "skills": 32,
+      "workflow": 4,
+      "setup": 5,
+      "planning": 1,
+      "testing": 2,
+      "overview": 1,
+      "architecture": 1,
+      "reference": 3,
+      "release": 1,
+      "research": 2,
+      "archive": 1
+    },
+    "bySourceType": {
+      "root": 16,
+      "agents": 12,
+      "docs": 11,
+      "skills": 27
+    }
+  }
+}

@@ -5,6 +5,7 @@ import {
   smoothedWinRate,
   computeAlpha,
   evalScore,
+  feedbackSignal,
   adaptiveScore,
   rankCandidates
 } from '../scripts/evaluation/adaptive-weight.js';
@@ -111,6 +112,17 @@ test('evalScore: mid-range metrics → around 0.5', () => {
   assert.ok(score > 0.3 && score < 0.7, `Expected 0.3-0.7, got ${score}`);
 });
 
+test('feedbackSignal: derives score from verdict counters', () => {
+  const signal = feedbackSignal({
+    feedback_positive: 3,
+    feedback_neutral: 1,
+    feedback_negative: 1,
+  });
+
+  assert.equal(signal.count, 5);
+  assert.ok(Math.abs(signal.score - 0.7) < 1e-10);
+});
+
 // ---- adaptiveScore ----
 
 test('adaptiveScore: null metrics → static only', () => {
@@ -150,6 +162,20 @@ test('adaptiveScore: no explore bonus for established providers', () => {
   const metrics = { wins: 5, total_responses: 50, avg_confidence: 0.5, avg_response_ms: 2000 };
   const result = adaptiveScore({ staticWeight: 5, metrics, globalWinRate: 0.25 });
   assert.equal(result.exploreComponent, 0, 'explore should be 0 for >=10 samples');
+});
+
+test('adaptiveScore: operator feedback contributes when feedback exists', () => {
+  const metrics = {
+    wins: 5,
+    total_responses: 50,
+    avg_confidence: 0.7,
+    avg_response_ms: 1000,
+    feedback_positive: 4,
+    feedback_negative: 1,
+    feedback_count: 5,
+  };
+  const result = adaptiveScore({ staticWeight: 8, metrics, globalWinRate: 0.25 });
+  assert.ok(result.feedbackComponent > 0, 'feedback component should be > 0');
 });
 
 // ---- rankCandidates ----

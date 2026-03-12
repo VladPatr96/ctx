@@ -63,9 +63,39 @@ export function evalScore(metrics, globalWinRate) {
 }
 
 /**
+ * Convert persisted operator feedback into a normalized 0-1 signal.
+ * 0.5 means neutral or no useful feedback signal.
+ * @param {{ feedback_score?: number, feedback_positive?: number, feedback_neutral?: number, feedback_negative?: number, feedback_count?: number } | null} metrics
+ * @returns {{ score: number, count: number }}
+ */
+export function feedbackSignal(metrics) {
+  if (!metrics) return { score: 0.5, count: 0 };
+
+  const directScore = metrics.feedback_score;
+  const directCount = metrics.feedback_count;
+  if (typeof directScore === 'number' && Number.isFinite(directScore)) {
+    return {
+      score: Math.min(1, Math.max(0, directScore)),
+      count: typeof directCount === 'number' && Number.isFinite(directCount) ? Math.max(0, directCount) : 0
+    };
+  }
+
+  const positive = Number(metrics.feedback_positive || 0);
+  const neutral = Number(metrics.feedback_neutral || 0);
+  const negative = Number(metrics.feedback_negative || 0);
+  const total = Number(metrics.feedback_count || positive + neutral + negative || 0);
+  if (total <= 0) return { score: 0.5, count: 0 };
+
+  return {
+    score: Math.min(1, Math.max(0, (positive + neutral * 0.5) / total)),
+    count: total
+  };
+}
+
+/**
  * Compute adaptive final score blending static weight with eval metrics.
  * @param {{ staticWeight: number, metrics: object|null, globalWinRate: number, options?: { epsilon?: number } }} params
- * @returns {{ finalScore: number, staticComponent: number, evalComponent: number, exploreComponent: number, alpha: number }}
+ * @returns {{ finalScore: number, staticComponent: number, evalComponent: number, feedbackComponent: number, exploreComponent: number, alpha: number }}
  */
 export function adaptiveScore({ staticWeight, metrics, globalWinRate, options = {} }) {
   const epsilon = options.epsilon ?? 0.05;
@@ -76,6 +106,7 @@ export function adaptiveScore({ staticWeight, metrics, globalWinRate, options = 
       finalScore: staticWeight / 10,
       staticComponent: staticWeight / 10,
       evalComponent: 0,
+      feedbackComponent: 0,
       exploreComponent: 0,
       alpha: 0
     };
@@ -84,14 +115,18 @@ export function adaptiveScore({ staticWeight, metrics, globalWinRate, options = 
   const sampleCount = metrics.total_responses || 0;
   const alpha = computeAlpha(sampleCount);
   const eval_ = evalScore(metrics, globalWinRate);
+  const feedback = feedbackSignal(metrics);
+  const feedbackShare = feedback.count > 0 ? 0.2 : 0;
+  const evalShare = 1 - feedbackShare;
   const exploreBonus = sampleCount < 10 ? 1.0 : 0.0;
 
   const staticComponent = (1 - alpha - epsilon) * (staticWeight / 10);
-  const evalComponent = alpha * eval_;
+  const evalComponent = alpha * evalShare * eval_;
+  const feedbackComponent = alpha * feedbackShare * feedback.score;
   const exploreComponent = epsilon * exploreBonus;
-  const finalScore = staticComponent + evalComponent + exploreComponent;
+  const finalScore = staticComponent + evalComponent + feedbackComponent + exploreComponent;
 
-  return { finalScore, staticComponent, evalComponent, exploreComponent, alpha };
+  return { finalScore, staticComponent, evalComponent, feedbackComponent, exploreComponent, alpha };
 }
 
 /**

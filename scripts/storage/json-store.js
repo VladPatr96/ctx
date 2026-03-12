@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
   appendLineLocked,
@@ -27,6 +27,21 @@ export class JsonStore extends StorageAdapter {
     return readJsonFile(this.pipelineFile, fallbackValue);
   }
 
+  readLog(limit = 50) {
+    const normalizedLimit = normalizeLimit(limit, 50);
+    try {
+      if (!existsSync(this.logFile)) return [];
+      return readFileSync(this.logFile, 'utf8')
+        .split('\n')
+        .filter(line => line.trim())
+        .slice(-normalizedLimit)
+        .map(parseLogEntry)
+        .filter(Boolean);
+    } catch {
+      return [];
+    }
+  }
+
   writePipeline(pipeline) {
     ensureDir(this.dataDir);
     withLockSync(this.pipelineLockFile, () => {
@@ -45,4 +60,18 @@ export class JsonStore extends StorageAdapter {
       writeFileAtomic(this.logFile, '');
     });
   }
+}
+
+function parseLogEntry(line) {
+  try {
+    return JSON.parse(line);
+  } catch {
+    return null;
+  }
+}
+
+function normalizeLimit(value, fallback) {
+  const parsed = Number.parseInt(String(value ?? ''), 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
+  return parsed;
 }

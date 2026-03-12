@@ -8,10 +8,14 @@
  *   node opencode-auto-setup.js <path>   — Use specific path
  */
 
-import { existsSync, copyFileSync, readFileSync, writeFileSync, mkdirSync, statSync } from 'node:fs';
+import { existsSync, copyFileSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join, dirname, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
+import {
+  findOpenCodeSkillsDir as resolveOpenCodeSkillsDir,
+  getOpenCodeSkillsDirCandidates,
+} from './setup/opencode-paths.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -46,19 +50,11 @@ function error(message) {
 
 function findOpenCodeSkillsDir() {
   log('Searching for OpenCode skills directory...', '🔍');
-  
-  for (const path of POSSIBLE_PATHS) {
-    if (existsSync(path)) {
-      try {
-        const stat = statSync(path);
-        if (stat.isDirectory()) {
-          log(`Found: ${path}`);
-          return path;
-        }
-      } catch (e) {
-        // Skip inaccessible paths
-      }
-    }
+
+  const resolved = resolveOpenCodeSkillsDir({ env: process.env });
+  if (resolved) {
+    log(`Found: ${resolved}`);
+    return resolved;
   }
   
   log('Not found in common locations', '⚠');
@@ -209,7 +205,7 @@ function main() {
     console.log('\nPlease specify the path manually:');
     console.log('  node opencode-auto-setup.js <path-to-opencode-skills>\n');
     console.log('Common locations:');
-    POSSIBLE_PATHS.forEach(path => console.log(`  - ${path}`));
+    getOpenCodeSkillsDirCandidates(process.env).forEach(path => console.log(`  - ${path}`));
     console.log();
     process.exit(1);
   }

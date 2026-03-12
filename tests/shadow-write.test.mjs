@@ -17,6 +17,11 @@ class MemoryStore {
     return this.pipeline ?? fallbackValue;
   }
 
+  readLog(limit = 50) {
+    if (this.failRead) throw new Error('mirror read failed');
+    return this.logs.slice(-limit);
+  }
+
   writePipeline(pipeline) {
     if (this.failWrite) throw new Error('mirror write failed');
     const next = this.transformWrite ? this.transformWrite(pipeline) : pipeline;
@@ -121,4 +126,19 @@ test('shadow store keeps json read path when readSource is json', () => {
   assert.equal(stats.read_sqlite_ok, 0);
   assert.equal(stats.read_sqlite_fail, 0);
   assert.equal(stats.read_fallback_json, 0);
+});
+
+test('shadow store reads logs from sqlite mirror when readSource is sqlite', () => {
+  const primary = new MemoryStore();
+  const mirror = new MemoryStore();
+  primary.appendLog({ action: 'json-log' });
+  mirror.appendLog({ action: 'sqlite-log' });
+  const shadow = new ShadowStore({ primary, mirror, readSource: 'sqlite' });
+
+  const logs = shadow.readLog(10);
+
+  assert.equal(logs.length, 1);
+  assert.equal(logs[0].action, 'sqlite-log');
+  const stats = shadow.getShadowStats();
+  assert.equal(stats.read_sqlite_ok, 1);
 });

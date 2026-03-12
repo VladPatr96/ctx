@@ -9,7 +9,6 @@ import { z } from 'zod';
 import { join } from 'node:path';
 
 const LABEL_RE = /^[a-z0-9:_-]{1,64}$/i;
-const CENTRAL_KB_REPO_NAME = 'my_claude_code';
 
 function mapCategoryToGitHubLabel(category) {
   if (category === 'error') return 'lesson';
@@ -72,7 +71,7 @@ async function createIssueWithLabelFallback(runCommand, { repo, title, body, lab
   };
 }
 
-export function registerKnowledgeTools(server, { runCommand, readJson, DATA_DIR, GITHUB_OWNER, knowledgeStore, kbSync }) {
+export function registerKnowledgeTools(server, { runCommand, readJson, DATA_DIR, GITHUB_OWNER, centralRepo, knowledgeStore, kbSync }) {
 
   server.registerTool(
     'ctx_get_project_map',
@@ -233,7 +232,11 @@ export function registerKnowledgeTools(server, { runCommand, readJson, DATA_DIR,
 
       const output = { ...result };
       if (sync_github && result.saved) {
-        const repo = `${GITHUB_OWNER}/${CENTRAL_KB_REPO_NAME}`;
+        const repo = centralRepo || (GITHUB_OWNER ? `${GITHUB_OWNER}/my_claude_code` : null);
+        if (!repo) {
+          output.github_sync = { attempted: false, error: 'Central repo not configured. Set CTX_CENTRAL_REPO or run ctx init.' };
+          return { content: [{ type: 'text', text: JSON.stringify(output) }] };
+        }
         const ghLabel = mapCategoryToGitHubLabel(category);
         output.github_sync = await createIssueWithLabelFallback(runCommand, {
           repo,

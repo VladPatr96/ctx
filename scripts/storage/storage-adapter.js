@@ -1,14 +1,15 @@
-export const STORAGE_MODES = Object.freeze(['json', 'sqlite']);
+import { StorageModeSchema, normalizeStorageMode } from '../contracts/config-schemas.js';
 
-export function normalizeStorageMode(value) {
-  if (typeof value !== 'string') return null;
-  const normalized = value.trim().toLowerCase();
-  return STORAGE_MODES.includes(normalized) ? normalized : null;
-}
+export const STORAGE_MODES = Object.freeze([...StorageModeSchema.options]);
+export { normalizeStorageMode };
 
 export class StorageAdapter {
   readPipeline(_fallbackValue) {
     throw new Error('StorageAdapter.readPipeline is not implemented');
+  }
+
+  readLog(_limit = 50) {
+    throw new Error('StorageAdapter.readLog is not implemented');
   }
 
   writePipeline(_pipeline) {

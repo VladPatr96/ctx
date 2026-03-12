@@ -7,43 +7,28 @@
 
 import { existsSync, readFileSync, writeFileSync, mkdirSync, copyFileSync } from 'node:fs';
 import { join } from 'node:path';
-
-// Possible OpenCode skills directories
-const POSSIBLE_PATHS = [
-  process.env.APPDATA && join(process.env.APPDATA, 'OpenCode', 'skills'),
-  process.env.LOCALAPPDATA && join(process.env.LOCALAPPDATA, 'OpenCode', 'skills'),
-  process.env.USERPROFILE && join(process.env.USERPROFILE, '.opencode', 'skills'),
-  'C:\\Program Files\\OpenCode\\skills',
-  'C:\\Program Files (x86)\\OpenCode\\skills',
-].filter(Boolean);
+import {
+  findOpenCodeSkillsDir,
+  getOpenCodeSkillsDirCandidates,
+} from './setup/opencode-paths.js';
 
 const UNIVERSAL_SKILL = join(process.cwd(), 'skills', 'ctx-universal-full', 'SKILL.md');
 
 console.log('\n🔄 OpenCode CTX Skill — Quick Update\n');
 
 // Find OpenCode skills directory
-let skillsDir = null;
-for (const path of POSSIBLE_PATHS) {
-  if (existsSync(path)) {
-    try {
-      const stat = require('node:fs').statSync(path);
-      if (stat.isDirectory()) {
-        skillsDir = path;
-        console.log(`✓ Found OpenCode skills: ${skillsDir}`);
-        break;
-      }
-    } catch (e) {}
-  }
-}
+const skillsDir = findOpenCodeSkillsDir({ env: process.env });
 
 if (!skillsDir) {
   console.log('❌ OpenCode skills directory not found.');
   console.log('\nSearched in:');
-  POSSIBLE_PATHS.forEach(p => console.log(`  - ${p}`));
+  getOpenCodeSkillsDirCandidates(process.env).forEach(p => console.log(`  - ${p}`));
   console.log('\nPlease specify path manually:');
   console.log('  node update-opencode-now.js <path-to-skills>\n');
   process.exit(1);
 }
+
+console.log(`✓ Found OpenCode skills: ${skillsDir}`);
 
 // Copy universal skill
 const destDir = join(skillsDir, 'ctx');

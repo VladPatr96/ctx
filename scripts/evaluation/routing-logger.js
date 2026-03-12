@@ -5,7 +5,8 @@
  * Feature-flagged by CTX_ADAPTIVE_ROUTING env var.
  */
 
-const MAX_SNIPPET_LEN = 120;
+import { createRoutingDecisionLogRecord } from '../contracts/runtime-schemas.js';
+
 const FLUSH_INTERVAL_MS = 500;
 const FLUSH_THRESHOLD = 10;
 
@@ -52,30 +53,7 @@ export function initRoutingLogger(store) {
  */
 export function logDecision(decision) {
   if (!_enabled) return;
-
-  const snippet = (decision.task || '').slice(0, MAX_SNIPPET_LEN);
-  const selectedProvider = decision.selectedProvider || '';
-  const runnerUp = decision.runnerUp || null;
-  const finalScore = decision.finalScore ?? 0;
-  const runnerUpScore = decision.runnerUpScore ?? null;
-  const delta = (runnerUp && runnerUpScore != null) ? finalScore - runnerUpScore : null;
-  const isDiverged = decision.staticBest && selectedProvider !== decision.staticBest ? 1 : 0;
-
-  _buffer.push({
-    timestamp: new Date().toISOString(),
-    task_snippet: snippet,
-    task_type: decision.taskType || 'unknown',
-    selected_provider: selectedProvider,
-    runner_up: runnerUp,
-    final_score: finalScore,
-    static_component: decision.staticComponent ?? 0,
-    eval_component: decision.evalComponent ?? 0,
-    explore_component: decision.exploreComponent ?? 0,
-    alpha: decision.alpha ?? 0,
-    delta,
-    is_diverged: isDiverged,
-    routing_mode: decision.routingMode || 'static'
-  });
+  _buffer.push(createRoutingDecisionLogRecord(decision));
 
   if (_buffer.length >= FLUSH_THRESHOLD) {
     setImmediate(() => flush());

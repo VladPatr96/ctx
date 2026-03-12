@@ -1,24 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { rmSync } from 'node:fs';
 import { join } from 'node:path';
-import { tmpdir } from 'node:os';
 import { execFileSync } from 'node:child_process';
+import { createTempGitRepo } from './helpers/git-test-repo.mjs';
 
 // Save original env
 const origRoot = process.env.CLAUDE_PLUGIN_ROOT;
 const origData = process.env.CTX_DATA_DIR;
 
-function createTempRepo() {
-  const dir = mkdtempSync(join(tmpdir(), 'exec-test-'));
-  execFileSync('git', ['init', dir], { encoding: 'utf-8' });
-  execFileSync('git', ['checkout', '-b', 'master'], { cwd: dir, encoding: 'utf-8' });
-  execFileSync('git', ['config', 'user.email', 'test@test.com'], { cwd: dir, encoding: 'utf-8' });
-  execFileSync('git', ['config', 'user.name', 'Test'], { cwd: dir, encoding: 'utf-8' });
-  writeFileSync(join(dir, '.gitignore'), '.data/\n.worktrees/\n');
-  execFileSync('git', ['add', '.gitignore'], { cwd: dir, encoding: 'utf-8' });
-  execFileSync('git', ['commit', '-m', 'init'], { cwd: dir, encoding: 'utf-8' });
-  return dir;
+function createTempRepo(opts = {}) {
+  return createTempGitRepo('exec-test-', opts);
 }
 
 function setupEnv(repoDir) {
@@ -70,15 +62,19 @@ function mockInvokeSlow(delayMs = 5000) {
 // ==================== Executor tests ====================
 
 test('executeAgent — successful execution', async () => {
-  const repo = createTempRepo();
+  const repo = createTempRepo({ defaultBranch: 'main' });
   try {
     setupEnv(repo);
     const { executeAgent, getExecutionStatus } = await loadExecutor();
+    let seenCwd = null;
 
     const result = await executeAgent('test-ok', {
       task: 'say hello',
       provider: 'claude',
-      invokeFn: mockInvoke('Hello!'),
+      invokeFn: async (_provider, _prompt, invokeOpts) => {
+        seenCwd = invokeOpts.cwd;
+        return { status: 'success', response: 'Hello!' };
+      },
       cleanup: true,
     });
 
@@ -89,10 +85,17 @@ test('executeAgent — successful execution', async () => {
     assert.ok(result.durationMs >= 0);
     assert.ok(result.startedAt);
     assert.ok(result.completedAt);
+    assert.equal(result.branchName, 'agent/test-ok');
+    assert.equal(seenCwd, result.worktreePath);
+    assert.match(seenCwd, /[\\/]\.worktrees[\\/]test-ok$/);
+    assert.equal(result.artifactBundle.status, 'completed');
+    assert.equal(result.artifactBundle.metadata.provider, 'claude');
+    assert.ok(result.artifactBundle.artifacts.some(a => a.kind === 'response'));
 
     // State should be persisted
     const status = getExecutionStatus('test-ok');
     assert.equal(status.status, 'completed');
+    assert.equal(status.artifactBundle.status, 'completed');
   } finally {
     restoreEnv();
     rmSync(repo, { recursive: true, force: true });
@@ -179,10 +182,12 @@ test('listExecutions — filters by status', async () => {
     const completed = listExecutions({ status: 'completed' });
     assert.equal(completed.length, 1);
     assert.equal(completed[0].agentId, 'list-a');
+    assert.equal(completed[0].artifactBundle.status, 'completed');
 
     const failed = listExecutions({ status: 'failed' });
     assert.equal(failed.length, 1);
     assert.equal(failed[0].agentId, 'list-b');
+    assert.equal(failed[0].artifactBundle.status, 'failed');
   } finally {
     restoreEnv();
     rmSync(repo, { recursive: true, force: true });

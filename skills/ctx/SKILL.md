@@ -90,7 +90,7 @@ ctx_get_project_context(project: PROJECT_NAME, limit: 5)
 ```bash
 PROJECT_NAME=$(basename "$(git rev-parse --show-toplevel 2>/dev/null || pwd)")
 gh issue list -L 20 --json number,title,labels,state 2>/dev/null
-gh search issues "label:lesson label:project:$PROJECT_NAME" --owner VladPatr96 --limit 5 --json title,body
+gh search issues "label:lesson label:project:$PROJECT_NAME" --owner {{GITHUB_OWNER}} --limit 5 --json title,body
 gh issue list -l blocker --state open --json number,title,body 2>/dev/null
 gh issue list -l wip --state open --json number,title,body 2>/dev/null
 ```
@@ -241,7 +241,7 @@ gh issue create \
 
 **В центральный репо:**
 ```bash
-gh issue create -R VladPatr96/my_claude_code \
+gh issue create -R {{GITHUB_OWNER}}/{{CTX_CENTRAL_REPO}} \
   --title "Session: $PROJECT_NAME $(date +%Y-%m-%d) — краткое описание" \
   --label "session,project:$PROJECT_NAME" \
   --body "[ключевые уроки и решения]"
@@ -376,7 +376,7 @@ ctx_search_solutions(query: "$ARGUMENTS", limit: 10)
 ### Decide + Log
 Прими решение и сохрани:
 ```bash
-gh issue create -R VladPatr96/my_claude_code \
+gh issue create -R {{GITHUB_OWNER}}/{{CTX_CENTRAL_REPO}} \
   --title "Consilium: [тема]" \
   --label "consilium,project:$PROJECT_NAME" \
   --body "[решение]"
@@ -410,7 +410,7 @@ gh issue create -R VladPatr96/my_claude_code \
 1. `ctx_log_error({ error, solution, prevention })`
 2. Создай GitHub Issue с меткой `lesson`:
 ```bash
-gh issue create -R VladPatr96/my_claude_code \
+gh issue create -R {{GITHUB_OWNER}}/{{CTX_CENTRAL_REPO}} \
   --title "Lesson: краткое описание" \
   --label "lesson,project:$PROJECT_NAME" \
   --body "[ошибка + решение + предотвращение]"

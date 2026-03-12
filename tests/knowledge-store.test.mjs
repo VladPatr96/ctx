@@ -93,6 +93,186 @@ test(`KnowledgeStore (${storeMode}): searchEntries`, () => {
     const projA = store.searchEntries('FTS5', { project: 'proj-a' });
     assert.ok(projA.length >= 1);
     assert.ok(projA.every(r => r.project === 'proj-a'));
+    assert.equal(projA[0].retrieval?.strategy, 'hybrid');
+    assert.equal(typeof projA[0].retrieval?.matchReason, 'string');
+  } finally {
+    store.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test(`KnowledgeStore (${storeMode}): getContinuityDigest returns continuity snapshot and suggestions`, () => {
+  const { store, dir } = createTempStore();
+  try {
+    store.saveEntry({
+      project: 'ctx-memory',
+      category: 'session-summary',
+      title: 'Session 1',
+      body: 'Continued work on knowledge continuity.'
+    });
+    store.saveEntry({
+      project: 'ctx-memory',
+      category: 'decision',
+      title: 'Adopt hybrid retrieval',
+      body: 'Combine FTS candidates with continuity-aware reranking.'
+    });
+    store.saveEntry({
+      project: 'ctx-memory',
+      category: 'error',
+      title: 'Continuity sync regression',
+      body: 'Continuity digest failed after an incomplete snapshot save.'
+    });
+    store.saveSnapshot('ctx-memory', {
+      branch: 'codex/knowledge-continuity',
+      task: 'Build continuity digest',
+      stage: 'execute'
+    });
+
+    const digest = store.getContinuityDigest('ctx-memory', 3);
+    assert.equal(digest.project, 'ctx-memory');
+    assert.equal(digest.snapshot.exists, true);
+    assert.equal(digest.snapshot.branch, 'codex/knowledge-continuity');
+    assert.equal(digest.stats.totalEntries, 3);
+    assert.equal(digest.stats.sessions, 1);
+    assert.equal(digest.stats.decisions, 1);
+    assert.equal(digest.stats.errors, 1);
+    assert.equal(digest.recentSessions.length, 1);
+    assert.equal(digest.recentDecisions.length, 1);
+    assert.equal(digest.recentErrors.length, 1);
+    assert.ok(digest.suggestions.some((suggestion) => suggestion.type === 'resume'));
+    assert.ok(digest.suggestions.some((suggestion) => suggestion.type === 'decision'));
+    assert.ok(digest.suggestions.some((suggestion) => suggestion.type === 'error'));
+  } finally {
+    store.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test(`KnowledgeStore (${storeMode}): getQualityInsights summarizes archive health and stale gaps`, () => {
+  const { store, dir } = createTempStore();
+  try {
+    store.saveEntry({
+      project: 'proj-health',
+      category: 'decision',
+      title: 'Decision memory',
+      body: 'Keep a durable decision record.'
+    });
+    store.saveEntry({
+      project: 'proj-health',
+      category: 'session-summary',
+      title: 'Session memory',
+      body: 'Summarize the current knowledge archive.'
+    });
+    store.saveEntry({
+      project: 'proj-stale',
+      category: 'error',
+      title: 'Old error memory',
+      body: 'An old stale error artifact.'
+    });
+    store.saveSnapshot('proj-health', {
+      branch: 'main',
+      task: 'Review archive health',
+      stage: 'execute'
+    });
+
+    if (storeMode === 'sqlite') {
+      store.db.exec("UPDATE kb_entries SET updated_at = '2025-01-01T00:00:00.000Z', created_at = '2025-01-01T00:00:00.000Z' WHERE project = 'proj-stale'");
+    } else {
+      const staleEntry = store.data.entries.find((entry) => entry.project === 'proj-stale');
+      staleEntry.updated_at = '2025-01-01T00:00:00.000Z';
+      staleEntry.created_at = '2025-01-01T00:00:00.000Z';
+      store._save();
+    }
+
+    const summary = store.getQualityInsights(30);
+    assert.equal(summary.totals.totalProjects, 2);
+    assert.equal(summary.totals.snapshotProjects, 1);
+    assert.ok(summary.totals.staleEntries >= 1);
+    assert.ok(summary.categoryCoverage.some((item) => item.category === 'decision' && item.count === 1));
+    assert.ok(summary.projects.some((project) => project.project === 'proj-health' && project.snapshotExists === true));
+    assert.ok(summary.gaps.some((gap) => gap.project === 'proj-stale' && gap.type === 'snapshot_missing'));
+    assert.ok(summary.gaps.some((gap) => gap.project === 'proj-stale' && gap.type === 'session_missing'));
+    assert.ok(summary.gaps.some((gap) => gap.project === 'proj-stale' && gap.type === 'stale_archive'));
+  } finally {
+    store.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test(`KnowledgeStore (${storeMode}): exportProjectArchive returns grouped project artifact`, () => {
+  const { store, dir } = createTempStore();
+  try {
+    store.saveEntry({
+      project: 'proj-export',
+      category: 'session-summary',
+      title: 'Session export',
+      body: 'A session summary ready for export.'
+    });
+    store.saveEntry({
+      project: 'proj-export',
+      category: 'decision',
+      title: 'Decision export',
+      body: 'A decision artifact ready for export.'
+    });
+    store.saveEntry({
+      project: 'proj-export',
+      category: 'error',
+      title: 'Error export',
+      body: 'An error artifact ready for export.'
+    });
+    store.saveSnapshot('proj-export', {
+      branch: 'codex/export',
+      task: 'Build knowledge export',
+      stage: 'execute'
+    });
+
+    const artifact = store.exportProjectArchive('proj-export', { limit: 2, staleAfterDays: 30 });
+    assert.equal(artifact.project, 'proj-export');
+    assert.equal(artifact.snapshot.exists, true);
+    assert.equal(artifact.continuity.project, 'proj-export');
+    assert.ok(artifact.quality.categories.includes('decision'));
+    assert.ok(artifact.sections.some((section) => section.category === 'session-summary' && section.count === 1));
+    assert.ok(artifact.sections.some((section) => section.category === 'decision' && section.entries[0].title === 'Decision export'));
+  } finally {
+    store.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test(`KnowledgeStore (${storeMode}): getSuggestionTemplates returns archive-backed suggestions and templates`, () => {
+  const { store, dir } = createTempStore();
+  try {
+    store.saveEntry({
+      project: 'proj-suggest',
+      category: 'session-summary',
+      title: 'Session suggest',
+      body: 'Continue the archived session context.'
+    });
+    store.saveEntry({
+      project: 'proj-suggest',
+      category: 'decision',
+      title: 'Decision suggest',
+      body: 'Revisit the architecture decision before coding.'
+    });
+    store.saveEntry({
+      project: 'proj-suggest',
+      category: 'error',
+      title: 'Error suggest',
+      body: 'A recent runtime error still needs triage.'
+    });
+    store.saveSnapshot('proj-suggest', {
+      branch: 'codex/suggest',
+      task: 'Build suggestions',
+      stage: 'execute'
+    });
+
+    const summary = store.getSuggestionTemplates('proj-suggest', 3);
+    assert.equal(summary.project, 'proj-suggest');
+    assert.ok(summary.suggestions.some((suggestion) => suggestion.action === 'resume_context'));
+    assert.ok(summary.suggestions.some((suggestion) => suggestion.action === 'review_decision'));
+    assert.ok(summary.suggestions.some((suggestion) => suggestion.action === 'triage_error'));
+    assert.ok(summary.templates.some((template) => template.sourceCategories.includes('decision')));
+    assert.ok(summary.templates.some((template) => template.prompt.includes('Decision suggest')));
   } finally {
     store.close();
     rmSync(dir, { recursive: true, force: true });

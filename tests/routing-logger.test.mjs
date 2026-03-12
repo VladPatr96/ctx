@@ -98,7 +98,7 @@ test('routing-logger: delta computation', () => {
     task: 'test', taskType: 'review',
     selectedProvider: 'claude', runnerUp: 'gemini',
     finalScore: 0.9, runnerUpScore: 0.7,
-    staticComponent: 0.5, evalComponent: 0.3, exploreComponent: 0.1, alpha: 0.2,
+    staticComponent: 0.5, evalComponent: 0.3, feedbackComponent: 0.04, exploreComponent: 0.1, alpha: 0.2,
     routingMode: 'adaptive'
   });
   flush();
@@ -106,6 +106,7 @@ test('routing-logger: delta computation', () => {
   const record = batches[0][0];
   assert.ok(Math.abs(record.delta - 0.2) < 1e-10, `delta should be 0.2, got ${record.delta}`);
   assert.equal(record.runner_up, 'gemini');
+  assert.equal(record.feedback_component, 0.04);
 
   process.env.CTX_ADAPTIVE_ROUTING = originalEnv;
   _resetForTest();

@@ -1,0 +1,34 @@
+{
+  "generatedAt": "2026-03-11T12:28:20.835Z",
+  "package": {
+    "name": "ctx-plugin",
+    "version": "0.1.0"
+  },
+  "versionSourceOfTruth": "package.json",
+  "publish": {
+    "workflowName": "npm publish on push",
+    "workflowPath": ".github/workflows/npm-publish-on-push.yml",
+    "branches": [
+      "master",
+      "main"
+    ],
+    "requiresNpmToken": true,
+    "runsTests": true,
+    "registryUrl": "https://registry.npmjs.org",
+    "strategy": "push_if_new_version"
+  },
+  "changelog": {
+    "exists": false,
+    "path": "CHANGELOG.md",
+    "automated": false
+  },
+  "releaseNotes": {
+    "automated": false,
+    "usesConventionalCommits": false
+  },
+  "gaps": [
+    "CHANGELOG.md is not present yet.",
+    "Automated release notes generation is not configured.",
+    "Conventional-commit-driven release notes are not configured."
+  ]
+}

@@ -11,8 +11,16 @@ import { fileURLToPath } from 'node:url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-const SKILLS_DIR = join(__dirname, '..', '..', 'skills');
-const REGISTRY_FILE = join(__dirname, '..', '..', '.data', 'skill-registry.json');
+const DEFAULT_SKILLS_DIR = join(__dirname, '..', '..', 'skills');
+const DEFAULT_REGISTRY_FILE = join(__dirname, '..', '..', '.data', 'skill-registry.json');
+
+export function getSkillsDir() {
+  return process.env.CTX_SKILLS_DIR || DEFAULT_SKILLS_DIR;
+}
+
+export function getRegistryFile() {
+  return process.env.CTX_SKILL_REGISTRY_FILE || DEFAULT_REGISTRY_FILE;
+}
 
 /**
  * Parse skill metadata from SKILL.md frontmatter
@@ -90,7 +98,7 @@ function parseSkillMetadata(skillPath) {
 /**
  * Discover all skills recursively
  */
-export function discoverSkills(skillsDir = SKILLS_DIR) {
+export function discoverSkills(skillsDir = getSkillsDir()) {
   const skills = new Map();
   
   function scanDirectory(dir, category = '') {
@@ -131,10 +139,10 @@ export function discoverSkills(skillsDir = SKILLS_DIR) {
 /**
  * Load skill registry from disk or create new
  */
-export function loadRegistry() {
-  if (existsSync(REGISTRY_FILE)) {
+export function loadRegistry(registryFile = getRegistryFile()) {
+  if (existsSync(registryFile)) {
     try {
-      const data = JSON.parse(readFileSync(REGISTRY_FILE, 'utf-8'));
+      const data = JSON.parse(readFileSync(registryFile, 'utf-8'));
       return new Map(Object.entries(data));
     } catch (e) {
       console.error('[skill-registry] Failed to load registry:', e.message);
@@ -146,21 +154,21 @@ export function loadRegistry() {
 /**
  * Save skill registry to disk
  */
-export function saveRegistry(registry) {
-  const dataDir = dirname(REGISTRY_FILE);
+export function saveRegistry(registry, registryFile = getRegistryFile()) {
+  const dataDir = dirname(registryFile);
   if (!existsSync(dataDir)) {
     mkdirSync(dataDir, { recursive: true });
   }
   const data = Object.fromEntries(registry);
-  writeFileSync(REGISTRY_FILE, JSON.stringify(data, null, 2));
+  writeFileSync(registryFile, JSON.stringify(data, null, 2));
 }
 
 /**
  * Sync discovered skills with registry
  */
-export function syncRegistry() {
-  const discovered = discoverSkills();
-  const registry = loadRegistry();
+export function syncRegistry({ skillsDir = getSkillsDir(), registryFile = getRegistryFile() } = {}) {
+  const discovered = discoverSkills(skillsDir);
+  const registry = loadRegistry(registryFile);
   
   // Add new skills
   for (const [name, skill] of discovered) {
@@ -182,7 +190,7 @@ export function syncRegistry() {
     }
   }
   
-  saveRegistry(registry);
+  saveRegistry(registry, registryFile);
   return registry;
 }
 
@@ -229,9 +237,10 @@ export function setSkillEnabled(name, enabled) {
  * Watch for skill changes (hot reload)
  */
 export function watchSkills(callback) {
-  if (!existsSync(SKILLS_DIR)) return;
+  const skillsDir = getSkillsDir();
+  if (!existsSync(skillsDir)) return;
   
-  watch(SKILLS_DIR, { recursive: true }, (eventType, filename) => {
+  watch(skillsDir, { recursive: true }, (eventType, filename) => {
     if (filename && filename.endsWith('SKILL.md')) {
       console.log(`[skill-registry] 🔄 Skill changed: ${filename}`);
       const registry = syncRegistry();

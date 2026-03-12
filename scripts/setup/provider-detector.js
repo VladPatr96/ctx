@@ -22,8 +22,6 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const ROOT_DIR = join(__dirname, '..', '..');
 
-const HOME = process.env.HOME || process.env.USERPROFILE || '';
-
 /**
  * Check if a CLI command is available on the system.
  * @param {string} command - Command to check
@@ -96,6 +94,7 @@ function checkProviderAvailability(checks) {
  * @returns {Array<{id: string, name: string, available: boolean, reason: string, details: Object}>} Array of provider objects
  */
 export function detectProviders() {
+  const home = resolveHomeDir();
   const claude = checkProviderAvailability({
     cli: 'claude',
     configDirs: [],
@@ -105,22 +104,22 @@ export function detectProviders() {
 
   const codex = checkProviderAvailability({
     cli: 'codex',
-    configDirs: [join(HOME, '.codex')],
+    configDirs: [join(home, '.codex')],
     apiKeys: ['OPENAI_API_KEY', 'CODEX_API_KEY']
   });
 
   const gemini = checkProviderAvailability({
     cli: 'gemini',
     configDirs: [
-      join(HOME, '.config', 'gemini-cli'),
-      join(HOME, '.gemini')
+      join(home, '.config', 'gemini-cli'),
+      join(home, '.gemini')
     ],
     apiKeys: ['GOOGLE_API_KEY', 'GEMINI_API_KEY']
   });
 
   const opencode = checkProviderAvailability({
     cli: 'opencode',
-    configDirs: [join(HOME, '.config', 'opencode')],
+    configDirs: [join(home, '.config', 'opencode')],
     apiKeys: ['OPENCODE_API_KEY']
   });
 
@@ -156,4 +155,8 @@ export function getUnavailableProviders() {
 export function isProviderAvailable(providerId) {
   const provider = detectProviders().find((p) => p.id === providerId);
   return provider ? provider.available : false;
+}
+
+function resolveHomeDir() {
+  return process.env.HOME || process.env.USERPROFILE || '';
 }

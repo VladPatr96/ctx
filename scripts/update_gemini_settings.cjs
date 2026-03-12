@@ -9,7 +9,7 @@ if (!fs.existsSync(settingsPath)) {
 }
 
 const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
-const projectRoot = 'D:/projects/Projects/github/my_claude_code'.replace(/\\/g, '/');
+const projectRoot = path.resolve(__dirname, '..').replace(/\\/g, '/');
 
 // 1. Configure MCP Server
 if (!settings.mcpServers) settings.mcpServers = {};
@@ -18,7 +18,7 @@ settings.mcpServers['ctx-hub'] = {
   args: [path.join(projectRoot, 'scripts/ctx-mcp-hub.js').replace(/\\/g, '/')],
   env: {
     CTX_DATA_DIR: path.join(projectRoot, '.data').replace(/\\/g, '/'),
-    GITHUB_OWNER: 'VladPatr96',
+    GITHUB_OWNER: process.env.GITHUB_OWNER || '',
     CLAUDE_PROJECT_DIR: projectRoot,
     CLAUDE_PLUGIN_ROOT: projectRoot
   }

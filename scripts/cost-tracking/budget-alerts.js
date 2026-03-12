@@ -15,17 +15,24 @@
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { resolveDataDir } from '../storage/index.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const DATA_DIR = join(__dirname, '..', '..', '.data');
-const BUDGET_FILE = join(DATA_DIR, 'budget-config.json');
+
+function resolveBudgetPaths(options = {}) {
+  const dataDir = resolveDataDir(options);
+  return {
+    dataDir,
+    budgetFile: join(dataDir, 'budget-config.json'),
+  };
+}
 
 /**
  * Ensure .data directory exists
  */
-function ensureDataDir() {
-  if (!existsSync(DATA_DIR)) {
-    mkdirSync(DATA_DIR, { recursive: true });
+function ensureDataDir(dataDir) {
+  if (!existsSync(dataDir)) {
+    mkdirSync(dataDir, { recursive: true });
   }
 }
 
@@ -33,9 +40,10 @@ function ensureDataDir() {
  * Load budget configuration from file
  * @returns {Object} Budget configuration
  */
-function loadBudgetConfig() {
+function loadBudgetConfig(options = {}) {
+  const { budgetFile } = resolveBudgetPaths(options);
   try {
-    if (!existsSync(BUDGET_FILE)) {
+    if (!existsSync(budgetFile)) {
       return {
         global: null,
         providers: {},
@@ -50,7 +58,7 @@ function loadBudgetConfig() {
         }
       };
     }
-    return JSON.parse(readFileSync(BUDGET_FILE, 'utf-8'));
+    return JSON.parse(readFileSync(budgetFile, 'utf-8'));
   } catch (error) {
     return {
       global: null,
@@ -72,12 +80,13 @@ function loadBudgetConfig() {
  * Save budget configuration to file
  * @param {Object} config - Budget configuration to save
  */
-function saveBudgetConfig(config) {
+function saveBudgetConfig(config, options = {}) {
   try {
-    ensureDataDir();
+    const { dataDir, budgetFile } = resolveBudgetPaths(options);
+    ensureDataDir(dataDir);
     config.metadata = config.metadata || {};
     config.metadata.updatedAt = new Date().toISOString();
-    writeFileSync(BUDGET_FILE, JSON.stringify(config, null, 2));
+    writeFileSync(budgetFile, JSON.stringify(config, null, 2));
   } catch (error) {
     throw new Error(`Failed to save budget config: ${error.message}`);
   }
@@ -99,15 +108,15 @@ function normalizeBudget(value) {
  * Set global budget limit
  * @param {number} amount - Budget amount in USD
  */
-export function setBudget(amount) {
+export function setBudget(amount, options = {}) {
   const budget = normalizeBudget(amount);
   if (budget === null && amount !== null) {
     throw new Error('Budget must be a non-negative number');
   }
 
-  const config = loadBudgetConfig();
+  const config = loadBudgetConfig(options);
   config.global = budget;
-  saveBudgetConfig(config);
+  saveBudgetConfig(config, options);
 }
 
 /**
@@ -115,7 +124,7 @@ export function setBudget(amount) {
  * @param {string} provider - Provider name
  * @param {number} amount - Budget amount in USD
  */
-export function setProviderBudget(provider, amount) {
+export function setProviderBudget(provider, amount, options = {}) {
   if (!provider) {
     throw new Error('Provider name is required');
   }
@@ -125,13 +134,13 @@ export function setProviderBudget(provider, amount) {
     throw new Error('Budget must be a non-negative number');
   }
 
-  const config = loadBudgetConfig();
+  const config = loadBudgetConfig(options);
   if (budget === null) {
     delete config.providers[provider];
   } else {
     config.providers[provider] = budget;
   }
-  saveBudgetConfig(config);
+  saveBudgetConfig(config, options);
 }
 
 /**
@@ -139,7 +148,7 @@ export function setProviderBudget(provider, amount) {
  * @param {string} sessionId - Session identifier
  * @param {number} amount - Budget amount in USD
  */
-export function setSessionBudget(sessionId, amount) {
+export function setSessionBudget(sessionId, amount, options = {}) {
   if (!sessionId) {
     throw new Error('Session ID is required');
   }
@@ -149,13 +158,13 @@ export function setSessionBudget(sessionId, amount) {
     throw new Error('Budget must be a non-negative number');
   }
 
-  const config = loadBudgetConfig();
+  const config = loadBudgetConfig(options);
   if (budget === null) {
     delete config.sessions[sessionId];
   } else {
     config.sessions[sessionId] = budget;
   }
-  saveBudgetConfig(config);
+  saveBudgetConfig(config, options);
 }
 
 /**
@@ -163,7 +172,7 @@ export function setSessionBudget(sessionId, amount) {
  * @param {string} projectId - Project identifier
  * @param {number} amount - Budget amount in USD
  */
-export function setProjectBudget(projectId, amount) {
+export function setProjectBudget(projectId, amount, options = {}) {
   if (!projectId) {
     throw new Error('Project ID is required');
   }
@@ -173,13 +182,13 @@ export function setProjectBudget(projectId, amount) {
     throw new Error('Budget must be a non-negative number');
   }
 
-  const config = loadBudgetConfig();
+  const config = loadBudgetConfig(options);
   if (budget === null) {
     delete config.projects[projectId];
   } else {
     config.projects[projectId] = budget;
   }
-  saveBudgetConfig(config);
+  saveBudgetConfig(config, options);
 }
 
 /**
@@ -188,8 +197,8 @@ export function setProjectBudget(projectId, amount) {
  * @param {number} [thresholds.warning] - Warning threshold (0-1, default 0.8)
  * @param {number} [thresholds.critical] - Critical threshold (0-1, default 0.95)
  */
-export function setThresholds(thresholds = {}) {
-  const config = loadBudgetConfig();
+export function setThresholds(thresholds = {}, options = {}) {
+  const config = loadBudgetConfig(options);
 
   if (thresholds.warning !== undefined) {
     const warning = Number.parseFloat(String(thresholds.warning));
@@ -207,15 +216,15 @@ export function setThresholds(thresholds = {}) {
     config.thresholds.critical = critical;
   }
 
-  saveBudgetConfig(config);
+  saveBudgetConfig(config, options);
 }
 
 /**
  * Get current budget configuration
  * @returns {Object} Budget configuration
  */
-export function getBudgetConfig() {
-  return loadBudgetConfig();
+export function getBudgetConfig(options = {}) {
+  return loadBudgetConfig(options);
 }
 
 /**
@@ -236,7 +245,7 @@ export function checkBudget(currentCost, options = {}) {
     };
   }
 
-  const config = loadBudgetConfig();
+  const config = loadBudgetConfig(options);
   let budget = null;
   let budgetType = 'none';
 
@@ -312,8 +321,8 @@ export function checkBudget(currentCost, options = {}) {
  * @param {Object} [costs.byProjects] - Cost by project
  * @returns {Object} Budget status for all budgets
  */
-export function checkAllBudgets(costs = {}) {
-  const config = loadBudgetConfig();
+export function checkAllBudgets(costs = {}, options = {}) {
+  const config = loadBudgetConfig(options);
   const results = {
     global: null,
     providers: {},
@@ -324,7 +333,7 @@ export function checkAllBudgets(costs = {}) {
 
   // Check global budget
   if (config.global !== null && costs.total !== undefined) {
-    results.global = checkBudget(costs.total);
+    results.global = checkBudget(costs.total, options);
     if (results.global.alert) {
       results.hasAlerts = true;
     }
@@ -336,7 +345,7 @@ export function checkAllBudgets(costs = {}) {
       if (config.providers[provider] !== undefined) {
         results.providers[provider] = checkBudget(
           providerCost.totalCost || providerCost,
-          { provider }
+          { ...options, provider }
         );
         if (results.providers[provider].alert) {
           results.hasAlerts = true;
@@ -351,7 +360,7 @@ export function checkAllBudgets(costs = {}) {
       if (config.sessions[sessionId] !== undefined) {
         results.sessions[sessionId] = checkBudget(
           sessionCost.totalCost || sessionCost,
-          { sessionId }
+          { ...options, sessionId }
         );
         if (results.sessions[sessionId].alert) {
           results.hasAlerts = true;
@@ -366,7 +375,7 @@ export function checkAllBudgets(costs = {}) {
       if (config.projects[projectId] !== undefined) {
         results.projects[projectId] = checkBudget(
           projectCost.totalCost || projectCost,
-          { projectId }
+          { ...options, projectId }
         );
         if (results.projects[projectId].alert) {
           results.hasAlerts = true;

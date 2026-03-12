@@ -4,9 +4,8 @@ import { useCtxConnection } from './api/hooks';
 import { useAppStore } from './store/useAppStore';
 import { Sidebar } from './components/layout/Sidebar';
 import { ErrorBoundary } from './components/layout/ErrorBoundary';
+import { getShellShortcut } from '../../scripts/contracts/shell-navigation.js';
 
-
-// Lazy load page components for code-splitting
 const DashboardPage = lazy(() => import('./pages/Dashboard').then(m => ({ default: m.DashboardPage })));
 const KnowledgePage = lazy(() => import('./pages/Knowledge').then(m => ({ default: m.KnowledgePage })));
 const AgentsPage = lazy(() => import('./pages/Agents').then(m => ({ default: m.AgentsPage })));
@@ -36,24 +35,18 @@ function App() {
       if (!event.ctrlKey) return;
       const tag = (event.target as HTMLElement | null)?.tagName?.toLowerCase() || '';
       if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
-      if (event.key.toLowerCase() === 't') {
-        event.preventDefault();
-        setActiveTab('dashboard');
-        requestAnimationFrame(() => {
-          const input = document.getElementById('task-input') as HTMLInputElement | null;
-          input?.focus();
-          input?.select();
-        });
-      }
-      if (event.key.toLowerCase() === 'k') {
-        event.preventDefault();
-        setActiveTab('knowledge');
-        requestAnimationFrame(() => {
-          const input = document.getElementById('kb-search-input') as HTMLInputElement | null;
-          input?.focus();
-          input?.select();
-        });
-      }
+
+      const shortcut = getShellShortcut(event.key);
+      if (!shortcut) return;
+
+      event.preventDefault();
+      setActiveTab(shortcut.tab);
+      requestAnimationFrame(() => {
+        if (!shortcut.focusTargetId) return;
+        const input = document.getElementById(shortcut.focusTargetId) as HTMLInputElement | null;
+        input?.focus();
+        input?.select?.();
+      });
     };
 
     window.addEventListener('keydown', handler);

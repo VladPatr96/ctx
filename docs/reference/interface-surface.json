@@ -1,0 +1,1045 @@
+{
+  "generatedAt": "2026-03-11T12:44:44.299Z",
+  "cli": {
+    "commands": [
+      {
+        "name": "api-design",
+        "source": "skill",
+        "description": "Автоматическое проектирование API: генерация OpenAPI спецификаций, TypeScript SDK, Postman коллекций и документации из кода.",
+        "usage": "api-design [--args ...]",
+        "skill": "api-designer",
+        "category": "general"
+      },
+      {
+        "name": "api-generate-sdk",
+        "source": "skill",
+        "description": "Автоматическое проектирование API: генерация OpenAPI спецификаций, TypeScript SDK, Postman коллекций и документации из кода.",
+        "usage": "api-generate-sdk [--args ...]",
+        "skill": "api-designer",
+        "category": "general"
+      },
+      {
+        "name": "api-generate-spec",
+        "source": "skill",
+        "description": "Автоматическое проектирование API: генерация OpenAPI спецификаций, TypeScript SDK, Postman коллекций и документации из кода.",
+        "usage": "api-generate-spec [--args ...]",
+        "skill": "api-designer",
+        "category": "general"
+      },
+      {
+        "name": "api-validate",
+        "source": "skill",
+        "description": "Автоматическое проектирование API: генерация OpenAPI спецификаций, TypeScript SDK, Postman коллекций и документации из кода.",
+        "usage": "api-validate [--args ...]",
+        "skill": "api-designer",
+        "category": "general"
+      },
+      {
+        "name": "ci-cd",
+        "source": "skill",
+        "description": "Автоматическое создание CI/CD pipelines для GitHub Actions, GitLab CI и Azure DevOps.",
+        "usage": "ci-cd [--args ...]",
+        "skill": "ci-cd-pipeline",
+        "category": "general"
+      },
+      {
+        "name": "cicd-deploy",
+        "source": "skill",
+        "description": "Автоматическое создание CI/CD pipelines для GitHub Actions, GitLab CI и Azure DevOps.",
+        "usage": "cicd-deploy [--args ...]",
+        "skill": "ci-cd-pipeline",
+        "category": "general"
+      },
+      {
+        "name": "cicd-generate",
+        "source": "skill",
+        "description": "Автоматическое создание CI/CD pipelines для GitHub Actions, GitLab CI и Azure DevOps.",
+        "usage": "cicd-generate [--args ...]",
+        "skill": "ci-cd-pipeline",
+        "category": "general"
+      },
+      {
+        "name": "cicd-rollback",
+        "source": "skill",
+        "description": "Автоматическое создание CI/CD pipelines для GitHub Actions, GitLab CI и Azure DevOps.",
+        "usage": "cicd-rollback [--args ...]",
+        "skill": "ci-cd-pipeline",
+        "category": "general"
+      },
+      {
+        "name": "consilium-early-stop",
+        "source": "skill",
+        "description": "Оптимизация multi-round советов с auto-stop, trust scores и улучшением синтеза.",
+        "usage": "consilium-early-stop [--args ...]",
+        "skill": "consilium-optimizer",
+        "category": "general"
+      },
+      {
+        "name": "consilium-opt",
+        "source": "skill",
+        "description": "Оптимизация multi-round советов с auto-stop, trust scores и улучшением синтеза.",
+        "usage": "consilium-opt [--args ...]",
+        "skill": "consilium-optimizer",
+        "category": "general"
+      },
+      {
+        "name": "consilium-smart-synthesis",
+        "source": "skill",
+        "description": "Оптимизация multi-round советов с auto-stop, trust scores и улучшением синтеза.",
+        "usage": "consilium-smart-synthesis [--args ...]",
+        "skill": "consilium-optimizer",
+        "category": "general"
+      },
+      {
+        "name": "consilium-trust-scores",
+        "source": "skill",
+        "description": "Оптимизация multi-round советов с auto-stop, trust scores и улучшением синтеза.",
+        "usage": "consilium-trust-scores [--args ...]",
+        "skill": "consilium-optimizer",
+        "category": "general"
+      },
+      {
+        "name": "debug",
+        "source": "skill",
+        "description": "Умный отладчик для анализа ошибок и поиска решений. Анализирует stack traces, находит похожие случаи в KB и предлагает решения.",
+        "usage": "debug [--args ...]",
+        "skill": "error-debugger",
+        "category": "general"
+      },
+      {
+        "name": "docker-compose",
+        "source": "skill",
+        "description": "Автоматическая контейнеризация проектов с генерацией Dockerfile, docker-compose и оптимизацией образов.",
+        "usage": "docker-compose [--args ...]",
+        "skill": "dockerizer",
+        "category": "general"
+      },
+      {
+        "name": "docker-generate",
+        "source": "skill",
+        "description": "Автоматическая контейнеризация проектов с генерацией Dockerfile, docker-compose и оптимизацией образов.",
+        "usage": "docker-generate [--args ...]",
+        "skill": "dockerizer",
+        "category": "general"
+      },
+      {
+        "name": "docker-optimize",
+        "source": "skill",
+        "description": "Автоматическая контейнеризация проектов с генерацией Dockerfile, docker-compose и оптимизацией образов.",
+        "usage": "docker-optimize [--args ...]",
+        "skill": "dockerizer",
+        "category": "general"
+      },
+      {
+        "name": "dockerize",
+        "source": "skill",
+        "description": "Автоматическая контейнеризация проектов с генерацией Dockerfile, docker-compose и оптимизацией образов.",
+        "usage": "dockerize [--args ...]",
+        "skill": "dockerizer",
+        "category": "general"
+      },
+      {
+        "name": "docs-api",
+        "source": "skill",
+        "description": "Автоматическая генерация документации: README, API docs, архитектурные диаграммы, changelog из кода и JSDoc комментариев.",
+        "usage": "docs-api [--args ...]",
+        "skill": "documentation-generator",
+        "category": "general"
+      },
+      {
+        "name": "docs-changelog",
+        "source": "skill",
+        "description": "Автоматическая генерация документации: README, API docs, архитектурные диаграммы, changelog из кода и JSDoc комментариев.",
+        "usage": "docs-changelog [--args ...]",
+        "skill": "documentation-generator",
+        "category": "general"
+      },
+      {
+        "name": "docs-readme",
+        "source": "skill",
+        "description": "Автоматическая генерация документации: README, API docs, архитектурные диаграммы, changelog из кода и JSDoc комментариев.",
+        "usage": "docs-readme [--args ...]",
+        "skill": "documentation-generator",
+        "category": "general"
+      },
+      {
+        "name": "error-analyze",
+        "source": "skill",
+        "description": "Умный отладчик для анализа ошибок и поиска решений. Анализирует stack traces, находит похожие случаи в KB и предлагает решения.",
+        "usage": "error-analyze [--args ...]",
+        "skill": "error-debugger",
+        "category": "general"
+      },
+      {
+        "name": "error-fix",
+        "source": "skill",
+        "description": "Умный отладчик для анализа ошибок и поиска решений. Анализирует stack traces, находит похожие случаи в KB и предлагает решения.",
+        "usage": "error-fix [--args ...]",
+        "skill": "error-debugger",
+        "category": "general"
+      },
+      {
+        "name": "error-similar",
+        "source": "skill",
+        "description": "Умный отладчик для анализа ошибок и поиска решений. Анализирует stack traces, находит похожие случаи в KB и предлагает решения.",
+        "usage": "error-similar [--args ...]",
+        "skill": "error-debugger",
+        "category": "general"
+      },
+      {
+        "name": "generate-docs",
+        "source": "skill",
+        "description": "Автоматическая генерация документации: README, API docs, архитектурные диаграммы, changelog из кода и JSDoc комментариев.",
+        "usage": "generate-docs [--args ...]",
+        "skill": "documentation-generator",
+        "category": "general"
+      },
+      {
+        "name": "get_pipeline",
+        "source": "built_in",
+        "description": "Read current pipeline state.",
+        "usage": "get_pipeline",
+        "skill": null,
+        "category": "pipeline"
+      },
+      {
+        "name": "log_action",
+        "source": "built_in",
+        "description": "Append an action entry to the CTX log.",
+        "usage": "log_action --entry <json>",
+        "skill": null,
+        "category": "logging"
+      },
+      {
+        "name": "log_error",
+        "source": "built_in",
+        "description": "Append an error entry to the CTX log.",
+        "usage": "log_error --entry <json>",
+        "skill": null,
+        "category": "logging"
+      },
+      {
+        "name": "provider-alerts",
+        "source": "skill",
+        "description": "Мониторинг здоровья AI провайдеров с автоматической оптимизацией и алертами.",
+        "usage": "provider-alerts [--args ...]",
+        "skill": "provider-health-monitor",
+        "category": "general"
+      },
+      {
+        "name": "provider-health",
+        "source": "skill",
+        "description": "Мониторинг здоровья AI провайдеров с автоматической оптимизацией и алертами.",
+        "usage": "provider-health [--args ...]",
+        "skill": "provider-health-monitor",
+        "category": "general"
+      },
+      {
+        "name": "provider-metrics",
+        "source": "skill",
+        "description": "Мониторинг здоровья AI провайдеров с автоматической оптимизацией и алертами.",
+        "usage": "provider-metrics [--args ...]",
+        "skill": "provider-health-monitor",
+        "category": "general"
+      },
+      {
+        "name": "provider-optimize",
+        "source": "skill",
+        "description": "Мониторинг здоровья AI провайдеров с автоматической оптимизацией и алертами.",
+        "usage": "provider-optimize [--args ...]",
+        "skill": "provider-health-monitor",
+        "category": "general"
+      },
+      {
+        "name": "refactor",
+        "source": "skill",
+        "description": "Помощник рефакторинга: находит code smells, предлагает улучшения, применяет безопасные трансформации с автоматическими тестами.",
+        "usage": "refactor [--args ...]",
+        "skill": "refactoring-assistant",
+        "category": "general"
+      },
+      {
+        "name": "refactor-analyze",
+        "source": "skill",
+        "description": "Помощник рефакторинга: находит code smells, предлагает улучшения, применяет безопасные трансформации с автоматическими тестами.",
+        "usage": "refactor-analyze [--args ...]",
+        "skill": "refactoring-assistant",
+        "category": "general"
+      },
+      {
+        "name": "refactor-apply",
+        "source": "skill",
+        "description": "Помощник рефакторинга: находит code smells, предлагает улучшения, применяет безопасные трансформации с автоматическими тестами.",
+        "usage": "refactor-apply [--args ...]",
+        "skill": "refactoring-assistant",
+        "category": "general"
+      },
+      {
+        "name": "refactor-suggest",
+        "source": "skill",
+        "description": "Помощник рефакторинга: находит code smells, предлагает улучшения, применяет безопасные трансформации с автоматическими тестами.",
+        "usage": "refactor-suggest [--args ...]",
+        "skill": "refactoring-assistant",
+        "category": "general"
+      },
+      {
+        "name": "security-ignore",
+        "source": "skill",
+        "description": "Сканер безопасности для кода и зависимостей. Автоматически находит уязвимости, проверяет зависимости и генерирует отчеты.",
+        "usage": "security-ignore [--args ...]",
+        "skill": "security-scanner",
+        "category": "general"
+      },
+      {
+        "name": "security-report",
+        "source": "skill",
+        "description": "Сканер безопасности для кода и зависимостей. Автоматически находит уязвимости, проверяет зависимости и генерирует отчеты.",
+        "usage": "security-report [--args ...]",
+        "skill": "security-scanner",
+        "category": "general"
+      },
+      {
+        "name": "security-scan",
+        "source": "skill",
+        "description": "Сканер безопасности для кода и зависимостей. Автоматически находит уязвимости, проверяет зависимости и генерирует отчеты.",
+        "usage": "security-scan [--args ...]",
+        "skill": "security-scanner",
+        "category": "general"
+      },
+      {
+        "name": "set_stage",
+        "source": "built_in",
+        "description": "Move pipeline to a specific stage.",
+        "usage": "set_stage --stage <name> [--data <json>]",
+        "skill": null,
+        "category": "pipeline"
+      },
+      {
+        "name": "test-coverage",
+        "source": "skill",
+        "description": "Анализ покрытия тестами и автогенерация недостающих тестов для достижения 90%+ coverage.",
+        "usage": "test-coverage [--args ...]",
+        "skill": "test-coverage-booster",
+        "category": "general"
+      },
+      {
+        "name": "update_pipeline",
+        "source": "built_in",
+        "description": "Patch allowed pipeline fields.",
+        "usage": "update_pipeline --patch <json>",
+        "skill": null,
+        "category": "pipeline"
+      }
+    ],
+    "summary": {
+      "total": 41,
+      "builtIn": 5,
+      "skill": 36
+    }
+  },
+  "mcp": {
+    "tools": [
+      {
+        "name": "ctx_adversarial_review",
+        "source": "built_in",
+        "description": "Adversarial code review: авто-определение scope по git diff, запуск ревьюеров (skeptic/architect/minimalist) с кросс-провайдерным режимом, финальный вердикт PASS/CONTESTED/REJECT.",
+        "inputType": "object",
+        "skill": null,
+        "category": null
+      },
+      {
+        "name": "ctx_advisor_consilium",
+        "source": "built_in",
+        "description": "Board of Advisors — совет из 4-6 экспертных персон (Steve Jobs, Karpathy, Carmack и др.). Каждый анализирует задачу через свою уникальную линзу изолированно, затем синтез. Используй для продуктовых, архитектурных и стратегических решений.",
+        "inputType": "object",
+        "skill": null,
+        "category": null
+      },
+      {
+        "name": "ctx_agent_consilium",
+        "source": "built_in",
+        "description": "Внутренний агентный консилиум: запускает выбранных агентов (architect, researcher, reviewer и др.) для анализа задачи каждый со своей позиции. Возвращает промпты для параллельного запуска через Task tool.",
+        "inputType": "object",
+        "skill": null,
+        "category": null
+      },
+      {
+        "name": "ctx_agent_execute",
+        "source": "built_in",
+        "description": "Запустить одного агента в изолированном worktree: создание worktree → invoke провайдера → сбор результата → очистка.",
+        "inputType": "object",
+        "skill": null,
+        "category": null
+      },
+      {
+        "name": "ctx_agent_run_parallel",
+        "source": "built_in",
+        "description": "Параллельный запуск нескольких агентов в worktrees с ограничением concurrency. Максимум 6 агентов.",
+        "inputType": "object",
+        "skill": null,
+        "category": null
+      },
+      {
+        "name": "ctx_agent_status",
+        "source": "built_in",
+        "description": "Статус выполнения агентов. По agentId — один агент, без — все, с фильтром по статусу.",
+        "inputType": "object",
+        "skill": null,
+        "category": null
+      },
+      {
+        "name": "ctx_api_design",
+        "source": "skill",
+        "description": "Автоматическое проектирование API: генерация OpenAPI спецификаций, TypeScript SDK, Postman коллекций и документации из кода.",
+        "inputType": "object",
+        "skill": "api-designer",
+        "category": "general"
+      },
+      {
+        "name": "ctx_api_generate_sdk",
+        "source": "skill",
+        "description": "Автоматическое проектирование API: генерация OpenAPI спецификаций, TypeScript SDK, Postman коллекций и документации из кода.",
+        "inputType": "object",
+        "skill": "api-designer",
+        "category": "general"
+      },
+      {
+        "name": "ctx_api_generate_spec",
+        "source": "skill",
+        "description": "Автоматическое проектирование API: генерация OpenAPI спецификаций, TypeScript SDK, Postman коллекций и документации из кода.",
+        "inputType": "object",
+        "skill": "api-designer",
+        "category": "general"
+      },
+      {
+        "name": "ctx_api_validate",
+        "source": "skill",
+        "description": "Автоматическое проектирование API: генерация OpenAPI спецификаций, TypeScript SDK, Postman коллекций и документации из кода.",
+        "inputType": "object",
+        "skill": "api-designer",
+        "category": "general"
+      },
+      {
+        "name": "ctx_cache_stats",
+        "source": "built_in",
+        "description": "Получить статистику двухуровневого кэша: L1 (RAM), L2 (SQLite), hit rates, namespaces.",
+        "inputType": "object",
+        "skill": null,
+        "category": null
+      },
+      {
+        "name": "ctx_ci_cd",
+        "source": "skill",
+        "description": "Автоматическое создание CI/CD pipelines для GitHub Actions, GitLab CI и Azure DevOps.",
+        "inputType": "object",
+        "skill": "ci-cd-pipeline",
+        "category": "general"
+      },
+      {
+        "name": "ctx_cicd_deploy",
+        "source": "skill",
+        "description": "Автоматическое создание CI/CD pipelines для GitHub Actions, GitLab CI и Azure DevOps.",
+        "inputType": "object",
+        "skill": "ci-cd-pipeline",
+        "category": "general"
+      },
+      {
+        "name": "ctx_cicd_generate",
+        "source": "skill",
+        "description": "Автоматическое создание CI/CD pipelines для GitHub Actions, GitLab CI и Azure DevOps.",
+        "inputType": "object",
+        "skill": "ci-cd-pipeline",
+        "category": "general"
+      },
+      {
+        "name": "ctx_cicd_rollback",
+        "source": "skill",
+        "description": "Автоматическое создание CI/CD pipelines для GitHub Actions, GitLab CI и Azure DevOps.",
+        "inputType": "object",
+        "skill": "ci-cd-pipeline",
+        "category": "general"
+      },
+      {
+        "name": "ctx_consilium_early_stop",
+        "source": "skill",
+        "description": "Оптимизация multi-round советов с auto-stop, trust scores и улучшением синтеза.",
+        "inputType": "object",
+        "skill": "consilium-optimizer",
+        "category": "general"
+      },
+      {
+        "name": "ctx_consilium_multi_round",
+        "source": "built_in",
+        "description": "Многораундовый анонимный консилиум. Провайдеры обсуждают тему в нескольких раундах, видя анонимизированные ответы друг друга. R1 — свободный ответ, R2+ — структурированная дискуссия с оценками.",
+        "inputType": "object",
+        "skill": null,
+        "category": null
+      },
+      {
+        "name": "ctx_consilium_opt",
+        "source": "skill",
+        "description": "Оптимизация multi-round советов с auto-stop, trust scores и улучшением синтеза.",
+        "inputType": "object",
+        "skill": "consilium-optimizer",
+        "category": "general"
+      },
+      {
+        "name": "ctx_consilium_presets",
+        "source": "built_in",
+        "description": "Получить список пресетов для consilium. Пресеты определяют предустановленные составы провайдеров или агентов.",
+        "inputType": "object",
+        "skill": null,
+        "category": null
+      },
+      {
+        "name": "ctx_consilium_smart_synthesis",
+        "source": "skill",
+        "description": "Оптимизация multi-round советов с auto-stop, trust scores и улучшением синтеза.",
+        "inputType": "object",
+        "skill": "consilium-optimizer",
+        "category": "general"
+      },
+      {
+        "name": "ctx_consilium_trust_scores",
+        "source": "skill",
+        "description": "Оптимизация multi-round советов с auto-stop, trust scores и улучшением синтеза.",
+        "inputType": "object",
+        "skill": "consilium-optimizer",
+        "category": "general"
+      },
+      {
+        "name": "ctx_create_agent",
+        "source": "built_in",
+        "description": "Создать нового агента из шаблона. Файл сохраняется в agents/generated/<name>.md.",
+        "inputType": "object",
+        "skill": null,
+        "category": null
+      },
+      {
+        "name": "ctx_debug",
+        "source": "skill",
+        "description": "Умный отладчик для анализа ошибок и поиска решений. Анализирует stack traces, находит похожие случаи в KB и предлагает решения.",
+        "inputType": "object",
+        "skill": "error-debugger",
+        "category": "general"
+      },
+      {
+        "name": "ctx_delegate_task",
+        "source": "built_in",
+        "description": "Делегировать задачу лучшему AI провайдеру. Роутер автоматически выбирает провайдера по типу задачи (code review → Codex, анализ → Gemini, планирование → Claude). Можно указать провайдера явно или запустить параллельно.",
+        "inputType": "object",
+        "skill": null,
+        "category": null
+      },
+      {
+        "name": "ctx_dev_pipeline_run",
+        "source": "built_in",
+        "description": "Запустить development pipeline: параллельное выполнение агентов → risk-aware merge → тесты → верификация. Автоматическое разрешение конфликтов через AI.",
+        "inputType": "object",
+        "skill": null,
+        "category": null
+      },
+      {
+        "name": "ctx_dev_pipeline_status",
+        "source": "built_in",
+        "description": "Статус development pipeline. По pipelineId — конкретный pipeline, без — список всех.",
+        "inputType": "object",
+        "skill": null,
+        "category": null
+      },
+      {
+        "name": "ctx_docker_compose",
+        "source": "skill",
+        "description": "Автоматическая контейнеризация проектов с генерацией Dockerfile, docker-compose и оптимизацией образов.",
+        "inputType": "object",
+        "skill": "dockerizer",
+        "category": "general"
+      },
+      {
+        "name": "ctx_docker_generate",
+        "source": "skill",
+        "description": "Автоматическая контейнеризация проектов с генерацией Dockerfile, docker-compose и оптимизацией образов.",
+        "inputType": "object",
+        "skill": "dockerizer",
+        "category": "general"
+      },
+      {
+        "name": "ctx_docker_optimize",
+        "source": "skill",
+        "description": "Автоматическая контейнеризация проектов с генерацией Dockerfile, docker-compose и оптимизацией образов.",
+        "inputType": "object",
+        "skill": "dockerizer",
+        "category": "general"
+      },
+      {
+        "name": "ctx_dockerize",
+        "source": "skill",
+        "description": "Автоматическая контейнеризация проектов с генерацией Dockerfile, docker-compose и оптимизацией образов.",
+        "inputType": "object",
+        "skill": "dockerizer",
+        "category": "general"
+      },
+      {
+        "name": "ctx_docs_api",
+        "source": "skill",
+        "description": "Автоматическая генерация документации: README, API docs, архитектурные диаграммы, changelog из кода и JSDoc комментариев.",
+        "inputType": "object",
+        "skill": "documentation-generator",
+        "category": "general"
+      },
+      {
+        "name": "ctx_docs_changelog",
+        "source": "skill",
+        "description": "Автоматическая генерация документации: README, API docs, архитектурные диаграммы, changelog из кода и JSDoc комментариев.",
+        "inputType": "object",
+        "skill": "documentation-generator",
+        "category": "general"
+      },
+      {
+        "name": "ctx_docs_readme",
+        "source": "skill",
+        "description": "Автоматическая генерация документации: README, API docs, архитектурные диаграммы, changelog из кода и JSDoc комментариев.",
+        "inputType": "object",
+        "skill": "documentation-generator",
+        "category": "general"
+      },
+      {
+        "name": "ctx_error_analyze",
+        "source": "skill",
+        "description": "Умный отладчик для анализа ошибок и поиска решений. Анализирует stack traces, находит похожие случаи в KB и предлагает решения.",
+        "inputType": "object",
+        "skill": "error-debugger",
+        "category": "general"
+      },
+      {
+        "name": "ctx_error_fix",
+        "source": "skill",
+        "description": "Умный отладчик для анализа ошибок и поиска решений. Анализирует stack traces, находит похожие случаи в KB и предлагает решения.",
+        "inputType": "object",
+        "skill": "error-debugger",
+        "category": "general"
+      },
+      {
+        "name": "ctx_error_similar",
+        "source": "skill",
+        "description": "Умный отладчик для анализа ошибок и поиска решений. Анализирует stack traces, находит похожие случаи в KB и предлагает решения.",
+        "inputType": "object",
+        "skill": "error-debugger",
+        "category": "general"
+      },
+      {
+        "name": "ctx_eval_ci_update",
+        "source": "built_in",
+        "description": "Обновить CI статус для завершённого консилиума.",
+        "inputType": "object",
+        "skill": null,
+        "category": null
+      },
+      {
+        "name": "ctx_eval_complete",
+        "source": "built_in",
+        "description": "Завершить запись консилиума с итоговым решением.",
+        "inputType": "object",
+        "skill": null,
+        "category": null
+      },
+      {
+        "name": "ctx_eval_provider",
+        "source": "built_in",
+        "description": "Записать ответ провайдера в текущий консилиум.",
+        "inputType": "object",
+        "skill": null,
+        "category": null
+      },
+      {
+        "name": "ctx_eval_report",
+        "source": "built_in",
+        "description": "Получить аналитику по консилиумам: медиана раундов, success rate, топ-провайдеры.",
+        "inputType": "object",
+        "skill": null,
+        "category": null
+      },
+      {
+        "name": "ctx_eval_start",
+        "source": "built_in",
+        "description": "Начать запись консилиума. Возвращает run_id для дальнейших вызовов.",
+        "inputType": "object",
+        "skill": null,
+        "category": null
+      },
+      {
+        "name": "ctx_generate_docs",
+        "source": "skill",
+        "description": "Автоматическая генерация документации: README, API docs, архитектурные диаграммы, changelog из кода и JSDoc комментариев.",
+        "inputType": "object",
+        "skill": "documentation-generator",
+        "category": "general"
+      },
+      {
+        "name": "ctx_get_pipeline",
+        "source": "built_in",
+        "description": "Получить текущее состояние pipeline: стадия, ведущий провайдер, задача, контекст, план.",
+        "inputType": "object",
+        "skill": null,
+        "category": null
+      },
+      {
+        "name": "ctx_get_project_context",
+        "source": "built_in",
+        "description": "Топ записей из KB для проекта + snapshot. Заменяет 5 вызовов gh CLI на старте. ~500 токенов вместо 10K.",
+        "inputType": "object",
+        "skill": null,
+        "category": null
+      },
+      {
+        "name": "ctx_get_project_map",
+        "source": "built_in",
+        "description": "Получить полную карту проекта: стек, структура, i18n, git, паттерны. Запускает индексацию если индекс устарел.",
+        "inputType": "object",
+        "skill": null,
+        "category": null
+      },
+      {
+        "name": "ctx_get_session",
+        "source": "built_in",
+        "description": "Получить текущий лог сессии: действия, ошибки, задачи.",
+        "inputType": "object",
+        "skill": null,
+        "category": null
+      },
+      {
+        "name": "ctx_get_tasks",
+        "source": "built_in",
+        "description": "Получить список задач текущей сессии.",
+        "inputType": "object",
+        "skill": null,
+        "category": null
+      },
+      {
+        "name": "ctx_inner_consilium",
+        "source": "built_in",
+        "description": "Мини-консилиум внутри одного провайдера: запускает задачу через разные модели параллельно и возвращает массив ответов для синтеза.",
+        "inputType": "object",
+        "skill": null,
+        "category": null
+      },
+      {
+        "name": "ctx_kb_bootstrap",
+        "source": "built_in",
+        "description": "Одноразовый импорт из GitHub Issues в KB. Защита от повторного запуска.",
+        "inputType": "object",
+        "skill": null,
+        "category": null
+      },
+      {
+        "name": "ctx_kb_link",
+        "source": "built_in",
+        "description": "Управление связями между записями KB (граф знаний). Добавить, удалить или просмотреть связи.",
+        "inputType": "object",
+        "skill": null,
+        "category": null
+      },
+      {
+        "name": "ctx_kb_stats",
+        "source": "built_in",
+        "description": "Статистика Knowledge Base: записи по категориям, проектам, размер.",
+        "inputType": "object",
+        "skill": null,
+        "category": null
+      },
+      {
+        "name": "ctx_kb_sync",
+        "source": "built_in",
+        "description": "Ручной pull/push KB Git-репо. Авто-вызов при /ctx (pull) и /ctx save (push).",
+        "inputType": "object",
+        "skill": null,
+        "category": null
+      },
+      {
+        "name": "ctx_list_agents",
+        "source": "built_in",
+        "description": "Список всех агентов: базовые (agents/*.md) и сгенерированные (agents/generated/*.md).",
+        "inputType": "object",
+        "skill": null,
+        "category": null
+      },
+      {
+        "name": "ctx_log_action",
+        "source": "built_in",
+        "description": "Записать действие в лог текущей сессии.",
+        "inputType": "object",
+        "skill": null,
+        "category": null
+      },
+      {
+        "name": "ctx_log_error",
+        "source": "built_in",
+        "description": "Записать ошибку и её решение. Автоматически сохраняется для будущего поиска.",
+        "inputType": "object",
+        "skill": null,
+        "category": null
+      },
+      {
+        "name": "ctx_provider_alerts",
+        "source": "skill",
+        "description": "Мониторинг здоровья AI провайдеров с автоматической оптимизацией и алертами.",
+        "inputType": "object",
+        "skill": "provider-health-monitor",
+        "category": "general"
+      },
+      {
+        "name": "ctx_provider_health",
+        "source": "skill",
+        "description": "Мониторинг здоровья AI провайдеров с автоматической оптимизацией и алертами.",
+        "inputType": "object",
+        "skill": "provider-health-monitor",
+        "category": "general"
+      },
+      {
+        "name": "ctx_provider_metrics",
+        "source": "skill",
+        "description": "Мониторинг здоровья AI провайдеров с автоматической оптимизацией и алертами.",
+        "inputType": "object",
+        "skill": "provider-health-monitor",
+        "category": "general"
+      },
+      {
+        "name": "ctx_provider_optimize",
+        "source": "skill",
+        "description": "Мониторинг здоровья AI провайдеров с автоматической оптимизацией и алертами.",
+        "inputType": "object",
+        "skill": "provider-health-monitor",
+        "category": "general"
+      },
+      {
+        "name": "ctx_react_changes_requested",
+        "source": "built_in",
+        "description": "Обработать review \"changes requested\": собрать комментарии → AI-генерация черновика ответа. Suggest-only — не публикует.",
+        "inputType": "object",
+        "skill": null,
+        "category": null
+      },
+      {
+        "name": "ctx_react_ci_failed",
+        "source": "built_in",
+        "description": "Обработать CI failure: собрать логи → AI-генерация фикса → создать draft PR. Макс 2 попытки на один CI run.",
+        "inputType": "object",
+        "skill": null,
+        "category": null
+      },
+      {
+        "name": "ctx_react_poll",
+        "source": "built_in",
+        "description": "Поллинг новых GitHub-событий (CI failures, changes_requested). Дедупликация по eventKey.",
+        "inputType": "object",
+        "skill": null,
+        "category": null
+      },
+      {
+        "name": "ctx_react_reset",
+        "source": "built_in",
+        "description": "Ручной сброс circuit breaker для указанного типа события.",
+        "inputType": "object",
+        "skill": null,
+        "category": null
+      },
+      {
+        "name": "ctx_react_status",
+        "source": "built_in",
+        "description": "Статус circuit breaker'ов и история недавних реакций.",
+        "inputType": "object",
+        "skill": null,
+        "category": null
+      },
+      {
+        "name": "ctx_read_results",
+        "source": "built_in",
+        "description": "Прочитать результаты других агентов. Используется для синтеза в consilium.",
+        "inputType": "object",
+        "skill": null,
+        "category": null
+      },
+      {
+        "name": "ctx_refactor",
+        "source": "skill",
+        "description": "Помощник рефакторинга: находит code smells, предлагает улучшения, применяет безопасные трансформации с автоматическими тестами.",
+        "inputType": "object",
+        "skill": "refactoring-assistant",
+        "category": "general"
+      },
+      {
+        "name": "ctx_refactor_analyze",
+        "source": "skill",
+        "description": "Помощник рефакторинга: находит code smells, предлагает улучшения, применяет безопасные трансформации с автоматическими тестами.",
+        "inputType": "object",
+        "skill": "refactoring-assistant",
+        "category": "general"
+      },
+      {
+        "name": "ctx_refactor_apply",
+        "source": "skill",
+        "description": "Помощник рефакторинга: находит code smells, предлагает улучшения, применяет безопасные трансформации с автоматическими тестами.",
+        "inputType": "object",
+        "skill": "refactoring-assistant",
+        "category": "general"
+      },
+      {
+        "name": "ctx_refactor_suggest",
+        "source": "skill",
+        "description": "Помощник рефакторинга: находит code smells, предлагает улучшения, применяет безопасные трансформации с автоматическими тестами.",
+        "inputType": "object",
+        "skill": "refactoring-assistant",
+        "category": "general"
+      },
+      {
+        "name": "ctx_routing_config",
+        "source": "built_in",
+        "description": "Get or set adaptive routing config, including readiness, mode, and threshold.",
+        "inputType": "object",
+        "skill": null,
+        "category": null
+      },
+      {
+        "name": "ctx_routing_explain",
+        "source": "built_in",
+        "description": "Explain provider selection for a task, including candidates, scoring, and readiness.",
+        "inputType": "object",
+        "skill": null,
+        "category": null
+      },
+      {
+        "name": "ctx_routing_health",
+        "source": "built_in",
+        "description": "Получить health-данные adaptive routing: решения, распределение, аномалии.",
+        "inputType": "object",
+        "skill": null,
+        "category": null
+      },
+      {
+        "name": "ctx_routing_override",
+        "source": "built_in",
+        "description": "Manually override the provider for a task type for the next N routing decisions.",
+        "inputType": "object",
+        "skill": null,
+        "category": null
+      },
+      {
+        "name": "ctx_save_lesson",
+        "source": "built_in",
+        "description": "Сохранить урок/решение в KB с upsert-дедупликацией (обновление при изменении содержимого).",
+        "inputType": "object",
+        "skill": null,
+        "category": null
+      },
+      {
+        "name": "ctx_search_solutions",
+        "source": "built_in",
+        "description": "Поиск решений в кросс-проектной базе знаний. FTS5 поиск в локальной KB, gh CLI как fallback.",
+        "inputType": "object",
+        "skill": null,
+        "category": null
+      },
+      {
+        "name": "ctx_security_ignore",
+        "source": "skill",
+        "description": "Сканер безопасности для кода и зависимостей. Автоматически находит уязвимости, проверяет зависимости и генерирует отчеты.",
+        "inputType": "object",
+        "skill": "security-scanner",
+        "category": "general"
+      },
+      {
+        "name": "ctx_security_report",
+        "source": "skill",
+        "description": "Сканер безопасности для кода и зависимостей. Автоматически находит уязвимости, проверяет зависимости и генерирует отчеты.",
+        "inputType": "object",
+        "skill": "security-scanner",
+        "category": "general"
+      },
+      {
+        "name": "ctx_security_scan",
+        "source": "skill",
+        "description": "Сканер безопасности для кода и зависимостей. Автоматически находит уязвимости, проверяет зависимости и генерирует отчеты.",
+        "inputType": "object",
+        "skill": "security-scanner",
+        "category": "general"
+      },
+      {
+        "name": "ctx_set_stage",
+        "source": "built_in",
+        "description": "Перейти на указанную стадию pipeline. Стадии: detect, context, task, brainstorm, plan, execute, done.",
+        "inputType": "object",
+        "skill": null,
+        "category": null
+      },
+      {
+        "name": "ctx_share_result",
+        "source": "built_in",
+        "description": "Опубликовать результат работы для других агентов. Используется в consilium для обмена предложениями.",
+        "inputType": "object",
+        "skill": null,
+        "category": null
+      },
+      {
+        "name": "ctx_test_coverage",
+        "source": "skill",
+        "description": "Анализ покрытия тестами и автогенерация недостающих тестов для достижения 90%+ coverage.",
+        "inputType": "object",
+        "skill": "test-coverage-booster",
+        "category": "general"
+      },
+      {
+        "name": "ctx_update_pipeline",
+        "source": "built_in",
+        "description": "Обновить произвольные поля pipeline (deep merge первого уровня).",
+        "inputType": "object",
+        "skill": null,
+        "category": null
+      },
+      {
+        "name": "ctx_worktree_create",
+        "source": "built_in",
+        "description": "Создать изолированный worktree для агента. Создаёт ветку agent/<agentId> от baseBranch.",
+        "inputType": "object",
+        "skill": null,
+        "category": null
+      },
+      {
+        "name": "ctx_worktree_list",
+        "source": "built_in",
+        "description": "Список всех worktrees с обогащённым статусом (git + state).",
+        "inputType": "object",
+        "skill": null,
+        "category": null
+      },
+      {
+        "name": "ctx_worktree_merge",
+        "source": "built_in",
+        "description": "Слить ветку агента в базовую ветку (rebase + merge --no-ff). Проверяет чистоту main repo.",
+        "inputType": "object",
+        "skill": null,
+        "category": null
+      },
+      {
+        "name": "ctx_worktree_remove",
+        "source": "built_in",
+        "description": "Удалить worktree агента. Опционально удаляет ветку.",
+        "inputType": "object",
+        "skill": null,
+        "category": null
+      },
+      {
+        "name": "ctx_worktree_status",
+        "source": "built_in",
+        "description": "Подробный статус worktree агента: HEAD, dirty, ahead/behind.",
+        "inputType": "object",
+        "skill": null,
+        "category": null
+      }
+    ],
+    "summary": {
+      "total": 87,
+      "builtIn": 51,
+      "skill": 36
+    }
+  }
+}

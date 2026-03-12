@@ -29,9 +29,13 @@ test('json store persists pipeline and logs to files', () => {
   const pipeline = { stage: 'task', lead: 'codex', task: 'day6' };
   store.writePipeline(pipeline);
   store.appendLog({ ts: '2026-02-18T00:00:00.000Z', action: 'test', message: 'ok' });
+  store.appendLog({ ts: '2026-02-18T00:01:00.000Z', action: 'followup', message: 'still ok' });
 
   const loaded = store.readPipeline({ stage: 'detect' });
   assert.equal(loaded.task, 'day6');
+  const logEntries = store.readLog(10);
+  assert.equal(logEntries.length, 2);
+  assert.equal(logEntries[1].action, 'followup');
 
   const logFile = join(dataDir, 'log.jsonl');
   assert.equal(existsSync(logFile), true);
@@ -51,8 +55,12 @@ test('sqlite store can be selected when available', () => {
   if (mode === 'sqlite') {
     const pipeline = { stage: 'plan', lead: 'codex', task: 'sqlite-check' };
     store.writePipeline(pipeline);
+    store.appendLog({ ts: '2026-02-18T00:00:00.000Z', action: 'sqlite-test', message: 'ok' });
     const loaded = store.readPipeline({ stage: 'detect' });
     assert.equal(loaded.task, 'sqlite-check');
+    const logEntries = store.readLog(10);
+    assert.equal(logEntries.length, 1);
+    assert.equal(logEntries[0].action, 'sqlite-test');
   } else {
     assert.equal(mode, 'json');
     assert.ok(warnings.length > 0);

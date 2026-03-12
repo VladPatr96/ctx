@@ -15,6 +15,8 @@ import { readJsonFile, withLockSync, writeJsonAtomic } from '../utils/state-io.j
 import { rankCandidates } from '../evaluation/adaptive-weight.js';
 import { createEvalStore as _createEvalStoreFn } from '../evaluation/eval-store.js';
 import { initRoutingLogger, logDecision, shutdownRoutingLogger } from '../evaluation/routing-logger.js';
+import { consumeRoutingOverride, normalizeRoutingConfig } from '../contracts/config-schemas.js';
+import { parseRoutingDecision } from '../contracts/runtime-schemas.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = process.env.CTX_DATA_DIR || join(__dirname, '..', '..', '.data');
@@ -55,7 +57,7 @@ function loadRoutingConfig() {
   if (_configCache && (now - _configCacheTime) < CONFIG_CACHE_TTL) {
     return _configCache;
   }
-  _configCache = readJsonFile(ROUTING_CONFIG_FILE, {});
+  _configCache = normalizeRoutingConfig(readJsonFile(ROUTING_CONFIG_FILE, {}));
   _configCacheTime = now;
   return _configCache;
 }
@@ -77,19 +79,13 @@ function invalidateConfigCache() {
 function checkOverride(taskType) {
   if (!taskType) return null;
   try {
-    const config = loadRoutingConfig();
-    const override = config.overrides?.[taskType];
-    if (!override || !override.provider) return null;
-    if (typeof override.remaining === 'number' && override.remaining <= 0) return null;
-
-    // Decrement remaining
-    if (typeof override.remaining === 'number') {
-      override.remaining--;
-      if (override.remaining <= 0) delete config.overrides[taskType];
+    const { provider, changed, config } = consumeRoutingOverride(loadRoutingConfig(), taskType);
+    if (!provider) return null;
+    if (changed) {
       writeJsonAtomic(ROUTING_CONFIG_FILE, config);
       invalidateConfigCache();
     }
-    return override.provider;
+    return provider;
   } catch {
     return null;
   }
@@ -187,6 +183,7 @@ export function route(task) {
 
       matches.push({
         provider: rule.provider,
+        mode: provider.mode,
         strength: rule.strength,
         reason: provider.bestFor?.[rule.strength] || rule.strength,
         weight: rule.weight
@@ -209,15 +206,16 @@ export function route(task) {
       selectedProvider: overrideProvider,
       runnerUp: staticSorted[0]?.provider !== overrideProvider ? staticSorted[0]?.provider : staticSorted[1]?.provider,
       finalScore: 1.0, staticComponent: 1.0,
-      evalComponent: 0, exploreComponent: 0, alpha: 0,
+      evalComponent: 0, feedbackComponent: 0, exploreComponent: 0, alpha: 0,
       routingMode: 'override'
     });
-    return {
+    return parseRoutingDecision({
       provider: overrideProvider,
+      mode: getProvider(overrideProvider)?.mode,
       strength: match.strength || taskType,
       reason: `Manual override for ${taskType}`,
       confidence: 1.0
-    };
+    });
   }
 
   // Adaptive scoring with readiness gate
@@ -235,18 +233,20 @@ export function route(task) {
           finalScore: best.confidence,
           staticComponent: best.adaptive?.staticComponent ?? 0,
           evalComponent: best.adaptive?.evalComponent ?? 0,
+          feedbackComponent: best.adaptive?.feedbackComponent ?? 0,
           exploreComponent: best.adaptive?.exploreComponent ?? 0,
           alpha: best.adaptive?.alpha ?? 0,
           runnerUpScore: ranked[1]?.confidence,
           staticBest: staticSorted[0]?.provider,
           routingMode: 'adaptive'
         });
-        return {
+        return parseRoutingDecision({
           provider: best.provider,
+          mode: best.mode,
           strength: best.strength,
           reason: best.reason,
           confidence: best.confidence
-        };
+        });
       }
     } catch (err) {
       // Fallthrough to static routing
@@ -262,16 +262,17 @@ export function route(task) {
     runnerUp: staticSorted[1]?.provider,
     finalScore: Math.min(best.weight / 10, 1),
     staticComponent: Math.min(best.weight / 10, 1),
-    evalComponent: 0, exploreComponent: 0, alpha: 0,
+    evalComponent: 0, feedbackComponent: 0, exploreComponent: 0, alpha: 0,
     routingMode: 'static'
   });
 
-  return {
+  return parseRoutingDecision({
     provider: best.provider,
+    mode: best.mode,
     strength: best.strength,
     reason: best.reason,
     confidence: Math.min(best.weight / 10, 1)
-  };
+  });
 }
 
 /**
@@ -291,6 +292,7 @@ export function routeMulti(task) {
       seen.add(rule.provider);
       matches.push({
         provider: rule.provider,
+        mode: provider.mode,
         strength: rule.strength,
         reason: provider.bestFor?.[rule.strength] || rule.strength,
         weight: rule.weight,
@@ -317,6 +319,7 @@ export function routeMulti(task) {
           finalScore: ranked[0].confidence,
           staticComponent: ranked[0].adaptive?.staticComponent ?? 0,
           evalComponent: ranked[0].adaptive?.evalComponent ?? 0,
+          feedbackComponent: ranked[0].adaptive?.feedbackComponent ?? 0,
           exploreComponent: ranked[0].adaptive?.exploreComponent ?? 0,
           alpha: ranked[0].adaptive?.alpha ?? 0,
           runnerUpScore: ranked[1]?.confidence,
@@ -338,7 +341,7 @@ export function routeMulti(task) {
       runnerUp: sorted[1]?.provider,
       finalScore: sorted[0].confidence,
       staticComponent: sorted[0].confidence,
-      evalComponent: 0, exploreComponent: 0, alpha: 0,
+      evalComponent: 0, feedbackComponent: 0, exploreComponent: 0, alpha: 0,
       routingMode: 'static'
     });
   }
@@ -395,6 +398,7 @@ export async function delegate(task, opts = {}) {
     if (result.status === 'success') {
       return {
         provider: candidate.provider,
+        mode: candidate.mode,
         strength: candidate.strength,
         reason: candidate.reason,
         routing: 'auto',
@@ -454,6 +458,7 @@ export function explain(task) {
       if (!provider) continue;
       matches.push({
         provider: rule.provider,
+        mode: provider.mode,
         strength: rule.strength,
         reason: provider.bestFor?.[rule.strength] || rule.strength,
         weight: rule.weight
@@ -494,6 +499,7 @@ export function explain(task) {
         finalScore: +(c.confidence || 0).toFixed(4),
         staticComponent: +(c.adaptive?.staticComponent ?? 0).toFixed(4),
         evalComponent: +(c.adaptive?.evalComponent ?? 0).toFixed(4),
+        feedbackComponent: +(c.adaptive?.feedbackComponent ?? 0).toFixed(4),
         exploreComponent: +(c.adaptive?.exploreComponent ?? 0).toFixed(4),
         alpha: +(c.adaptive?.alpha ?? 0).toFixed(4),
         staticWeight: c.weight
@@ -503,6 +509,7 @@ export function explain(task) {
       candidates = staticSorted.map(c => ({
         provider: c.provider, strength: c.strength,
         finalScore: +(Math.min(c.weight / 10, 1)).toFixed(4),
+        feedbackComponent: 0,
         staticWeight: c.weight
       }));
     }
@@ -510,6 +517,7 @@ export function explain(task) {
     candidates = staticSorted.map(c => ({
       provider: c.provider, strength: c.strength,
       finalScore: +(Math.min(c.weight / 10, 1)).toFixed(4),
+      feedbackComponent: 0,
       staticWeight: c.weight
     }));
   }

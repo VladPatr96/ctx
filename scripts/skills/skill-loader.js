@@ -4,46 +4,19 @@
  * Автоматически загружает скиллы и регистрирует их как MCP tools
  */
 
-import { getSkill, listEnabledSkills, generateMCPTools, syncRegistry } from './skill-registry.js';
+import { z } from 'zod';
+import { listEnabledSkills, generateMCPTools, syncRegistry } from './skill-registry.js';
+import { loadSkillCommandHandlerByName } from './skill-contracts.js';
+
+const SKILL_TOOL_INPUT_SCHEMA = z.object({}).passthrough();
 
 /**
  * Execute skill command
  */
 async function executeSkillCommand(skillName, command, params) {
-  const skill = getSkill(skillName);
-  
-  if (!skill || !skill.enabled) {
-    throw new Error(`Skill "${skillName}" not found or disabled`);
-  }
-  
-  // Load skill module dynamically
-  const skillModulePath = join(skill.path, 'index.js');
-  
-  if (existsSync(skillModulePath)) {
-    const { default: skillModule } = await import(pathToFileURL(skillModulePath).href);
-    
-    if (typeof skillModule[command] === 'function') {
-      return await skillModule[command](params);
-    }
-  }
-  
-  // Fallback: try to load command from commands/ directory
-  const commandPath = join(skill.path, 'commands', `${command}.js`);
-  
-  if (existsSync(commandPath)) {
-    const { default: commandFn } = await import(pathToFileURL(commandPath).href);
-    return await commandFn(params);
-  }
-  
-  throw new Error(`Command "${command}" not found in skill "${skillName}"`);
+  const { handler } = await loadSkillCommandHandlerByName(skillName, command);
+  return await handler(params);
 }
-
-import { join, dirname } from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
-import { existsSync } from 'node:fs';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
 
 /**
  * Register skill-based MCP tools
@@ -62,16 +35,11 @@ export function registerSkillTools(server) {
   for (const tool of tools) {
     const toolName = tool.name;
     
-    server.tool(
+    server.registerTool(
       toolName,
       {
-        type: 'object',
-        properties: {
-          params: {
-            type: 'object',
-            description: `Parameters for ${tool.command} command`
-          }
-        }
+        description: tool.description || `Execute ${tool.command} command`,
+        inputSchema: SKILL_TOOL_INPUT_SCHEMA,
       },
       async (params) => {
         try {

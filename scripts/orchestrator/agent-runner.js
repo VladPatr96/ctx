@@ -40,7 +40,7 @@ function createSemaphore(limit) {
  * @param {object} [opts]
  * @param {number} [opts.concurrency=3] — макс. параллельных запусков
  * @param {number} [opts.globalTimeout=300000] — глобальный таймаут для всех
- * @param {string} [opts.baseBranch='master'] — базовая ветка
+ * @param {string} [opts.baseBranch] — базовая ветка; по умолчанию определяется автоматически
  * @param {boolean} [opts.cleanup=true] — удалять worktrees после завершения
  * @param {Function} [opts.invokeFn] — injection для тестов
  * @returns {Promise<object>} сводка выполнения
@@ -49,7 +49,7 @@ export async function runParallel(specs, opts = {}) {
   const {
     concurrency = 3,
     globalTimeout = 300_000,
-    baseBranch = 'master',
+    baseBranch,
     cleanup = true,
     invokeFn = null,
   } = opts;

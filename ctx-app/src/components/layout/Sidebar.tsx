@@ -1,4 +1,5 @@
 import { LayoutDashboard, BookOpen, Users, GitBranch, Settings, Terminal, Workflow, Bot, MessageSquareMore, type LucideIcon } from 'lucide-react';
+import { SHELL_TABS } from '../../../../scripts/contracts/shell-navigation.js';
 
 export type AppTab = 'dashboard' | 'knowledge' | 'agents' | 'routing' | 'devpipeline' | 'orchestrator' | 'debates' | 'settings' | 'terminal';
 
@@ -7,31 +8,31 @@ interface SidebarProps {
   onTabChange: (tab: AppTab) => void;
 }
 
-const TABS: Array<{ id: AppTab; label: string; icon: LucideIcon }> = [
-  { id: 'dashboard', label: 'Пайплайн', icon: LayoutDashboard },
-  { id: 'knowledge', label: 'База знаний', icon: BookOpen },
-  { id: 'agents', label: 'Агенты', icon: Users },
-  { id: 'routing', label: 'Роутинг', icon: GitBranch },
-  { id: 'devpipeline', label: 'Dev Pipeline', icon: Workflow },
-  { id: 'orchestrator', label: 'Оркестратор', icon: Bot },
-  { id: 'debates', label: 'Дебаты', icon: MessageSquareMore },
-  { id: 'settings', label: 'Настройки', icon: Settings },
-  { id: 'terminal', label: 'Терминал', icon: Terminal }
-];
+const TAB_ICONS: Record<string, LucideIcon> = {
+  'layout-dashboard': LayoutDashboard,
+  'book-open': BookOpen,
+  users: Users,
+  'git-branch': GitBranch,
+  workflow: Workflow,
+  bot: Bot,
+  'message-square-more': MessageSquareMore,
+  settings: Settings,
+  terminal: Terminal,
+};
 
 export function Sidebar({ activeTab, onTabChange }: SidebarProps) {
   return (
     <aside className="sidebar">
       <div className="logo">CTX</div>
       <nav>
-        {TABS.map((tab) => {
-          const Icon = tab.icon;
+        {SHELL_TABS.map((tab) => {
+          const Icon = TAB_ICONS[tab.icon] || LayoutDashboard;
           return (
             <button
               key={tab.id}
               type="button"
               className={tab.id === activeTab ? 'nav-btn active' : 'nav-btn'}
-              onClick={() => onTabChange(tab.id)}
+              onClick={() => onTabChange(tab.id as AppTab)}
             >
               <Icon size={18} />
               <span>{tab.label}</span>

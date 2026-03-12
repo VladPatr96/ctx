@@ -12,6 +12,7 @@ import {
   withLockSync,
   writeJsonAtomic
 } from '../utils/state-io.js';
+import { resolveDataDir } from '../storage/index.js';
 
 function ensureDir(path) {
   if (!existsSync(path)) mkdirSync(path, { recursive: true });
@@ -19,7 +20,7 @@ function ensureDir(path) {
 
 export class CostStore {
   constructor(options = {}) {
-    this.dataDir = options.dataDir || '.data';
+    this.dataDir = resolveDataDir(options);
     this.costFile = join(this.dataDir, 'cost-tracking.json');
     this.lockFile = join(this.dataDir, '.cost-tracking.lock');
   }

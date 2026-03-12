@@ -1,0 +1,968 @@
+{
+  "generatedAt": "2026-03-12T11:56:58.093Z",
+  "desktop": {
+    "runtime": {
+      "name": "ctx-app",
+      "version": "1.0.0",
+      "main": "dist-electron/main.js",
+      "shell": "electron",
+      "renderer": "react_vite"
+    },
+    "navigation": {
+      "defaultTab": "dashboard",
+      "tabs": [
+        {
+          "id": "dashboard",
+          "label": "Pipeline",
+          "icon": "layout-dashboard",
+          "focusTargetId": "task-input"
+        },
+        {
+          "id": "knowledge",
+          "label": "Knowledge",
+          "icon": "book-open",
+          "focusTargetId": "kb-search-input"
+        },
+        {
+          "id": "agents",
+          "label": "Agents",
+          "icon": "users"
+        },
+        {
+          "id": "routing",
+          "label": "Routing",
+          "icon": "git-branch"
+        },
+        {
+          "id": "devpipeline",
+          "label": "Dev Pipeline",
+          "icon": "workflow"
+        },
+        {
+          "id": "orchestrator",
+          "label": "Orchestrator",
+          "icon": "bot"
+        },
+        {
+          "id": "debates",
+          "label": "Debates",
+          "icon": "message-square-more"
+        },
+        {
+          "id": "settings",
+          "label": "Settings",
+          "icon": "settings"
+        },
+        {
+          "id": "terminal",
+          "label": "Terminal",
+          "icon": "terminal"
+        }
+      ],
+      "shortcuts": [
+        {
+          "key": "t",
+          "tab": "dashboard",
+          "focusTargetId": "task-input"
+        },
+        {
+          "key": "k",
+          "tab": "knowledge",
+          "focusTargetId": "kb-search-input"
+        }
+      ]
+    },
+    "connectionBudget": {
+      "baseReconnectDelayMs": 1000,
+      "maxReconnectDelayMs": 30000,
+      "staleAfterMs": 15000,
+      "recoveryPollMs": 5000,
+      "minRecoveryIntervalMs": 3000
+    },
+    "shellSummaryContract": {
+      "topLevelFields": [
+        "session",
+        "project",
+        "storage",
+        "providers"
+      ],
+      "sessionFields": [
+        "stage",
+        "lead",
+        "task",
+        "updatedAt"
+      ],
+      "projectFields": [
+        "name",
+        "branch",
+        "stackLabel"
+      ],
+      "storageFields": [
+        "status",
+        "mode",
+        "effectiveMode",
+        "policyState",
+        "failureRatio",
+        "failover",
+        "shadow",
+        "warningActive",
+        "reasons",
+        "sourceCount",
+        "sources",
+        "ts"
+      ],
+      "providersFields": [
+        "models",
+        "cards"
+      ],
+      "providerCardFields": [
+        "provider",
+        "status",
+        "model",
+        "calls",
+        "successes",
+        "failures",
+        "consecutiveFailures",
+        "circuitOpen",
+        "successRate",
+        "avgLatencyMs",
+        "lastLatencyMs",
+        "lastSuccess",
+        "lastFailure",
+        "updatedAt",
+        "hasTelemetry",
+        "reasons"
+      ]
+    },
+    "ipc": {
+      "methods": [
+        {
+          "id": "terminalAllowlist",
+          "api": "ctxApi.getTerminalAllowlist",
+          "channel": "ctx-terminal:get-allowlist",
+          "category": "terminal",
+          "purpose": "Read the Electron terminal allowlist exposed to the desktop shell.",
+          "requestShape": null,
+          "responseShape": "string[]"
+        },
+        {
+          "id": "terminalRun",
+          "api": "ctxApi.runTerminalCommand",
+          "channel": "ctx-terminal:run",
+          "category": "terminal",
+          "purpose": "Run a single allowlisted terminal command through Electron IPC.",
+          "requestShape": "(command: string)",
+          "responseShape": "TerminalCommandResult"
+        }
+      ],
+      "summary": {
+        "total": 2,
+        "terminal": 2
+      }
+    }
+  },
+  "dashboard": {
+    "endpoints": [
+      {
+        "id": "events",
+        "method": "GET",
+        "transport": "sse",
+        "path": "/events",
+        "aliases": [],
+        "pathParams": [],
+        "queryParams": [],
+        "auth": "bearer_or_query_token",
+        "category": "state",
+        "purpose": "Subscribe to live dashboard event stream with replay support.",
+        "requestShape": null,
+        "responseShape": "server_sent_events",
+        "clientMethod": null
+      },
+      {
+        "id": "state",
+        "method": "GET",
+        "transport": "http",
+        "path": "/api/state",
+        "aliases": [
+          "/state"
+        ],
+        "pathParams": [],
+        "queryParams": [],
+        "auth": "bearer_or_query_token",
+        "category": "pipeline",
+        "purpose": "Read the current dashboard pipeline snapshot.",
+        "requestShape": null,
+        "responseShape": "AppState",
+        "clientMethod": "getState"
+      },
+      {
+        "id": "shellSummary",
+        "method": "GET",
+        "transport": "http",
+        "path": "/api/shell/summary",
+        "aliases": [],
+        "pathParams": [],
+        "queryParams": [],
+        "auth": "bearer_or_query_token",
+        "category": "shell",
+        "purpose": "Read the normalized desktop shell summary contract.",
+        "requestShape": null,
+        "responseShape": "ShellSummary",
+        "clientMethod": "getShellSummary"
+      },
+      {
+        "id": "providersExtensibility",
+        "method": "GET",
+        "transport": "http",
+        "path": "/api/providers/extensibility",
+        "aliases": [],
+        "pathParams": [],
+        "queryParams": [],
+        "auth": "bearer_or_query_token",
+        "category": "providers",
+        "purpose": "Read the typed provider and plugin extensibility inventory for operator-facing runtime surfaces.",
+        "requestShape": null,
+        "responseShape": "ProviderExtensibilityInventory",
+        "clientMethod": "getProviderExtensibility"
+      },
+      {
+        "id": "providersRecovery",
+        "method": "GET",
+        "transport": "http",
+        "path": "/api/providers/recovery",
+        "aliases": [],
+        "pathParams": [],
+        "queryParams": [],
+        "auth": "bearer_or_query_token",
+        "category": "providers",
+        "purpose": "Read explicit provider outage recovery hooks and deterministic recovery actions for operator surfaces.",
+        "requestShape": null,
+        "responseShape": "ProviderRecoveryInventory",
+        "clientMethod": "getProviderRecovery"
+      },
+      {
+        "id": "runtimeResilience",
+        "method": "GET",
+        "transport": "http",
+        "path": "/api/runtime/resilience",
+        "aliases": [],
+        "pathParams": [],
+        "queryParams": [],
+        "auth": "bearer_or_query_token",
+        "category": "runtime",
+        "purpose": "Read the typed resilience audit trail with outage notifications and throttling hooks for operator surfaces.",
+        "requestShape": null,
+        "responseShape": "ResilienceAuditInventory",
+        "clientMethod": "getRuntimeResilience"
+      },
+      {
+        "id": "runtimeFallbacks",
+        "method": "GET",
+        "transport": "http",
+        "path": "/api/runtime/fallbacks",
+        "aliases": [],
+        "pathParams": [],
+        "queryParams": [],
+        "auth": "bearer_or_query_token",
+        "category": "runtime",
+        "purpose": "Read the typed offline and degraded runtime fallback inventory for storage and provider recovery.",
+        "requestShape": null,
+        "responseShape": "RuntimeFallbackInventory",
+        "clientMethod": "getRuntimeFallbacks"
+      },
+      {
+        "id": "consiliumObservability",
+        "method": "GET",
+        "transport": "http",
+        "path": "/api/consilium/observability",
+        "aliases": [],
+        "pathParams": [],
+        "queryParams": [],
+        "auth": "bearer_or_query_token",
+        "category": "claims",
+        "purpose": "Read the latest consilium observability snapshot with rounds and trust matrix.",
+        "requestShape": null,
+        "responseShape": "{ observability }",
+        "clientMethod": "getConsiliumObservability"
+      },
+      {
+        "id": "consiliumReplay",
+        "method": "GET",
+        "transport": "http",
+        "path": "/api/consilium/replay",
+        "aliases": [],
+        "pathParams": [],
+        "queryParams": [
+          "last",
+          "project",
+          "provider",
+          "consensus",
+          "run_id"
+        ],
+        "auth": "bearer_or_query_token",
+        "category": "claims",
+        "purpose": "Read recent consilium decisions with replayable round history and linked archive references.",
+        "requestShape": null,
+        "responseShape": "ConsiliumReplayArchive",
+        "clientMethod": "getConsiliumReplay"
+      },
+      {
+        "id": "consiliumReplayExport",
+        "method": "GET",
+        "transport": "http",
+        "path": "/api/consilium/replay/export",
+        "aliases": [],
+        "pathParams": [],
+        "queryParams": [
+          "run_id",
+          "format",
+          "project",
+          "provider",
+          "consensus"
+        ],
+        "auth": "bearer_or_query_token",
+        "category": "claims",
+        "purpose": "Export one archived consilium decision trail as deterministic markdown or json.",
+        "requestShape": null,
+        "responseShape": "ConsiliumReplayExport",
+        "clientMethod": "exportConsiliumReplay"
+      },
+      {
+        "id": "storageHealth",
+        "method": "GET",
+        "transport": "http",
+        "path": "/storage-health",
+        "aliases": [],
+        "pathParams": [],
+        "queryParams": [],
+        "auth": "bearer_or_query_token",
+        "category": "health",
+        "purpose": "Inspect storage adapter mode, failover, and shadow policy state.",
+        "requestShape": null,
+        "responseShape": "StorageHealth",
+        "clientMethod": null
+      },
+      {
+        "id": "health",
+        "method": "GET",
+        "transport": "http",
+        "path": "/health",
+        "aliases": [],
+        "pathParams": [],
+        "queryParams": [],
+        "auth": "public",
+        "category": "health",
+        "purpose": "Liveness probe for dashboard backend startup and reachability.",
+        "requestShape": null,
+        "responseShape": "text_plain_ok",
+        "clientMethod": null
+      },
+      {
+        "id": "kbSearch",
+        "method": "GET",
+        "transport": "http",
+        "path": "/api/kb/search",
+        "aliases": [],
+        "pathParams": [],
+        "queryParams": [
+          "q",
+          "limit",
+          "project"
+        ],
+        "auth": "bearer_or_query_token",
+        "category": "knowledge",
+        "purpose": "Search the knowledge base with optional project scoping.",
+        "requestShape": null,
+        "responseShape": "KBSearchResult",
+        "clientMethod": "searchKb"
+      },
+      {
+        "id": "kbContext",
+        "method": "GET",
+        "transport": "http",
+        "path": "/api/kb/context/:project",
+        "aliases": [],
+        "pathParams": [
+          "project"
+        ],
+        "queryParams": [
+          "limit"
+        ],
+        "auth": "bearer_or_query_token",
+        "category": "knowledge",
+        "purpose": "Read the context snapshot for a single project from the KB.",
+        "requestShape": null,
+        "responseShape": "ProjectContextSnapshot",
+        "clientMethod": null
+      },
+      {
+        "id": "kbContinuity",
+        "method": "GET",
+        "transport": "http",
+        "path": "/api/kb/continuity/:project",
+        "aliases": [],
+        "pathParams": [
+          "project"
+        ],
+        "queryParams": [
+          "limit"
+        ],
+        "auth": "bearer_or_query_token",
+        "category": "knowledge",
+        "purpose": "Read the continuity digest for a single project with hybrid retrieval hints and recent session memory.",
+        "requestShape": null,
+        "responseShape": "KnowledgeContinuityDigest",
+        "clientMethod": "getKbContinuity"
+      },
+      {
+        "id": "kbQuality",
+        "method": "GET",
+        "transport": "http",
+        "path": "/api/kb/quality",
+        "aliases": [],
+        "pathParams": [],
+        "queryParams": [
+          "stale_days"
+        ],
+        "auth": "bearer_or_query_token",
+        "category": "knowledge",
+        "purpose": "Read archive quality insights for project coverage, snapshots, and stale knowledge artifacts.",
+        "requestShape": null,
+        "responseShape": "KnowledgeQualitySummary",
+        "clientMethod": "getKbQuality"
+      },
+      {
+        "id": "kbExport",
+        "method": "GET",
+        "transport": "http",
+        "path": "/api/kb/export/:project",
+        "aliases": [],
+        "pathParams": [
+          "project"
+        ],
+        "queryParams": [
+          "limit",
+          "stale_days"
+        ],
+        "auth": "bearer_or_query_token",
+        "category": "knowledge",
+        "purpose": "Read a project-scoped knowledge export artifact combining continuity, quality, and grouped archive entries.",
+        "requestShape": null,
+        "responseShape": "KnowledgeProjectExport",
+        "clientMethod": "getKbExport"
+      },
+      {
+        "id": "kbSuggestions",
+        "method": "GET",
+        "transport": "http",
+        "path": "/api/kb/suggestions/:project",
+        "aliases": [],
+        "pathParams": [
+          "project"
+        ],
+        "queryParams": [
+          "limit"
+        ],
+        "auth": "bearer_or_query_token",
+        "category": "knowledge",
+        "purpose": "Read archive-backed suggestions and reusable templates for a project knowledge surface.",
+        "requestShape": null,
+        "responseShape": "KnowledgeSuggestionSummary",
+        "clientMethod": "getKbSuggestions"
+      },
+      {
+        "id": "kbStats",
+        "method": "GET",
+        "transport": "http",
+        "path": "/api/kb/stats",
+        "aliases": [],
+        "pathParams": [],
+        "queryParams": [],
+        "auth": "bearer_or_query_token",
+        "category": "knowledge",
+        "purpose": "Read aggregate knowledge-base statistics.",
+        "requestShape": null,
+        "responseShape": "KBStats",
+        "clientMethod": "getKbStats"
+      },
+      {
+        "id": "routingHealth",
+        "method": "GET",
+        "transport": "http",
+        "path": "/api/routing/health",
+        "aliases": [],
+        "pathParams": [],
+        "queryParams": [
+          "last",
+          "since_days"
+        ],
+        "auth": "bearer_or_query_token",
+        "category": "routing",
+        "purpose": "Inspect routing evaluation health and recent provider outcomes.",
+        "requestShape": null,
+        "responseShape": "RoutingHealthData",
+        "clientMethod": "getRoutingHealth"
+      },
+      {
+        "id": "routingExplainability",
+        "method": "GET",
+        "transport": "http",
+        "path": "/api/routing/explainability",
+        "aliases": [],
+        "pathParams": [],
+        "queryParams": [
+          "last",
+          "since_days"
+        ],
+        "auth": "bearer_or_query_token",
+        "category": "routing",
+        "purpose": "Read normalized routing explainability summaries and recent operator feedback.",
+        "requestShape": null,
+        "responseShape": "RoutingExplainabilitySummary",
+        "clientMethod": "getRoutingExplainability"
+      },
+      {
+        "id": "devPipelineStatus",
+        "method": "GET",
+        "transport": "http",
+        "path": "/api/dev-pipeline/status",
+        "aliases": [],
+        "pathParams": [],
+        "queryParams": [
+          "pipelineId"
+        ],
+        "auth": "bearer_or_query_token",
+        "category": "dev_pipeline",
+        "purpose": "Read one or many development pipeline reports.",
+        "requestShape": null,
+        "responseShape": "DevPipelineReport | DevPipelineReport[]",
+        "clientMethod": "devPipelineStatus"
+      },
+      {
+        "id": "claimGraph",
+        "method": "GET",
+        "transport": "http",
+        "path": "/api/claims/graph",
+        "aliases": [],
+        "pathParams": [],
+        "queryParams": [],
+        "auth": "bearer_or_query_token",
+        "category": "claims",
+        "purpose": "Read the current claim graph snapshot.",
+        "requestShape": null,
+        "responseShape": "ClaimGraphData",
+        "clientMethod": "getClaimGraph"
+      },
+      {
+        "id": "terminalSessions",
+        "method": "GET",
+        "transport": "http",
+        "path": "/api/terminal/sessions",
+        "aliases": [],
+        "pathParams": [],
+        "queryParams": [],
+        "auth": "bearer_or_query_token",
+        "category": "terminal",
+        "purpose": "List orchestrator-managed terminal sessions.",
+        "requestShape": null,
+        "responseShape": "TerminalSessionsList",
+        "clientMethod": "listTerminalSessions"
+      },
+      {
+        "id": "terminalSession",
+        "method": "GET",
+        "transport": "http",
+        "path": "/api/terminal/session/:sessionId",
+        "aliases": [],
+        "pathParams": [
+          "sessionId"
+        ],
+        "queryParams": [],
+        "auth": "bearer_or_query_token",
+        "category": "terminal",
+        "purpose": "Read a single terminal session snapshot.",
+        "requestShape": null,
+        "responseShape": "TerminalSessionDetails",
+        "clientMethod": null
+      },
+      {
+        "id": "terminalSessionStream",
+        "method": "GET",
+        "transport": "sse",
+        "path": "/api/terminal/session/:sessionId/stream",
+        "aliases": [],
+        "pathParams": [
+          "sessionId"
+        ],
+        "queryParams": [],
+        "auth": "bearer_or_query_token",
+        "category": "terminal",
+        "purpose": "Stream terminal session output over SSE.",
+        "requestShape": null,
+        "responseShape": "server_sent_events",
+        "clientMethod": "getTerminalStreamUrl"
+      },
+      {
+        "id": "analyticsSummary",
+        "method": "GET",
+        "transport": "http",
+        "path": "/api/analytics/summary",
+        "aliases": [],
+        "pathParams": [],
+        "queryParams": [],
+        "auth": "bearer_or_query_token",
+        "category": "analytics",
+        "purpose": "Read the normalized dashboard analytics summary for provider cost, budgets, recommendations, and routing snapshot.",
+        "requestShape": null,
+        "responseShape": "AnalyticsSummary",
+        "clientMethod": "getAnalyticsSummary"
+      },
+      {
+        "id": "costSummary",
+        "method": "GET",
+        "transport": "http",
+        "path": "/api/cost/summary",
+        "aliases": [],
+        "pathParams": [],
+        "queryParams": [],
+        "auth": "bearer_or_query_token",
+        "category": "cost",
+        "purpose": "Read aggregate provider cost metrics.",
+        "requestShape": null,
+        "responseShape": "CostSummary",
+        "clientMethod": "getCostSummary"
+      },
+      {
+        "id": "costByProvider",
+        "method": "GET",
+        "transport": "http",
+        "path": "/api/cost/by-provider",
+        "aliases": [],
+        "pathParams": [],
+        "queryParams": [],
+        "auth": "bearer_or_query_token",
+        "category": "cost",
+        "purpose": "Read per-provider cost breakdowns.",
+        "requestShape": null,
+        "responseShape": "ProviderCostDataMap",
+        "clientMethod": "getCostsByProvider"
+      },
+      {
+        "id": "costRecommendations",
+        "method": "GET",
+        "transport": "http",
+        "path": "/api/cost/recommendations",
+        "aliases": [],
+        "pathParams": [],
+        "queryParams": [],
+        "auth": "bearer_or_query_token",
+        "category": "cost",
+        "purpose": "Read cost optimization recommendations.",
+        "requestShape": null,
+        "responseShape": "Recommendation[]",
+        "clientMethod": "getRecommendations"
+      },
+      {
+        "id": "costBudget",
+        "method": "GET",
+        "transport": "http",
+        "path": "/api/cost/budget",
+        "aliases": [],
+        "pathParams": [],
+        "queryParams": [],
+        "auth": "bearer_or_query_token",
+        "category": "cost",
+        "purpose": "Read the current budget configuration and status.",
+        "requestShape": null,
+        "responseShape": "BudgetStatus",
+        "clientMethod": "getBudgetStatus"
+      },
+      {
+        "id": "pipelineStage",
+        "method": "POST",
+        "transport": "http",
+        "path": "/api/pipeline/stage",
+        "aliases": [],
+        "pathParams": [],
+        "queryParams": [],
+        "auth": "bearer_token",
+        "category": "pipeline",
+        "purpose": "Set the current pipeline stage.",
+        "requestShape": "{ stage }",
+        "responseShape": "ok",
+        "clientMethod": "setStage"
+      },
+      {
+        "id": "routingFeedback",
+        "method": "POST",
+        "transport": "http",
+        "path": "/api/routing/feedback",
+        "aliases": [],
+        "pathParams": [],
+        "queryParams": [],
+        "auth": "bearer_token",
+        "category": "routing",
+        "purpose": "Persist operator feedback for a routing decision through the explicit routing feedback contract.",
+        "requestShape": "RoutingFeedbackPayload",
+        "responseShape": "RoutingFeedbackRecord",
+        "clientMethod": "submitRoutingFeedback"
+      },
+      {
+        "id": "pipelineTask",
+        "method": "POST",
+        "transport": "http",
+        "path": "/api/pipeline/task",
+        "aliases": [],
+        "pathParams": [],
+        "queryParams": [],
+        "auth": "bearer_token",
+        "category": "pipeline",
+        "purpose": "Set the current pipeline task label.",
+        "requestShape": "{ task }",
+        "responseShape": "ok",
+        "clientMethod": "setTask"
+      },
+      {
+        "id": "pipelineLead",
+        "method": "POST",
+        "transport": "http",
+        "path": "/api/pipeline/lead",
+        "aliases": [],
+        "pathParams": [],
+        "queryParams": [],
+        "auth": "bearer_token",
+        "category": "pipeline",
+        "purpose": "Switch the lead provider for the active pipeline.",
+        "requestShape": "{ lead }",
+        "responseShape": "ok",
+        "clientMethod": null
+      },
+      {
+        "id": "pipelineReset",
+        "method": "POST",
+        "transport": "http",
+        "path": "/api/pipeline/reset",
+        "aliases": [],
+        "pathParams": [],
+        "queryParams": [],
+        "auth": "bearer_token",
+        "category": "pipeline",
+        "purpose": "Reset pipeline state to a clean baseline.",
+        "requestShape": null,
+        "responseShape": "ok",
+        "clientMethod": null
+      },
+      {
+        "id": "logClear",
+        "method": "POST",
+        "transport": "http",
+        "path": "/api/log/clear",
+        "aliases": [],
+        "pathParams": [],
+        "queryParams": [],
+        "auth": "bearer_token",
+        "category": "pipeline",
+        "purpose": "Clear dashboard-visible runtime log history.",
+        "requestShape": null,
+        "responseShape": "ok",
+        "clientMethod": null
+      },
+      {
+        "id": "agentDetails",
+        "method": "POST",
+        "transport": "http",
+        "path": "/api/agent/details",
+        "aliases": [],
+        "pathParams": [],
+        "queryParams": [],
+        "auth": "bearer_token",
+        "category": "agents",
+        "purpose": "Read detailed markdown/source content for an agent definition.",
+        "requestShape": "{ id }",
+        "responseShape": "{ content }",
+        "clientMethod": "getAgentDetails"
+      },
+      {
+        "id": "claimGraphRefresh",
+        "method": "POST",
+        "transport": "http",
+        "path": "/api/claims/graph",
+        "aliases": [],
+        "pathParams": [],
+        "queryParams": [],
+        "auth": "bearer_token",
+        "category": "claims",
+        "purpose": "Recompute and return the current claim graph.",
+        "requestShape": null,
+        "responseShape": "{ graph }",
+        "clientMethod": null
+      },
+      {
+        "id": "claimVerdict",
+        "method": "POST",
+        "transport": "http",
+        "path": "/api/claims/verdict",
+        "aliases": [],
+        "pathParams": [],
+        "queryParams": [],
+        "auth": "bearer_token",
+        "category": "claims",
+        "purpose": "Persist a verdict for a claim node.",
+        "requestShape": "{ claimId, verdict }",
+        "responseShape": "ok",
+        "clientMethod": "setClaimVerdict"
+      },
+      {
+        "id": "consiliumActivate",
+        "method": "POST",
+        "transport": "http",
+        "path": "/api/consilium/activate",
+        "aliases": [],
+        "pathParams": [],
+        "queryParams": [],
+        "auth": "bearer_token",
+        "category": "claims",
+        "purpose": "Activate consilium follow-up from the dashboard surface.",
+        "requestShape": null,
+        "responseShape": "ok",
+        "clientMethod": null
+      },
+      {
+        "id": "pipelinePlan",
+        "method": "POST",
+        "transport": "http",
+        "path": "/api/pipeline/plan",
+        "aliases": [],
+        "pathParams": [],
+        "queryParams": [],
+        "auth": "bearer_token",
+        "category": "pipeline",
+        "purpose": "Write the current pipeline plan payload.",
+        "requestShape": "{ plan }",
+        "responseShape": "ok",
+        "clientMethod": null
+      },
+      {
+        "id": "kbSave",
+        "method": "POST",
+        "transport": "http",
+        "path": "/api/kb/save",
+        "aliases": [],
+        "pathParams": [],
+        "queryParams": [],
+        "auth": "bearer_token",
+        "category": "knowledge",
+        "purpose": "Persist a knowledge-base entry.",
+        "requestShape": "KBEntryInput",
+        "responseShape": "ok",
+        "clientMethod": "saveKbEntry"
+      },
+      {
+        "id": "devPipelineRun",
+        "method": "POST",
+        "transport": "http",
+        "path": "/api/dev-pipeline/run",
+        "aliases": [],
+        "pathParams": [],
+        "queryParams": [],
+        "auth": "bearer_token",
+        "category": "dev_pipeline",
+        "purpose": "Start a development pipeline run.",
+        "requestShape": "{ specs, ...opts }",
+        "responseShape": "DevPipelineReport",
+        "clientMethod": "devPipelineRun"
+      },
+      {
+        "id": "kbSync",
+        "method": "POST",
+        "transport": "http",
+        "path": "/api/kb/sync",
+        "aliases": [],
+        "pathParams": [],
+        "queryParams": [],
+        "auth": "bearer_token",
+        "category": "knowledge",
+        "purpose": "Trigger a KB sync pull/push cycle.",
+        "requestShape": null,
+        "responseShape": "KBSyncResult",
+        "clientMethod": null
+      },
+      {
+        "id": "terminalSessionCreate",
+        "method": "POST",
+        "transport": "http",
+        "path": "/api/terminal/session/create",
+        "aliases": [],
+        "pathParams": [],
+        "queryParams": [],
+        "auth": "bearer_token",
+        "category": "terminal",
+        "purpose": "Create a new orchestrator terminal session.",
+        "requestShape": "CreateSessionOpts",
+        "responseShape": "{ sessionId }",
+        "clientMethod": "createTerminalSession"
+      },
+      {
+        "id": "terminalSessionKill",
+        "method": "POST",
+        "transport": "http",
+        "path": "/api/terminal/session/kill",
+        "aliases": [],
+        "pathParams": [],
+        "queryParams": [],
+        "auth": "bearer_token",
+        "category": "terminal",
+        "purpose": "Kill a running orchestrator terminal session.",
+        "requestShape": "{ sessionId }",
+        "responseShape": "ok",
+        "clientMethod": "killTerminalSession"
+      },
+      {
+        "id": "terminalSessionDelete",
+        "method": "POST",
+        "transport": "http",
+        "path": "/api/terminal/session/delete",
+        "aliases": [],
+        "pathParams": [],
+        "queryParams": [],
+        "auth": "bearer_token",
+        "category": "terminal",
+        "purpose": "Delete an orchestrator terminal session and its buffered state.",
+        "requestShape": "{ sessionId }",
+        "responseShape": "ok",
+        "clientMethod": "deleteTerminalSession"
+      },
+      {
+        "id": "terminalSessionInput",
+        "method": "POST",
+        "transport": "http",
+        "path": "/api/terminal/session/input",
+        "aliases": [
+          "/api/terminal/session/:sessionId/input"
+        ],
+        "pathParams": [],
+        "queryParams": [],
+        "auth": "bearer_token",
+        "category": "terminal",
+        "purpose": "Send input to an orchestrator terminal session.",
+        "requestShape": "{ sessionId, text }",
+        "responseShape": "ok",
+        "clientMethod": "sendSessionInput"
+      }
+    ],
+    "summary": {
+      "total": 49,
+      "get": 31,
+      "post": 18,
+      "sse": 2,
+      "public": 1,
+      "protected": 48,
+      "clientBound": 37,
+      "operatorOnly": 12
+    }
+  },
+  "notes": [
+    "Dashboard GET endpoints accept Bearer auth and the dashboard query token; POST endpoints require Bearer auth.",
+    "Desktop terminal execution is canonical through Electron IPC, not dashboard HTTP routes."
+  ]
+}

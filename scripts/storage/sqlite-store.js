@@ -61,6 +61,12 @@ export class SqliteStore extends StorageAdapter {
       INSERT INTO task_history(ts, task, lead, stage, source)
       VALUES (?, ?, ?, ?, ?)
     `);
+    this.getRecentLogEventsStmt = this.db.prepare(`
+      SELECT payload_json
+      FROM log_events
+      ORDER BY id DESC
+      LIMIT ?
+    `);
     this.clearLogEventsStmt = this.db.prepare('DELETE FROM log_events');
   }
 
@@ -72,6 +78,20 @@ export class SqliteStore extends StorageAdapter {
     } catch {
       return fallbackValue;
     }
+  }
+
+  readLog(limit = 50) {
+    const normalizedLimit = normalizeLimit(limit, 50);
+    const rows = this.getRecentLogEventsStmt.all(normalizedLimit).reverse();
+    return rows
+      .map(row => {
+        try {
+          return JSON.parse(row.payload_json);
+        } catch {
+          return null;
+        }
+      })
+      .filter(Boolean);
   }
 
   writePipeline(pipeline) {
@@ -112,4 +132,10 @@ export class SqliteStore extends StorageAdapter {
       this.db.close();
     }
   }
+}
+
+function normalizeLimit(value, fallback) {
+  const parsed = Number.parseInt(String(value ?? ''), 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
+  return parsed;
 }

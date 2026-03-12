@@ -44,8 +44,9 @@ export function createEvalStore(dataDir = '.data') {
   db.exec('PRAGMA busy_timeout = 2000;');
   db.exec(readFileSync(SCHEMA_FILE, 'utf8'));
 
-  // Idempotent schema migration: add task_type column
+  // Idempotent schema migrations for runtime contracts
   try { db.exec('ALTER TABLE provider_responses ADD COLUMN task_type TEXT;'); } catch { /* already exists */ }
+  try { db.exec('ALTER TABLE routing_decisions ADD COLUMN feedback_component REAL NOT NULL DEFAULT 0;'); } catch { /* already exists */ }
 
   // ---- Prepared statements ----
 
@@ -149,6 +150,42 @@ export function createEvalStore(dataDir = '.data') {
 
   // Metrics caching via external cache-store (if provided), with local fallback
   let _cacheStore = null;
+  function invalidateMetricsCache(taskType = null) {
+    _localCache.delete('metrics:global');
+    if (taskType) _localCache.delete(`metrics:tasktype:${taskType}`);
+
+    if (_cacheStore && typeof _cacheStore.delete === 'function') {
+      try { _cacheStore.delete('metrics:global'); } catch { /* ignore */ }
+      if (taskType) {
+        try { _cacheStore.delete(`metrics:tasktype:${taskType}`); } catch { /* ignore */ }
+      }
+    }
+  }
+
+  function applyFeedbackStats(providers, rows) {
+    for (const row of rows) {
+      const existing = providers.get(row.provider) || {
+        total_responses: 0,
+        wins: 0,
+        avg_response_ms: null,
+        avg_confidence: null
+      };
+      const positive = row.positive_count || 0;
+      const neutral = row.neutral_count || 0;
+      const negative = row.negative_count || 0;
+      const total = row.feedback_total || 0;
+      const score = total > 0 ? (positive + neutral * 0.5) / total : 0.5;
+
+      providers.set(row.provider, {
+        ...existing,
+        feedback_positive: positive,
+        feedback_neutral: neutral,
+        feedback_negative: negative,
+        feedback_count: total,
+        feedback_score: score
+      });
+    }
+  }
   const _localCache = new Map(); // fallback: key → { value, time }
 
   const ciStatsStmt = db.prepare(`
@@ -166,8 +203,12 @@ export function createEvalStore(dataDir = '.data') {
 
   const insertRoutingDecisionStmt = db.prepare(`
     INSERT INTO routing_decisions(timestamp, task_snippet, task_type, selected_provider, runner_up,
-      final_score, static_component, eval_component, explore_component, alpha, delta, is_diverged, routing_mode)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      final_score, static_component, eval_component, feedback_component, explore_component, alpha, delta, is_diverged, routing_mode)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+
+  const getRoutingDecisionByIdStmt = db.prepare(`
+    SELECT * FROM routing_decisions WHERE id = ?
   `);
 
   const getLastRoutingDecisionsStmt = db.prepare(`
@@ -195,6 +236,46 @@ export function createEvalStore(dataDir = '.data') {
       AVG(explore_component) as avg_explore,
       SUM(is_diverged) as diverged_count
     FROM routing_decisions WHERE timestamp > ?
+  `);
+
+  const feedbackStatsByProviderStmt = db.prepare(`
+    SELECT selected_provider as provider,
+      COUNT(*) as feedback_total,
+      SUM(CASE WHEN verdict = 'positive' THEN 1 ELSE 0 END) as positive_count,
+      SUM(CASE WHEN verdict = 'neutral' THEN 1 ELSE 0 END) as neutral_count,
+      SUM(CASE WHEN verdict = 'negative' THEN 1 ELSE 0 END) as negative_count
+    FROM routing_feedback
+    GROUP BY selected_provider
+  `);
+
+  const feedbackStatsByProviderTaskTypeStmt = db.prepare(`
+    SELECT selected_provider as provider,
+      COUNT(*) as feedback_total,
+      SUM(CASE WHEN verdict = 'positive' THEN 1 ELSE 0 END) as positive_count,
+      SUM(CASE WHEN verdict = 'neutral' THEN 1 ELSE 0 END) as neutral_count,
+      SUM(CASE WHEN verdict = 'negative' THEN 1 ELSE 0 END) as negative_count
+    FROM routing_feedback
+    WHERE task_type = ?
+    GROUP BY selected_provider
+  `);
+
+  const upsertRoutingFeedbackStmt = db.prepare(`
+    INSERT INTO routing_feedback(decision_id, timestamp, selected_provider, task_type, verdict, note, actor)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(decision_id, actor) DO UPDATE SET
+      timestamp = excluded.timestamp,
+      selected_provider = excluded.selected_provider,
+      task_type = excluded.task_type,
+      verdict = excluded.verdict,
+      note = excluded.note
+  `);
+
+  const getRoutingFeedbackByDecisionActorStmt = db.prepare(`
+    SELECT * FROM routing_feedback WHERE decision_id = ? AND actor = ?
+  `);
+
+  const getRecentRoutingFeedbackStmt = db.prepare(`
+    SELECT * FROM routing_feedback WHERE timestamp > ? ORDER BY timestamp DESC
   `);
 
   const deleteOldRoutingStmt = db.prepare(`
@@ -379,6 +460,34 @@ export function createEvalStore(dataDir = '.data') {
      * Inject external cache-store for metrics caching.
      * @param {object} cacheStore — createCacheStore() instance
      */
+    getConsiliumRuns({ last = 10, project = null } = {}) {
+      try {
+        return project
+          ? getRunsByProjectStmt.all(project, last)
+          : getLastRunsStmt.all(last);
+      } catch (err) {
+        console.error('[eval-store] getConsiliumRuns failed:', err.message);
+        return [];
+      }
+    },
+
+    getConsiliumRunDetail(runId) {
+      try {
+        const run = getRunStmt.get(runId);
+        if (!run) return null;
+
+        return {
+          run,
+          providerResponses: getProviderResponsesStmt.all(runId),
+          roundSummary: getRoundSummaryStmt.all(runId),
+          roundResponses: getRoundResponsesStmt.all(runId),
+        };
+      } catch (err) {
+        console.error('[eval-store] getConsiliumRunDetail failed:', err.message);
+        return null;
+      }
+    },
+
     setCacheStore(cacheStore) {
       _cacheStore = cacheStore;
     },
@@ -417,6 +526,7 @@ export function createEvalStore(dataDir = '.data') {
             avg_confidence: row.avg_confidence
           });
         }
+        applyFeedbackStats(providers, feedbackStatsByProviderStmt.all());
         const global = globalWinRateStmt.get();
         const globalWinRate = global.total_responses > 0
           ? global.total_wins / global.total_responses
@@ -470,6 +580,7 @@ export function createEvalStore(dataDir = '.data') {
             avg_confidence: row.avg_confidence
           });
         }
+        applyFeedbackStats(providers, feedbackStatsByProviderTaskTypeStmt.all(taskType));
         const global = globalWinRateStmt.get();
         const globalWinRate = global.total_responses > 0
           ? global.total_wins / global.total_responses
@@ -520,7 +631,7 @@ export function createEvalStore(dataDir = '.data') {
           record.timestamp, record.task_snippet, record.task_type,
           record.selected_provider, record.runner_up ?? null,
           record.final_score, record.static_component, record.eval_component,
-          record.explore_component, record.alpha, record.delta ?? null,
+          record.feedback_component ?? 0, record.explore_component, record.alpha, record.delta ?? null,
           record.is_diverged ?? 0, record.routing_mode
         );
       } catch (err) {
@@ -540,7 +651,7 @@ export function createEvalStore(dataDir = '.data') {
             r.timestamp, r.task_snippet, r.task_type,
             r.selected_provider, r.runner_up ?? null,
             r.final_score, r.static_component, r.eval_component,
-            r.explore_component, r.alpha, r.delta ?? null,
+            r.feedback_component ?? 0, r.explore_component, r.alpha, r.delta ?? null,
             r.is_diverged ?? 0, r.routing_mode
           );
         }
@@ -567,6 +678,135 @@ export function createEvalStore(dataDir = '.data') {
       } catch (err) {
         console.error('[eval-store] getRoutingHealth failed:', err.message);
         return { total: 0, decisions: [], distribution: [], anomalyStats: {} };
+      }
+    },
+
+    /**
+     * Persist operator feedback for a routing decision.
+     * One record per { decision, actor } to keep the contract idempotent for dashboard UX.
+     */
+    addRoutingFeedback({
+      decision_id,
+      selected_provider = null,
+      task_type = null,
+      verdict,
+      note = null,
+      actor = 'dashboard',
+      timestamp = new Date().toISOString()
+    }) {
+      try {
+        const decision = getRoutingDecisionByIdStmt.get(decision_id);
+        if (!decision) {
+          return { ok: false, error: `Routing decision "${decision_id}" not found` };
+        }
+
+        const provider = selected_provider || decision.selected_provider;
+        const taskType = task_type || decision.task_type;
+        upsertRoutingFeedbackStmt.run(
+          decision_id,
+          timestamp,
+          provider,
+          taskType,
+          verdict,
+          note ?? null,
+          actor
+        );
+        invalidateMetricsCache(taskType);
+
+        const row = getRoutingFeedbackByDecisionActorStmt.get(decision_id, actor);
+        if (!row) {
+          return { ok: false, error: 'Feedback persisted but could not be reloaded' };
+        }
+
+        return {
+          ok: true,
+          record: {
+            id: row.id,
+            decision_id: row.decision_id,
+            selected_provider: row.selected_provider,
+            task_type: row.task_type,
+            verdict: row.verdict,
+            note: row.note ?? null,
+            actor: row.actor,
+            timestamp: row.timestamp
+          }
+        };
+      } catch (err) {
+        console.error('[eval-store] addRoutingFeedback failed:', err.message);
+        return { ok: false, error: err.message };
+      }
+    },
+
+    /**
+     * Aggregate routing feedback for explainability and adaptive weighting.
+     */
+    getRoutingFeedbackSummary({ sinceDays = 7, decisionIds = [] } = {}) {
+      try {
+        const since = new Date(Date.now() - sinceDays * 86400000).toISOString();
+        const rows = getRecentRoutingFeedbackStmt.all(since);
+        const decisionSet = new Set((decisionIds || []).filter((value) => Number.isInteger(value)));
+        const byProvider = new Map();
+        const byDecision = new Map();
+        const summary = { total: 0, positive: 0, neutral: 0, negative: 0 };
+
+        for (const row of rows) {
+          summary.total++;
+          summary[row.verdict] = (summary[row.verdict] || 0) + 1;
+
+          let providerEntry = byProvider.get(row.selected_provider);
+          if (!providerEntry) {
+            providerEntry = {
+              provider: row.selected_provider,
+              total: 0,
+              positive: 0,
+              neutral: 0,
+              negative: 0,
+              score: 0.5
+            };
+            byProvider.set(row.selected_provider, providerEntry);
+          }
+          providerEntry.total++;
+          providerEntry[row.verdict]++;
+          providerEntry.score = (providerEntry.positive + providerEntry.neutral * 0.5) / providerEntry.total;
+
+          if (decisionSet.size > 0 && !decisionSet.has(row.decision_id)) continue;
+
+          let decisionEntry = byDecision.get(row.decision_id);
+          if (!decisionEntry) {
+            decisionEntry = {
+              verdict: 'unrated',
+              total: 0,
+              positive: 0,
+              neutral: 0,
+              negative: 0,
+              note: null,
+              lastSubmittedAt: null,
+            };
+            byDecision.set(row.decision_id, decisionEntry);
+          }
+
+          decisionEntry.total++;
+          decisionEntry[row.verdict]++;
+          decisionEntry.verdict = row.verdict;
+          decisionEntry.note = row.note ?? null;
+          decisionEntry.lastSubmittedAt = row.timestamp;
+        }
+
+        return {
+          ...summary,
+          byProvider: [...byProvider.values()].sort((a, b) => b.total - a.total || a.provider.localeCompare(b.provider)),
+          byDecision: Object.fromEntries(byDecision.entries()),
+        };
+      } catch (err) {
+        console.error('[eval-store] getRoutingFeedbackSummary failed:', err.message);
+        return {
+          total: 0,
+          positive: 0,
+          neutral: 0,
+          negative: 0,
+          byProvider: [],
+          byDecision: {},
+        };
       }
     },
 

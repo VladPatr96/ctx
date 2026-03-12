@@ -22,19 +22,35 @@ import * as termSessions from './terminal-sessions.js';
 import { getCostSummary, getCostsByProvider } from './cost-tracking/index.js';
 import { getRecommendations } from './cost-tracking/optimization-engine.js';
 import { getBudgetConfig, checkAllBudgets } from './cost-tracking/budget-alerts.js';
+import { resolveDataDir } from './storage/index.js';
+import { createDashboardStateStore } from './storage/dashboard-state-store.js';
+import { createShellSummary } from './contracts/shell-schemas.js';
+import { buildAnalyticsSummary } from './analytics/summary.js';
+import { buildRoutingExplainability } from './analytics/routing-explainability.js';
+import { listProviderExtensibilityInventory } from './providers/index.js';
+import { buildRuntimeFallbackInventory } from './contracts/runtime-fallback-schemas.js';
+import { buildProviderRecoveryInventory } from './contracts/provider-recovery-schemas.js';
+import { buildResilienceAuditInventory } from './contracts/resilience-audit-schemas.js';
+import {
+  buildConsiliumObservabilitySnapshot,
+  createConsiliumObservabilitySnapshot,
+} from './contracts/consilium-observability.js';
+import {
+  buildConsiliumReplayArchive,
+  buildConsiliumReplayExport,
+  buildConsiliumReplayKnowledgeContext,
+} from './contracts/consilium-replay-schemas.js';
+import {
+  createRoutingFeedbackRecord,
+  parseRoutingFeedbackPayload,
+} from './contracts/routing-feedback-schemas.js';
 
 // 1. CONSTANTS
-const DATA_DIR = '.data';
+const DATA_DIR = resolveDataDir();
 const TOKEN_FILE = join(DATA_DIR, '.dashboard-token');
-const PIPELINE_FILE = '.data/pipeline.json';
-const INDEX_FILE = '.data/index.json';
-const PROVIDER_HEALTH_FILE = '.data/provider-health.json';
-const SESSION_FILE = '.data/session.json';
-const LOG_FILE = '.data/log.jsonl';
-const COST_TRACKING_FILE = '.data/cost-tracking.json';
+const COST_TRACKING_FILE = join(DATA_DIR, 'cost-tracking.json');
 const AGENTS_DIR = 'agents';
 const CONSILIUM_FILE = 'consilium.presets.json';
-const RESULTS_FILE = '.data/results.json';
 const SKILLS_DIR = 'skills';
 const SCRIPTS_DIR = 'scripts';
 const LOG_RING_SIZE = 50;
@@ -88,6 +104,12 @@ setInterval(() => {
 let kbRuntimePromise = null;
 let kbSyncClient = null;
 let _dashboardEvalStorePromise = null;
+const dashboardStateStore = createDashboardStateStore({
+  dataDir: DATA_DIR,
+  preferred: process.env.CTX_STORAGE,
+  sqliteFallbackJson: process.env.CTX_SQLITE_FALLBACK_JSON,
+  onWarning: (message) => console.warn(`[storage] ${message}`)
+});
 
 async function getDashboardEvalStore() {
   if (!_dashboardEvalStorePromise) {
@@ -113,6 +135,30 @@ function getKbSyncClient() {
     kbSyncClient = new KbSync();
   }
   return kbSyncClient;
+}
+
+export async function resetDashboardRuntimeCachesForTests() {
+  if (kbRuntimePromise) {
+    try {
+      const runtime = await kbRuntimePromise;
+      runtime?.store?.close?.();
+    } catch {
+      // Best-effort cleanup for hermetic test runs.
+    }
+  }
+
+  if (_dashboardEvalStorePromise) {
+    try {
+      const evalStore = await _dashboardEvalStorePromise;
+      evalStore?.close?.();
+    } catch {
+      // Best-effort cleanup for hermetic test runs.
+    }
+  }
+
+  kbRuntimePromise = null;
+  kbSyncClient = null;
+  _dashboardEvalStorePromise = null;
 }
 
 function getExpectedToken(token) {
@@ -148,6 +194,169 @@ function parsePositiveInt(raw, fallback, min = 1, max = 1000) {
   if (parsed < min) return min;
   if (parsed > max) return max;
   return parsed;
+}
+
+function parseConsiliumProvider(raw) {
+  const value = String(raw || '').trim().toLowerCase();
+  return value || null;
+}
+
+function parseConsiliumConsensus(raw) {
+  const value = String(raw || '').trim().toLowerCase();
+  return value === 'consensus' || value === 'open' ? value : 'all';
+}
+
+function parseJsonArray(raw) {
+  if (Array.isArray(raw)) return raw;
+  if (typeof raw !== 'string' || !raw.trim()) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function runMatchesConsiliumFilters(run, { project = null, provider = null, consensus = 'all' } = {}) {
+  if (project && String(run?.project || '').trim() !== project) {
+    return false;
+  }
+
+  if (provider) {
+    const participantSet = new Set([
+      ...parseJsonArray(run?.providers_invoked),
+      ...parseJsonArray(run?.providers_responded),
+      run?.proposed_by,
+    ].map((value) => String(value || '').trim().toLowerCase()).filter(Boolean));
+
+    if (!participantSet.has(provider)) {
+      return false;
+    }
+  }
+
+  if (consensus === 'consensus') {
+    return Boolean(run?.consensus_reached);
+  }
+
+  if (consensus === 'open') {
+    return !Boolean(run?.consensus_reached);
+  }
+
+  return true;
+}
+
+function filterConsiliumRuns(runs, filters) {
+  return (Array.isArray(runs) ? runs : []).filter((run) => runMatchesConsiliumFilters(run, filters));
+}
+
+function buildKnowledgeShellHref({ project = null, query = null, focusId = null } = {}) {
+  const params = new URLSearchParams({ tab: 'knowledge' });
+  if (project) params.set('kb_project', project);
+  if (query) params.set('kb_query', query);
+  if (focusId !== null && focusId !== undefined) params.set('kb_focus', String(focusId));
+  return `?${params.toString()}`;
+}
+
+function buildReplayKnowledgeQuery(run, providerResponses = []) {
+  const stopwords = new Set(['a', 'an', 'and', 'the', 'with', 'for', 'to', 'of', 'in', 'on', 'or', 'is']);
+  const fragments = [
+    run?.topic,
+    run?.decision_summary,
+    ...(Array.isArray(providerResponses) ? providerResponses.map((response) => response?.key_idea) : []),
+  ]
+    .map((value) => String(value || '').replace(/[^\p{L}\p{N}\s-]+/gu, ' ').trim())
+    .filter(Boolean);
+
+  if (fragments.length === 0) {
+    return 'consilium decision';
+  }
+
+  const tokens = [];
+  const seen = new Set();
+  for (const fragment of fragments) {
+    for (const token of fragment.split(/\s+/)) {
+      const normalized = token.trim();
+      if (!normalized) continue;
+      const key = normalized.toLowerCase();
+      if (stopwords.has(key)) continue;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      tokens.push(normalized);
+      if (tokens.length >= 4) {
+        return tokens.join(' ');
+      }
+    }
+  }
+
+  return tokens.join(' ') || 'consilium decision';
+}
+
+async function buildReplayKnowledgeContext(detail) {
+  if (!detail?.run) return null;
+
+  const project = String(detail.run.project || '').trim();
+  if (!project) return null;
+
+  let runtime = null;
+  try {
+    runtime = await getKnowledgeRuntime();
+  } catch {
+    return null;
+  }
+
+  if (!runtime?.store || typeof runtime.store.searchEntries !== 'function') {
+    return null;
+  }
+
+  const query = buildReplayKnowledgeQuery(detail.run, detail.providerResponses);
+  const entries = runtime.store.searchEntries(query, { limit: 4, project });
+  const continuity = typeof runtime.store.getContinuityDigest === 'function'
+    ? runtime.store.getContinuityDigest(project, 3)
+    : null;
+  const runId = String(detail.run.run_id || 'consilium-run').trim() || 'consilium-run';
+
+  return buildConsiliumReplayKnowledgeContext({
+    project,
+    query,
+    actions: [
+      {
+        id: `${runId}:knowledge_search`,
+        type: 'knowledge_search',
+        label: 'Open related knowledge',
+        href: buildKnowledgeShellHref({ project, query }),
+        project,
+        query,
+      },
+      {
+        id: `${runId}:knowledge_project`,
+        type: 'knowledge_project',
+        label: 'Open project continuity',
+        href: buildKnowledgeShellHref({ project }),
+        project,
+        query: null,
+      },
+    ],
+    entries: entries.map((entry) => ({
+      id: entry.id,
+      project: entry.project,
+      category: entry.category,
+      title: entry.title,
+      body: entry.body,
+      href: buildKnowledgeShellHref({
+        project: entry.project,
+        query: entry.title,
+        focusId: entry.id,
+      }),
+      updatedAt: entry.updated_at || entry.created_at || null,
+      source: entry.source || null,
+      githubUrl: entry.github_url || null,
+      retrieval: {
+        score: typeof entry?.retrieval?.score === 'number' ? entry.retrieval.score : null,
+        matchReason: entry?.retrieval?.matchReason || null,
+      },
+    })),
+    continuity,
+  });
 }
 
 function normalizeKbEntry(body) {
@@ -191,6 +400,7 @@ export const state = {
   brainstorm: null,
   plan: null,
   claimGraph: null,
+  consiliumObservability: null,
   lastEventId: 0
 };
 
@@ -213,25 +423,11 @@ const safeReadJson = (path) => {
   }
 };
 
-const safeReadLines = (path) => {
-  try {
-    if (!existsSync(path)) return [];
-    return readFileSync(path, 'utf8').split('\n').filter(l => l.trim());
-  } catch {
-    return [];
-  }
-};
-
-const readPipelineJson = () => safeReadJson(PIPELINE_FILE);
-
-const readIndexJson = () => safeReadJson(INDEX_FILE);
-const readProviderHealthJson = () => safeReadJson(PROVIDER_HEALTH_FILE);
-
-const readSessionJson = () => safeReadJson(SESSION_FILE);
-
-const readLogJsonl = () => safeReadLines(LOG_FILE).slice(-LOG_RING_SIZE).map(l => {
-  try { return JSON.parse(l); } catch { return null; }
-}).filter(Boolean);
+const readPipelineJson = () => dashboardStateStore.readPipeline(null);
+const readIndexJson = () => dashboardStateStore.readProjectIndex();
+const readProviderHealthJson = () => dashboardStateStore.readProviderHealth();
+const readSessionJson = () => dashboardStateStore.readSession();
+const readLogJsonl = () => dashboardStateStore.readLog(LOG_RING_SIZE);
 
 /** Extract skill names from backtick-wrapped references in agent .md */
 const parseSkills = (content) => {
@@ -279,7 +475,7 @@ const readConsiliumPresets = () => {
 };
 
 const readResultsJson = () => {
-  const raw = safeReadJson(RESULTS_FILE);
+  const raw = dashboardStateStore.readResults();
   if (!raw) return [];
   if (!Array.isArray(raw) && Array.isArray(raw.providers)) {
     const baseTs = raw.generatedAt || new Date().toISOString();
@@ -402,9 +598,12 @@ export const refreshAllData = () => {
   state.results = readResultsJson();
   state.progress = buildProgress();
   state.skills = readSkillsList();
-  state.storageHealth = typeof actions.getStorageHealth === 'function'
+  const storageHealth = typeof actions.getStorageHealth === 'function'
     ? actions.getStorageHealth()
     : null;
+  state.storageHealth = storageHealth
+    ? { ...storageHealth, sources: dashboardStateStore.getSourceMap() }
+    : { sources: dashboardStateStore.getSourceMap() };
   state.providerHealth = readProviderHealthJson() || {};
 
   // Brainstorm + Plan from pipeline.json
@@ -418,6 +617,20 @@ export const refreshAllData = () => {
 export function setClaimGraph(graph) {
   state.claimGraph = graph ? { ...graph, userVerdicts: state.claimGraph?.userVerdicts || {} } : null;
   broadcast('full', getStateSnapshot());
+}
+
+export function setConsiliumObservability(snapshot) {
+  state.consiliumObservability = snapshot
+    ? createConsiliumObservabilitySnapshot(snapshot)
+    : null;
+  broadcast('full', getStateSnapshot());
+}
+
+export function recordConsiliumObservability(result, options = {}) {
+  const snapshot = buildConsiliumObservabilitySnapshot(result, options);
+  state.consiliumObservability = snapshot;
+  broadcast('full', getStateSnapshot());
+  return snapshot;
 }
 
 // 4. FILE WATCHERS
@@ -638,6 +851,44 @@ function safeResolveStaticFile(staticDir, pathname) {
 
 export const createRouter = (buildHtmlFn, token, options = {}) => async (req, res) => {
   const staticDir = options.staticDir ? resolve(options.staticDir) : null;
+  const getEvalStoreForRequest = async () => options.evalStore || await getDashboardEvalStore();
+  const analyticsSummaryLoader = typeof options.analyticsSummaryLoader === 'function'
+    ? options.analyticsSummaryLoader
+    : async () => buildAnalyticsSummary({
+      dataDir: DATA_DIR,
+      evalStore: await getEvalStoreForRequest(),
+    });
+  const routingExplainabilityLoader = typeof options.routingExplainabilityLoader === 'function'
+    ? options.routingExplainabilityLoader
+    : async ({ last, sinceDays } = {}) => buildRoutingExplainability({
+      dataDir: DATA_DIR,
+      evalStore: await getEvalStoreForRequest(),
+      last,
+      sinceDays,
+    });
+  const providerExtensibilityLoader = typeof options.providerExtensibilityLoader === 'function'
+    ? options.providerExtensibilityLoader
+    : async () => listProviderExtensibilityInventory();
+  const runtimeFallbacksLoader = typeof options.runtimeFallbacksLoader === 'function'
+    ? options.runtimeFallbacksLoader
+    : async () => buildRuntimeFallbackInventory({
+      shellSummary: createShellSummary(getStateSnapshot()),
+      providerExtensibility: listProviderExtensibilityInventory(),
+    });
+  const providerRecoveryLoader = typeof options.providerRecoveryLoader === 'function'
+    ? options.providerRecoveryLoader
+    : async () => buildProviderRecoveryInventory({
+      shellSummary: createShellSummary(getStateSnapshot()),
+      providerExtensibility: listProviderExtensibilityInventory(),
+      runtimeFallbacks: await runtimeFallbacksLoader(),
+    });
+  const runtimeResilienceLoader = typeof options.runtimeResilienceLoader === 'function'
+    ? options.runtimeResilienceLoader
+    : async () => buildResilienceAuditInventory({
+      shellSummary: createShellSummary(getStateSnapshot()),
+      providerRecovery: await providerRecoveryLoader(),
+      runtimeFallbacks: await runtimeFallbacksLoader(),
+    });
   const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
   const serve = (status, type, data, extraHeaders = {}) => {
     const headers = {
@@ -885,6 +1136,38 @@ export const createRouter = (buildHtmlFn, token, options = {}) => async (req, re
             result
           });
         }
+        case '/api/routing/feedback': {
+          const evalStore = await getEvalStoreForRequest();
+          if (!evalStore) {
+            return serve(503, 'application/json', { error: 'Eval store unavailable' });
+          }
+          const payload = parseRoutingFeedbackPayload(body || {});
+          const result = evalStore.addRoutingFeedback({
+            decision_id: payload.decisionId,
+            selected_provider: payload.provider,
+            task_type: payload.taskType,
+            verdict: payload.verdict,
+            note: payload.note || null,
+            actor: payload.actor || 'dashboard',
+          });
+          if (!result.ok) {
+            const status = /not found/i.test(result.error || '') ? 404 : 400;
+            return serve(status, 'application/json', { error: result.error || 'Failed to persist routing feedback' });
+          }
+          return serve(200, 'application/json', {
+            ok: true,
+            record: createRoutingFeedbackRecord({
+              id: result.record.id,
+              decisionId: result.record.decision_id,
+              provider: result.record.selected_provider,
+              taskType: result.record.task_type,
+              verdict: result.record.verdict,
+              note: result.record.note,
+              actor: result.record.actor,
+              createdAt: result.record.timestamp,
+            })
+          });
+        }
         // Terminal session management
         case '/api/terminal/session/create': {
           const { provider, model, task, label, branch, cwd } = body || {};
@@ -941,6 +1224,101 @@ export const createRouter = (buildHtmlFn, token, options = {}) => async (req, re
     case '/events': return sseConnect(req, res, getStateSnapshot, url);
     case '/api/state':
     case '/state': return serve(200, 'application/json', getStateSnapshot());
+    case '/api/shell/summary':
+      return serve(200, 'application/json', { summary: createShellSummary(getStateSnapshot()) });
+    case '/api/providers/extensibility':
+      return serve(200, 'application/json', { inventory: await providerExtensibilityLoader() });
+    case '/api/providers/recovery':
+      return serve(200, 'application/json', { inventory: await providerRecoveryLoader() });
+    case '/api/runtime/resilience':
+      return serve(200, 'application/json', { inventory: await runtimeResilienceLoader() });
+    case '/api/runtime/fallbacks':
+      return serve(200, 'application/json', { inventory: await runtimeFallbacksLoader() });
+    case '/api/consilium/observability':
+      return serve(200, 'application/json', { observability: state.consiliumObservability || null });
+    case '/api/consilium/replay': {
+      const evalStore = await getEvalStoreForRequest();
+      if (!evalStore) {
+        return serve(503, 'application/json', { error: 'Eval store unavailable' });
+      }
+
+      const last = parsePositiveInt(url.searchParams.get('last'), 8, 1, 50);
+      const project = String(url.searchParams.get('project') || '').trim() || null;
+      const provider = parseConsiliumProvider(url.searchParams.get('provider'));
+      const consensus = parseConsiliumConsensus(url.searchParams.get('consensus'));
+      const requestedRunId = String(url.searchParams.get('run_id') || '').trim() || null;
+      const sourceDecisions = typeof evalStore.getConsiliumRuns === 'function'
+        ? evalStore.getConsiliumRuns({ last: Math.max(last * 5, 50) })
+        : [];
+      const decisions = filterConsiliumRuns(sourceDecisions, { project, provider, consensus }).slice(0, last);
+      const selectedRunId = requestedRunId && decisions.some((decision) => decision.run_id === requestedRunId)
+        ? requestedRunId
+        : decisions[0]?.run_id || null;
+      const detail = selectedRunId && typeof evalStore.getConsiliumRunDetail === 'function'
+        ? evalStore.getConsiliumRunDetail(selectedRunId)
+        : null;
+
+      if (requestedRunId && !detail?.run) {
+        return serve(404, 'application/json', { error: `Consilium run "${requestedRunId}" not found` });
+      }
+
+      if (detail?.run && !runMatchesConsiliumFilters(detail.run, { project, provider, consensus })) {
+        return serve(404, 'application/json', {
+          error: `Consilium run "${selectedRunId}" does not match the requested replay filters`,
+        });
+      }
+
+      const archive = buildConsiliumReplayArchive({
+        decisions,
+        allDecisions: sourceDecisions,
+        detail,
+        knowledgeContext: await buildReplayKnowledgeContext(detail),
+        selectedRunId,
+        filters: { project, provider, consensus },
+      });
+
+      return serve(200, 'application/json', { archive });
+    }
+    case '/api/consilium/replay/export': {
+      const evalStore = await getEvalStoreForRequest();
+      if (!evalStore) {
+        return serve(503, 'application/json', { error: 'Eval store unavailable' });
+      }
+
+      const runId = String(url.searchParams.get('run_id') || '').trim();
+      if (!runId) {
+        return serve(400, 'application/json', { error: 'run_id is required' });
+      }
+
+      const format = String(url.searchParams.get('format') || 'markdown').trim().toLowerCase();
+      const project = String(url.searchParams.get('project') || '').trim() || null;
+      const provider = parseConsiliumProvider(url.searchParams.get('provider'));
+      const consensus = parseConsiliumConsensus(url.searchParams.get('consensus'));
+      const detail = typeof evalStore.getConsiliumRunDetail === 'function'
+        ? evalStore.getConsiliumRunDetail(runId)
+        : null;
+
+      if (!detail?.run) {
+        return serve(404, 'application/json', { error: `Consilium run "${runId}" not found` });
+      }
+
+      if (!runMatchesConsiliumFilters(detail.run, { project, provider, consensus })) {
+        return serve(404, 'application/json', {
+          error: `Consilium run "${runId}" does not match the requested replay filters`,
+        });
+      }
+
+      const archive = buildConsiliumReplayArchive({
+        decisions: [detail.run],
+        allDecisions: [detail.run],
+        detail,
+        knowledgeContext: await buildReplayKnowledgeContext(detail),
+        selectedRunId: runId,
+        filters: { project, provider, consensus },
+      });
+      const exportArtifact = buildConsiliumReplayExport(archive.replay, { format });
+      return serve(200, 'application/json', { export: exportArtifact });
+    }
     case '/storage-health': return serve(200, 'application/json', state.storageHealth || {});
     case '/health': return serve(200, 'text/plain', 'OK');
     default:
@@ -977,8 +1355,71 @@ export const createRouter = (buildHtmlFn, token, options = {}) => async (req, re
         return serve(200, 'application/json', { ok: true, mode: runtime.mode, project, ...context });
       }
 
+      if (url.pathname.startsWith('/api/kb/continuity/')) {
+        const runtime = await getKnowledgeRuntime();
+        if (!runtime?.store || typeof runtime.store.getContinuityDigest !== 'function') {
+          return serve(503, 'application/json', {
+            error: runtime?.error || 'Knowledge continuity unavailable',
+            mode: runtime?.mode || 'disabled'
+          });
+        }
+
+        const project = decodeURIComponent(url.pathname.slice('/api/kb/continuity/'.length)).trim();
+        if (!project) return serve(400, 'application/json', { error: 'project is required' });
+        const limit = parsePositiveInt(url.searchParams.get('limit'), 5, 1, 20);
+        const digest = runtime.store.getContinuityDigest(project, limit);
+        return serve(200, 'application/json', { ok: true, mode: runtime.mode, project, digest });
+      }
+
+      if (url.pathname === '/api/kb/quality') {
+        const runtime = await getKnowledgeRuntime();
+        if (!runtime?.store || typeof runtime.store.getQualityInsights !== 'function') {
+          return serve(503, 'application/json', {
+            error: runtime?.error || 'Knowledge quality insights unavailable',
+            mode: runtime?.mode || 'disabled'
+          });
+        }
+
+        const staleAfterDays = parsePositiveInt(url.searchParams.get('stale_days'), 30, 1, 365);
+        const summary = runtime.store.getQualityInsights(staleAfterDays);
+        return serve(200, 'application/json', { ok: true, mode: runtime.mode, summary });
+      }
+
+      if (url.pathname.startsWith('/api/kb/export/')) {
+        const runtime = await getKnowledgeRuntime();
+        if (!runtime?.store || typeof runtime.store.exportProjectArchive !== 'function') {
+          return serve(503, 'application/json', {
+            error: runtime?.error || 'Knowledge export unavailable',
+            mode: runtime?.mode || 'disabled'
+          });
+        }
+
+        const project = decodeURIComponent(url.pathname.slice('/api/kb/export/'.length)).trim();
+        if (!project) return serve(400, 'application/json', { error: 'project is required' });
+        const limit = parsePositiveInt(url.searchParams.get('limit'), 5, 1, 20);
+        const staleAfterDays = parsePositiveInt(url.searchParams.get('stale_days'), 30, 1, 365);
+        const artifact = runtime.store.exportProjectArchive(project, { limit, staleAfterDays });
+        return serve(200, 'application/json', { ok: true, mode: runtime.mode, project, artifact });
+      }
+
+      if (url.pathname.startsWith('/api/kb/suggestions/')) {
+        const runtime = await getKnowledgeRuntime();
+        if (!runtime?.store || typeof runtime.store.getSuggestionTemplates !== 'function') {
+          return serve(503, 'application/json', {
+            error: runtime?.error || 'Knowledge suggestions unavailable',
+            mode: runtime?.mode || 'disabled'
+          });
+        }
+
+        const project = decodeURIComponent(url.pathname.slice('/api/kb/suggestions/'.length)).trim();
+        if (!project) return serve(400, 'application/json', { error: 'project is required' });
+        const limit = parsePositiveInt(url.searchParams.get('limit'), 5, 1, 20);
+        const summary = runtime.store.getSuggestionTemplates(project, limit);
+        return serve(200, 'application/json', { ok: true, mode: runtime.mode, project, summary });
+      }
+
       if (url.pathname === '/api/routing/health') {
-        const evalStore = await getDashboardEvalStore();
+        const evalStore = await getEvalStoreForRequest();
         if (!evalStore) {
           return serve(503, 'application/json', { error: 'Eval store unavailable' });
         }
@@ -997,6 +1438,19 @@ export const createRouter = (buildHtmlFn, token, options = {}) => async (req, re
         });
       }
 
+      if (url.pathname === '/api/routing/explainability') {
+        try {
+          const last = parsePositiveInt(url.searchParams.get('last'), 20, 1, 200);
+          const sinceDays = parsePositiveInt(url.searchParams.get('since_days'), 7, 1, 30);
+          const summary = await routingExplainabilityLoader({ last, sinceDays });
+          return serve(200, 'application/json', { ok: true, summary });
+        } catch (err) {
+          return serve(500, 'application/json', {
+            error: `Failed to build routing explainability: ${err.message}`
+          });
+        }
+      }
+
       if (url.pathname === '/api/dev-pipeline/status') {
         const pipeline = createDevelopmentPipeline();
         const pipelineId = url.searchParams.get('pipelineId') || undefined;
@@ -1005,6 +1459,17 @@ export const createRouter = (buildHtmlFn, token, options = {}) => async (req, re
           return serve(404, 'application/json', { error: `Pipeline "${pipelineId}" not found` });
         }
         return serve(200, 'application/json', result);
+      }
+
+      if (url.pathname === '/api/analytics/summary') {
+        try {
+          const summary = await analyticsSummaryLoader();
+          return serve(200, 'application/json', { ok: true, summary });
+        } catch (err) {
+          return serve(500, 'application/json', {
+            error: `Failed to build analytics summary: ${err.message}`
+          });
+        }
       }
 
       if (url.pathname === '/api/claims/graph') {

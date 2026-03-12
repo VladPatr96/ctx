@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { ApiClient } from '../api/client';
-import type { PipelineState } from '../api/types';
+import type { KnowledgeContinuityDigest, PipelineState } from '../api/types';
 import { useAppStore } from '../store/useAppStore';
 import { PipelineBar } from '../components/pipeline/PipelineBar';
 import { PipelineGraph } from '../components/pipeline/PipelineGraph';
@@ -9,6 +9,7 @@ import { CombinedLogView } from '../components/log/CombinedLogView';
 import { AgentActivityWidget } from '../components/dashboard/AgentActivityWidget';
 import { CostAnalyticsWidget } from '../components/dashboard/CostAnalyticsWidget';
 import { TaskCompareModal } from '../components/dashboard/TaskCompareModal';
+import { QuickActions } from '../components/dashboard/QuickActions';
 import { CostDashboard } from '../components/cost/CostDashboard';
 
 const STAGES = ['detect', 'context', 'task', 'brainstorm', 'plan', 'execute', 'done'];
@@ -35,6 +36,16 @@ export function DashboardPage({ client, onRefresh }: DashboardPageProps) {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [comparingVersion, setComparingVersion] = useState<TaskVersion | null>(null);
+  const [continuity, setContinuity] = useState<KnowledgeContinuityDigest | null>(null);
+
+  const projectRecord = (state as Record<string, unknown> | null)?.project as Record<string, unknown> | null | undefined;
+  const projectName = typeof projectRecord?.name === 'string' ? projectRecord.name : null;
+
+  useEffect(() => {
+    if (projectName) {
+      client.getKbContinuity(projectName).then(setContinuity).catch(() => {});
+    }
+  }, [client, projectName]);
 
   useEffect(() => {
     setTask(state?.pipeline?.task || '');
@@ -226,8 +237,32 @@ export function DashboardPage({ client, onRefresh }: DashboardPageProps) {
         {error ? <p className="error-text">{error}</p> : null}
       </section>
 
+      <QuickActions client={client} onRefresh={onRefresh} />
+
       <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-        <CostAnalyticsWidget />
+        {continuity ? (
+          <div className="panel" style={{ padding: '12px' }}>
+            <h4 style={{ margin: '0 0 8px', fontSize: '13px' }}>Knowledge Continuity</h4>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(80px, 1fr))', gap: '8px', marginBottom: '8px' }}>
+              <div style={{ fontSize: '12px' }}><span style={{ color: 'var(--muted)' }}>Sessions:</span> {continuity.stats.sessions}</div>
+              <div style={{ fontSize: '12px' }}><span style={{ color: 'var(--muted)' }}>Decisions:</span> {continuity.stats.decisions}</div>
+              <div style={{ fontSize: '12px' }}><span style={{ color: 'var(--muted)' }}>Errors:</span> {continuity.stats.errors}</div>
+              <div style={{ fontSize: '12px' }}><span style={{ color: 'var(--muted)' }}>Total:</span> {continuity.stats.totalEntries}</div>
+            </div>
+            {continuity.snapshot.task ? (
+              <div style={{ fontSize: '12px', color: 'var(--muted)', marginBottom: '4px' }}>
+                Last task: <span style={{ color: 'var(--text)' }}>{continuity.snapshot.task}</span>
+              </div>
+            ) : null}
+            {continuity.suggestions.length > 0 ? (
+              <div style={{ fontSize: '12px', marginTop: '4px' }}>
+                <span style={{ color: 'var(--muted)' }}>Next:</span>{' '}
+                {continuity.suggestions[0].title}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+        <CostAnalyticsWidget client={client} />
         <CostDashboard client={client} />
         <AgentActivityWidget />
         <CombinedLogView stageFilter={selectedStage || undefined} onClearStageFilter={() => setSelectedStage(null)} />

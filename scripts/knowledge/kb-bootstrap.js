@@ -12,7 +12,10 @@
 import { runCommandSync } from '../utils/shell.js';
 import { KbSync } from './kb-sync.js';
 
-const GITHUB_OWNER = process.env.GITHUB_OWNER || 'VladPatr96';
+import { resolveConfig } from '../config/resolve-config.js';
+
+const _config = resolveConfig({ detectGh: true });
+const GITHUB_OWNER = _config.githubOwner || '';
 
 async function loadStore() {
   try {

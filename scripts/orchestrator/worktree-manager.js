@@ -9,6 +9,7 @@ import { existsSync, mkdirSync, rmSync, realpathSync } from 'node:fs';
 import { join, resolve, sep } from 'node:path';
 import { runCommand } from '../utils/shell.js';
 import { readJsonFile, writeJsonAtomic, withLockSync } from '../utils/state-io.js';
+import { resolveBaseBranch } from './base-branch.js';
 
 // ==================== Constants (lazy for testability) ====================
 
@@ -118,7 +119,7 @@ function parsePorcelainOutput(stdout) {
 export async function createWorktree(agentId, opts = {}) {
   validateAgentId(agentId);
   const wtPath = safeWorktreePath(agentId);
-  const baseBranch = opts.baseBranch || 'master';
+  const baseBranch = await resolveBaseBranch(opts.baseBranch, { cwd: getPluginRoot() });
   const branchName = `agent/${agentId}`;
 
   // State check: duplicate + concurrent limit
@@ -165,7 +166,9 @@ export async function createWorktree(agentId, opts = {}) {
   return {
     status: 'created',
     worktreePath: wtPath,
-    branchName: info.branchName
+    branchName: info.branchName,
+    path: wtPath,
+    branch: info.branchName,
   };
 }
 

@@ -11,13 +11,12 @@
  *   node ctx-cli.js log_action --action "stage_change"
  */
 
-import { readFile, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
-import { z } from 'zod';
+import { fileURLToPath } from 'node:url';
 import { createStorageAdapter } from './storage/index.js';
 import { parseDataPatch } from './tools/pipeline.js';
 import { generateCLICommands, syncRegistry } from './skills/skill-registry.js';
+import { loadSkillCommandHandlerByName } from './skills/skill-contracts.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -131,25 +130,8 @@ async function cmdLogError(args) {
  * Execute skill command dynamically
  */
 async function executeSkillCommand(skillName, command, args) {
-  const skillPath = join(__dirname, '..', 'skills', skillName);
-  const commandPath = join(skillPath, 'commands', `${command}.js`);
-  const indexPath = join(skillPath, 'index.js');
-  
-  // Try command-specific file first
-  if (existsSync(commandPath)) {
-    const { default: commandFn } = await import(pathToFileURL(commandPath).href);
-    return await commandFn(args, { storage, loadPipeline, savePipeline, appendLog });
-  }
-
-  // Try index.js with exported command
-  if (existsSync(indexPath)) {
-    const { default: skillModule } = await import(pathToFileURL(indexPath).href);
-    if (typeof skillModule[command] === 'function') {
-      return await skillModule[command](args, { storage, loadPipeline, savePipeline, appendLog });
-    }
-  }
-  
-  throw new Error(`Command "${command}" not found in skill "${skillName}"`);
+  const { handler } = await loadSkillCommandHandlerByName(skillName, command);
+  return await handler(args, { storage, loadPipeline, savePipeline, appendLog });
 }
 
 /**
@@ -197,14 +179,15 @@ const commands = { ...builtInCommands, ...skillCommands };
 
 async function main() {
   const args = process.argv.slice(2);
-  
+
   if (args.length === 0 || args[0] === '--help' || args[0] === '-h') {
     const skillCmdsList = Object.keys(skillCommands).map(cmd => `  ${cmd.padEnd(40)} (skill)`).join('\n');
-    
-    console.log(`
-CTX CLI — универсальный интерфейс для CTX tools
 
-Встроенные команды:
+    console.log(`
+CTX CLI — мульти-провайдерная AI-оркестрация
+
+Команды:
+  init                                   Инициализировать ctx в текущем проекте
   get_pipeline                           Получить состояние pipeline
   set_stage --stage <name> [--data ...]  Перейти на стадию
   update_pipeline --patch <json>         Обновить поля pipeline
@@ -218,7 +201,14 @@ ${skillCmdsList}
 `);
     process.exit(0);
   }
-  
+
+  // Handle 'init' subcommand
+  if (args[0] === 'init') {
+    const { init } = await import('./cli/init.js');
+    await init();
+    return;
+  }
+
   const [cmdName, ...cmdArgs] = args;
   const cmd = commands[cmdName];
   

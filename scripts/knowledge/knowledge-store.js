@@ -12,6 +12,10 @@ import { createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { buildKnowledgeContinuityDigest } from './continuity.js';
+import { buildKnowledgeProjectExport, buildKnowledgeQualitySummary } from './quality.js';
+import { rankKnowledgeEntries } from './retrieval.js';
+import { buildKnowledgeSuggestionSummary } from './suggestions.js';
 
 const require = createRequire(import.meta.url);
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -90,7 +94,7 @@ export class KnowledgeStore {
 
     this.searchStmt = this.db.prepare(`
       SELECT e.id, e.project, e.category, e.title, e.body, e.tags, e.source, e.github_url,
-             e.created_at, e.access_count
+             e.created_at, e.updated_at, e.access_count
       FROM kb_fts f
       JOIN kb_entries e ON e.id = f.rowid
       WHERE kb_fts MATCH ?
@@ -99,11 +103,29 @@ export class KnowledgeStore {
     `);
 
     this.getByProjectStmt = this.db.prepare(`
-      SELECT id, project, category, title, body, tags, source, github_url, created_at, access_count
+      SELECT id, project, category, title, body, tags, source, github_url, created_at, updated_at, access_count
       FROM kb_entries
       WHERE project = ?
       ORDER BY updated_at DESC
       LIMIT ?
+    `);
+
+    this.listAllEntriesStmt = this.db.prepare(`
+      SELECT id, project, category, title, body, tags, source, github_url, created_at, updated_at, access_count
+      FROM kb_entries
+      ORDER BY updated_at DESC
+    `);
+
+    this.listLatestSnapshotsStmt = this.db.prepare(`
+      SELECT snapshots.project, snapshots.snapshot_json, snapshots.created_at
+      FROM kb_snapshots snapshots
+      JOIN (
+        SELECT project, MAX(created_at) AS created_at
+        FROM kb_snapshots
+        GROUP BY project
+      ) latest
+      ON latest.project = snapshots.project AND latest.created_at = snapshots.created_at
+      ORDER BY snapshots.project ASC
     `);
 
     this.bumpAccessStmt = this.db.prepare(`
@@ -224,7 +246,9 @@ export class KnowledgeStore {
       if (project) results = results.filter(r => r.project === project);
       if (category) results = results.filter(r => r.category === category);
       if (dateFrom) results = results.filter(r => r.created_at >= dateFrom);
-      results = results.slice(0, limit);
+      results = rankKnowledgeEntries(results, query, {
+        preferredProject: project,
+      }).slice(0, limit);
 
       for (const r of results) {
         this._batchBumpAccess(r.id);
@@ -242,6 +266,56 @@ export class KnowledgeStore {
     }
     const snapshot = this.getSnapshot(project);
     return { entries, snapshot };
+  }
+
+  getContinuityDigest(project, limit = 5) {
+    const scopedEntries = this.getByProjectStmt.all(project, Math.max(limit * 6, limit));
+    for (const entry of scopedEntries) {
+      this._batchBumpAccess(entry.id);
+    }
+    return buildKnowledgeContinuityDigest({
+      project,
+      entries: scopedEntries,
+      snapshot: this.getSnapshot(project),
+      limit,
+    });
+  }
+
+  getQualityInsights(staleAfterDays = 30) {
+    const entries = this.listAllEntriesStmt.all();
+    const snapshots = this.listLatestSnapshotsStmt.all().map((row) => ({
+      project: row.project,
+      created_at: row.created_at,
+      data: safeParseJson(row.snapshot_json),
+    }));
+    return buildKnowledgeQualitySummary({
+      entries,
+      snapshots,
+      staleAfterDays,
+    });
+  }
+
+  exportProjectArchive(project, { limit = 5, staleAfterDays = 30 } = {}) {
+    const scopedEntries = this.getByProjectStmt.all(project, Math.max(limit * 8, limit));
+    for (const entry of scopedEntries) {
+      this._batchBumpAccess(entry.id);
+    }
+    const continuity = this.getContinuityDigest(project, limit);
+    return buildKnowledgeProjectExport({
+      project,
+      entries: scopedEntries,
+      continuity,
+      limit,
+      staleAfterDays,
+    });
+  }
+
+  getSuggestionTemplates(project, limit = 5) {
+    const exportArtifact = this.exportProjectArchive(project, { limit });
+    return buildKnowledgeSuggestionSummary({
+      project,
+      exportArtifact,
+    });
   }
 
   saveSnapshot(project, state) {
@@ -342,4 +416,12 @@ function detectCategory(issue) {
   if (labels.includes('session')) return 'session-summary';
   if (labels.includes('consilium')) return 'decision';
   return 'solution';
+}
+
+function safeParseJson(raw) {
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
 }

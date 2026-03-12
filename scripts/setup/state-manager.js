@@ -8,6 +8,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync, unlinkSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { parseWizardState } from '../contracts/onboarding-schemas.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -64,7 +65,8 @@ export function saveState(state, options = {}) {
 
   try {
     ensureDirectoryExists(filePath);
-    const json = JSON.stringify(state, null, 2);
+    const normalizedState = parseWizardState(state);
+    const json = JSON.stringify(normalizedState, null, 2);
     writeFileSync(filePath, json, 'utf-8');
   } catch (err) {
     throw new Error(`Failed to save wizard state: ${err.message}`);
@@ -87,7 +89,7 @@ export function loadState(options = {}) {
 
   try {
     const json = readFileSync(filePath, 'utf-8');
-    return JSON.parse(json);
+    return parseWizardState(JSON.parse(json));
   } catch (err) {
     throw new Error(`Failed to load wizard state: ${err.message}`);
   }

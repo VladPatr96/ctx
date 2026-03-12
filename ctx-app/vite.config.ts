@@ -31,6 +31,11 @@ export default defineConfig(({ mode }) => {
     },
     server: {
       port: 5173,
+      fs: {
+        allow: [
+          resolve(__dirname, '..'),
+        ],
+      },
       proxy: {
         '/api': {
           target: 'http://127.0.0.1:7331',

@@ -1,0 +1,479 @@
+{
+  "generatedAt": "2026-03-11T13:20:24.318Z",
+  "sessions": {
+    "entries": [
+      {
+        "sessionId": "2026-02-17-1503",
+        "title": "Session 2026-02-17 15:03",
+        "path": ".sessions/2026-02-17-1503.md",
+        "project": "claude_ctx",
+        "branch": "master",
+        "lead": "claude",
+        "goals": "Расширение CTX для кросс-провайдерной оркестрации, агентов со скилами, гибкого консилиума",
+        "summary": "Две задачи в одной сессии: **Task 1** — Расширение CTX по 4 направлениям: кросс-провайдерный запуск (Codex + Gemini), агенты со скилами (7 superpowers protocols), гибкий consilium (пресеты + выбор провайдеров/агентов). 17 новых файлов, 1...",
+        "actionsCount": 5,
+        "errorsCount": 2,
+        "decisionsCount": 4,
+        "filesModifiedCount": 29,
+        "tasksCount": 13
+      },
+      {
+        "sessionId": "2026-02-18-0644",
+        "title": "Session 2026-02-18 06:44",
+        "path": ".sessions/2026-02-18-0644.md",
+        "project": "claude_ctx",
+        "branch": "master",
+        "lead": "claude",
+        "goals": null,
+        "summary": "Session started. Command schema fixed. Ready for task definition.",
+        "actionsCount": 2,
+        "errorsCount": 1,
+        "decisionsCount": 1,
+        "filesModifiedCount": 4,
+        "tasksCount": 1
+      },
+      {
+        "sessionId": "2026-02-18-0857",
+        "title": "Session 2026-02-18 08:57",
+        "path": ".sessions/2026-02-18-0857.md",
+        "project": "claude_ctx",
+        "branch": "master",
+        "lead": "claude",
+        "goals": null,
+        "summary": null,
+        "actionsCount": 0,
+        "errorsCount": 0,
+        "decisionsCount": 0,
+        "filesModifiedCount": 0,
+        "tasksCount": 0
+      },
+      {
+        "sessionId": "2026-02-18-1036",
+        "title": "Session 2026-02-18 10:36",
+        "path": ".sessions/2026-02-18-1036.md",
+        "project": "claude_ctx",
+        "branch": "master",
+        "lead": "gemini",
+        "goals": "Phase 1 test",
+        "summary": null,
+        "actionsCount": 0,
+        "errorsCount": 0,
+        "decisionsCount": 0,
+        "filesModifiedCount": 0,
+        "tasksCount": 0
+      },
+      {
+        "sessionId": "2026-02-18-1500",
+        "title": "Session 2026-02-18 15:00",
+        "path": ".sessions/2026-02-18-1500.md",
+        "project": "ctx-plugin 0.1.0",
+        "branch": "master",
+        "lead": "claude",
+        "goals": null,
+        "summary": null,
+        "actionsCount": 0,
+        "errorsCount": 0,
+        "decisionsCount": 0,
+        "filesModifiedCount": 0,
+        "tasksCount": 0
+      },
+      {
+        "sessionId": "2026-02-18-1830",
+        "title": "Session 2026-02-18 18:30",
+        "path": ".sessions/2026-02-18-1830.md",
+        "project": "claude_ctx",
+        "branch": "master",
+        "lead": "claude",
+        "goals": null,
+        "summary": null,
+        "actionsCount": 0,
+        "errorsCount": 0,
+        "decisionsCount": 0,
+        "filesModifiedCount": 0,
+        "tasksCount": 0
+      },
+      {
+        "sessionId": "2026-02-19-0747",
+        "title": "Session 2026-02-19 07:47",
+        "path": ".sessions/2026-02-19-0747.md",
+        "project": "claude_ctx",
+        "branch": "master",
+        "lead": "codex",
+        "goals": "Завершить Day 6: SQLite слой (schema + adapter) после Day 5 Hot Reload",
+        "summary": "Day 6 завершен: введен storage adapter boundary, добавлен SQLite schema/bootstrap слой и сохранен безопасный fallback на JSON. Изменения покрыты тестами (`npm test`: 10/10 pass). Pipeline переведен в `done` с execution summary и логами.",
+        "actionsCount": 12,
+        "errorsCount": 4,
+        "decisionsCount": 3,
+        "filesModifiedCount": 9,
+        "tasksCount": 3
+      },
+      {
+        "sessionId": "2026-02-19-0838",
+        "title": "Session 2026-02-19 08:38",
+        "path": ".sessions/2026-02-19-0838.md",
+        "project": "claude_ctx",
+        "branch": "master",
+        "lead": "codex",
+        "goals": "Day 8 - switch read path to SQLite with JSON backup fallback",
+        "summary": "Day 8 completed. Read path now supports controlled cutover to SQLite while retaining JSON backup fallback. Tests passed (`node --test`: 19 passed, 0 failed).",
+        "actionsCount": 6,
+        "errorsCount": 1,
+        "decisionsCount": 3,
+        "filesModifiedCount": 4,
+        "tasksCount": 1
+      },
+      {
+        "sessionId": "2026-02-19-0907",
+        "title": "Session 2026-02-19 09:07",
+        "path": ".sessions/2026-02-19-0907.md",
+        "project": "claude_ctx",
+        "branch": "master",
+        "lead": "codex",
+        "goals": "Day 9 - cutover на SQLite primary с rollback и monitoring",
+        "summary": "Day 9 completed. Added SQLite-primary runtime failover to JSON backup with rollback/recovery telemetry and test coverage. Test suite passed (`node --test`: 24 passed, 0 failed).",
+        "actionsCount": 5,
+        "errorsCount": 1,
+        "decisionsCount": 3,
+        "filesModifiedCount": 6,
+        "tasksCount": 1
+      },
+      {
+        "sessionId": "2026-02-19-1007",
+        "title": "Session 2026-02-19 10:07",
+        "path": ".sessions/2026-02-19-1007.md",
+        "project": "claude_ctx",
+        "branch": "master",
+        "lead": "codex",
+        "goals": "Day 10 - observability for SQLite primary, alerts, rollback runbook",
+        "summary": "Day 10 completed. Added operational observability for SQLite primary failover, warning thresholds, dashboard and API health exposure, and a rollback runbook. Test suite passed (`node --test`: 33 passed, 0 failed).",
+        "actionsCount": 9,
+        "errorsCount": 2,
+        "decisionsCount": 3,
+        "filesModifiedCount": 9,
+        "tasksCount": 1
+      },
+      {
+        "sessionId": "2026-02-19-1139",
+        "title": "Session 2026-02-19 11:39",
+        "path": ".sessions/2026-02-19-1139.md",
+        "project": "claude_ctx",
+        "branch": "master",
+        "lead": "codex",
+        "goals": "Day 11 - auto rollback policy for SQLite primary",
+        "summary": "Day 11 completed. SQLite primary now has health-gated auto rollback with probe-based recovery and env overrides. Storage health exposes policy state for monitoring. Day 11-focused tests pass; one unrelated shell-utils test remains failin...",
+        "actionsCount": 7,
+        "errorsCount": 5,
+        "decisionsCount": 2,
+        "filesModifiedCount": 8,
+        "tasksCount": 1
+      },
+      {
+        "sessionId": "2026-03-03-0941",
+        "title": "Session 2026-03-03 09:41",
+        "path": ".sessions/2026-03-03-0941.md",
+        "project": "claude_ctx",
+        "branch": "master",
+        "lead": "claude",
+        "goals": null,
+        "summary": "Фаза 1 \"Укрепить ядро\" завершена. Все 11 задач выполнены. TypeScript компилируется без ошибок.",
+        "actionsCount": 5,
+        "errorsCount": 0,
+        "decisionsCount": 6,
+        "filesModifiedCount": 14,
+        "tasksCount": 0
+      },
+      {
+        "sessionId": "2026-03-11-1135",
+        "title": "Session 2026-03-11 11:35",
+        "path": ".sessions/2026-03-11-1135.md",
+        "project": "claude_ctx",
+        "branch": "master",
+        "lead": "claude",
+        "goals": null,
+        "summary": null,
+        "actionsCount": 0,
+        "errorsCount": 0,
+        "decisionsCount": 0,
+        "filesModifiedCount": 0,
+        "tasksCount": 0
+      }
+    ],
+    "summary": {
+      "total": 13,
+      "withDecisions": 8,
+      "withErrors": 7,
+      "withSummary": 8
+    }
+  },
+  "decisions": {
+    "entries": [
+      {
+        "id": "2026-02-17-1503:decision:1",
+        "source": "session",
+        "title": "Session decision 1",
+        "path": ".sessions/2026-02-17-1503.md",
+        "recordedOn": "2026-02-17-1503",
+        "status": null,
+        "summary": "Гибридный план: Вариант 1 для провайдерных конфигов + Вариант 2 для capabilities/consilium",
+        "sessionId": "2026-02-17-1503"
+      },
+      {
+        "id": "2026-02-17-1503:decision:2",
+        "source": "session",
+        "title": "Session decision 2",
+        "path": ".sessions/2026-02-17-1503.md",
+        "recordedOn": "2026-02-17-1503",
+        "status": null,
+        "summary": "Consilium presets вместо ad-hoc выбора (предложение Claude)",
+        "sessionId": "2026-02-17-1503"
+      },
+      {
+        "id": "2026-02-17-1503:decision:3",
+        "source": "session",
+        "title": "Session decision 3",
+        "path": ".sessions/2026-02-17-1503.md",
+        "recordedOn": "2026-02-17-1503",
+        "status": null,
+        "summary": "Codex: файловые операции вместо MCP (предложение Codex)",
+        "sessionId": "2026-02-17-1503"
+      },
+      {
+        "id": "2026-02-17-1503:decision:4",
+        "source": "session",
+        "title": "Session decision 4",
+        "path": ".sessions/2026-02-17-1503.md",
+        "recordedOn": "2026-02-17-1503",
+        "status": null,
+        "summary": "Agent-skill binding через секцию ## Skills (Required) в .md агентов",
+        "sessionId": "2026-02-17-1503"
+      },
+      {
+        "id": "2026-02-18-0644:decision:1",
+        "source": "session",
+        "title": "Session decision 1",
+        "path": ".sessions/2026-02-18-0644.md",
+        "recordedOn": "2026-02-18-0644",
+        "status": null,
+        "summary": "Use direct file injection (@{}) in command prompts instead of skills/ redirection.",
+        "sessionId": "2026-02-18-0644"
+      },
+      {
+        "id": "2026-02-19-0747:decision:1",
+        "source": "session",
+        "title": "Session decision 1",
+        "path": ".sessions/2026-02-19-0747.md",
+        "recordedOn": "2026-02-19-0747",
+        "status": null,
+        "summary": "Day 6 ограничен подготовкой schema/adapter без read-switch и без shadow-write",
+        "sessionId": "2026-02-19-0747"
+      },
+      {
+        "id": "2026-02-19-0747:decision:2",
+        "source": "session",
+        "title": "Session decision 2",
+        "path": ".sessions/2026-02-19-0747.md",
+        "recordedOn": "2026-02-19-0747",
+        "status": null,
+        "summary": "JSON остается основным/дефолтным источником данных",
+        "sessionId": "2026-02-19-0747"
+      },
+      {
+        "id": "2026-02-19-0747:decision:3",
+        "source": "session",
+        "title": "Session decision 3",
+        "path": ".sessions/2026-02-19-0747.md",
+        "recordedOn": "2026-02-19-0747",
+        "status": null,
+        "summary": "SQLite путь активируется только через env (`CTX_STORAGE=sqlite`) с fallback на JSON",
+        "sessionId": "2026-02-19-0747"
+      },
+      {
+        "id": "2026-02-19-0838:decision:1",
+        "source": "session",
+        "title": "Session decision 1",
+        "path": ".sessions/2026-02-19-0838.md",
+        "recordedOn": "2026-02-19-0838",
+        "status": null,
+        "summary": "Keep write path from Day 7 unchanged (JSON primary + SQLite mirror)",
+        "sessionId": "2026-02-19-0838"
+      },
+      {
+        "id": "2026-02-19-0838:decision:2",
+        "source": "session",
+        "title": "Session decision 2",
+        "path": ".sessions/2026-02-19-0838.md",
+        "recordedOn": "2026-02-19-0838",
+        "status": null,
+        "summary": "Enable SQLite reads only through explicit strategy flag",
+        "sessionId": "2026-02-19-0838"
+      },
+      {
+        "id": "2026-02-19-0838:decision:3",
+        "source": "session",
+        "title": "Session decision 3",
+        "path": ".sessions/2026-02-19-0838.md",
+        "recordedOn": "2026-02-19-0838",
+        "status": null,
+        "summary": "Use graceful JSON fallback to preserve availability",
+        "sessionId": "2026-02-19-0838"
+      },
+      {
+        "id": "2026-02-19-0907:decision:1",
+        "source": "session",
+        "title": "Session decision 1",
+        "path": ".sessions/2026-02-19-0907.md",
+        "recordedOn": "2026-02-19-0907",
+        "status": null,
+        "summary": "SQLite is primary in `CTX_STORAGE=sqlite`",
+        "sessionId": "2026-02-19-0907"
+      },
+      {
+        "id": "2026-02-19-0907:decision:2",
+        "source": "session",
+        "title": "Session decision 2",
+        "path": ".sessions/2026-02-19-0907.md",
+        "recordedOn": "2026-02-19-0907",
+        "status": null,
+        "summary": "JSON backup remains hot fallback path when `CTX_SQLITE_FALLBACK_JSON=1`",
+        "sessionId": "2026-02-19-0907"
+      },
+      {
+        "id": "2026-02-19-0907:decision:3",
+        "source": "session",
+        "title": "Session decision 3",
+        "path": ".sessions/2026-02-19-0907.md",
+        "recordedOn": "2026-02-19-0907",
+        "status": null,
+        "summary": "Failover events are logged via backup log path for diagnostics",
+        "sessionId": "2026-02-19-0907"
+      },
+      {
+        "id": "2026-02-19-1007:decision:1",
+        "source": "session",
+        "title": "Session decision 1",
+        "path": ".sessions/2026-02-19-1007.md",
+        "recordedOn": "2026-02-19-1007",
+        "status": null,
+        "summary": "Keep observability in-app for current phase",
+        "sessionId": "2026-02-19-1007"
+      },
+      {
+        "id": "2026-02-19-1007:decision:2",
+        "source": "session",
+        "title": "Session decision 2",
+        "path": ".sessions/2026-02-19-1007.md",
+        "recordedOn": "2026-02-19-1007",
+        "status": null,
+        "summary": "Use warning thresholds to surface degradation early",
+        "sessionId": "2026-02-19-1007"
+      },
+      {
+        "id": "2026-02-19-1007:decision:3",
+        "source": "session",
+        "title": "Session decision 3",
+        "path": ".sessions/2026-02-19-1007.md",
+        "recordedOn": "2026-02-19-1007",
+        "status": null,
+        "summary": "Document hard rollback (`CTX_STORAGE=json`) and runtime-safe mode (`CTX_SQLITE_FALLBACK_JSON=1`)",
+        "sessionId": "2026-02-19-1007"
+      },
+      {
+        "id": "2026-02-19-1139:decision:1",
+        "source": "session",
+        "title": "Session decision 1",
+        "path": ".sessions/2026-02-19-1139.md",
+        "recordedOn": "2026-02-19-1139",
+        "status": null,
+        "summary": "Keep Day 11 scope focused on storage failover policy and not include unrelated shell utility changes",
+        "sessionId": "2026-02-19-1139"
+      },
+      {
+        "id": "2026-02-19-1139:decision:2",
+        "source": "session",
+        "title": "Session decision 2",
+        "path": ".sessions/2026-02-19-1139.md",
+        "recordedOn": "2026-02-19-1139",
+        "status": null,
+        "summary": "Mark execution as `approved_with_known_issue` until shell-utils test is addressed separately",
+        "sessionId": "2026-02-19-1139"
+      },
+      {
+        "id": "2026-03-03-0941:decision:1",
+        "source": "session",
+        "title": "Session decision 1",
+        "path": ".sessions/2026-03-03-0941.md",
+        "recordedOn": "2026-03-03-0941",
+        "status": null,
+        "summary": "CTX = полноценное приложение, не только плагин",
+        "sessionId": "2026-03-03-0941"
+      },
+      {
+        "id": "2026-03-03-0941:decision:2",
+        "source": "session",
+        "title": "Session decision 2",
+        "path": ".sessions/2026-03-03-0941.md",
+        "recordedOn": "2026-03-03-0941",
+        "status": null,
+        "summary": "Архитектура: Web-first + Electron shell",
+        "sessionId": "2026-03-03-0941"
+      },
+      {
+        "id": "2026-03-03-0941:decision:3",
+        "source": "session",
+        "title": "Session decision 3",
+        "path": ".sessions/2026-03-03-0941.md",
+        "recordedOn": "2026-03-03-0941",
+        "status": null,
+        "summary": "Убрать IPC, всё через HTTP API :7331",
+        "sessionId": "2026-03-03-0941"
+      },
+      {
+        "id": "2026-03-03-0941:decision:4",
+        "source": "session",
+        "title": "Session decision 4",
+        "path": ".sessions/2026-03-03-0941.md",
+        "recordedOn": "2026-03-03-0941",
+        "status": null,
+        "summary": "Zustand для глобального state",
+        "sessionId": "2026-03-03-0941"
+      },
+      {
+        "id": "2026-03-03-0941:decision:5",
+        "source": "session",
+        "title": "Session decision 5",
+        "path": ".sessions/2026-03-03-0941.md",
+        "recordedOn": "2026-03-03-0941",
+        "status": null,
+        "summary": "recharts для графиков",
+        "sessionId": "2026-03-03-0941"
+      },
+      {
+        "id": "2026-03-03-0941:decision:6",
+        "source": "session",
+        "title": "Session decision 6",
+        "path": ".sessions/2026-03-03-0941.md",
+        "recordedOn": "2026-03-03-0941",
+        "status": null,
+        "summary": "ErrorBoundary для каждой страницы",
+        "sessionId": "2026-03-03-0941"
+      },
+      {
+        "id": "ADR_PHASE0_SQLITE_FIRST",
+        "source": "adr",
+        "title": "ADR: SQLite-First As The Phase 0-1 Migration Target",
+        "path": "docs/ADR_PHASE0_SQLITE_FIRST.md",
+        "recordedOn": "2026-03-10",
+        "status": "Accepted",
+        "summary": "For Phase 0-1 migration work, CTX treats SQLite as the canonical operational storage target. Current runtime behavior is intentionally different: - `CTX_STORAGE` still defaults to `json` in the shipping code - JSON remains the compatibil...",
+        "sessionId": null
+      }
+    ],
+    "summary": {
+      "total": 26,
+      "bySource": {
+        "session": 25,
+        "adr": 1
+      }
+    }
+  }
+}

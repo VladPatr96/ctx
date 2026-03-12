@@ -8,6 +8,8 @@
 import { join } from 'node:path';
 import { readJsonFile, writeJsonAtomic, withLockSync } from '../utils/state-io.js';
 import { createWorktree, removeWorktree, getPluginRoot } from './worktree-manager.js';
+import { withExecutionArtifactBundle } from '../contracts/runtime-schemas.js';
+import { resolveBaseBranch } from './base-branch.js';
 
 // ==================== Paths (lazy for testability) ====================
 
@@ -52,7 +54,7 @@ function withState(fn) {
  * @param {string} opts.task — задача/промпт для провайдера
  * @param {string} opts.provider — имя провайдера (claude, gemini, opencode, codex)
  * @param {number} [opts.timeout=120000] — таймаут invoke в ms
- * @param {string} [opts.baseBranch='master'] — базовая ветка для worktree
+ * @param {string} [opts.baseBranch] — базовая ветка для worktree; по умолчанию определяется автоматически
  * @param {boolean} [opts.cleanup=true] — удалять worktree после завершения
  * @param {Function} [opts.invokeFn] — injection для тестов (заменяет providers/index invoke)
  * @returns {Promise<object>} результат выполнения
@@ -62,7 +64,7 @@ export async function executeAgent(agentId, opts = {}) {
     task,
     provider,
     timeout = 120_000,
-    baseBranch = 'master',
+    baseBranch,
     cleanup = true,
     invokeFn = null,
   } = opts;
@@ -95,12 +97,13 @@ export async function executeAgent(agentId, opts = {}) {
 
   let worktreePath = null;
   let branchName = null;
+  const resolvedBaseBranch = await resolveBaseBranch(baseBranch, { cwd: getPluginRoot() });
 
   try {
     // 1. Create worktree
-    const wt = await createWorktree(agentId, { baseBranch, task, provider });
-    worktreePath = wt.path;
-    branchName = wt.branch;
+    const wt = await createWorktree(agentId, { baseBranch: resolvedBaseBranch, task, provider });
+    worktreePath = wt.worktreePath;
+    branchName = wt.branchName;
 
     // Update state → running
     withState(state => {
@@ -150,7 +153,7 @@ export async function executeAgent(agentId, opts = {}) {
       }
     }
 
-    return entry;
+    return withExecutionArtifactBundle(entry);
   } catch (err) {
     const completedAt = new Date().toISOString();
     const durationMs = Date.now() - new Date(startedAt).getTime();
@@ -176,7 +179,7 @@ export async function executeAgent(agentId, opts = {}) {
       }
     }
 
-    return entry;
+    return withExecutionArtifactBundle(entry);
   }
 }
 
@@ -189,7 +192,7 @@ export async function executeAgent(agentId, opts = {}) {
  */
 export function getExecutionStatus(agentId) {
   const state = loadState();
-  return state.executions[agentId] || null;
+  return withExecutionArtifactBundle(state.executions[agentId] || null);
 }
 
 /**
@@ -204,7 +207,7 @@ export function listExecutions(opts = {}) {
   if (opts.status) {
     entries = entries.filter(e => e.status === opts.status);
   }
-  return entries;
+  return entries.map(withExecutionArtifactBundle);
 }
 
 /**

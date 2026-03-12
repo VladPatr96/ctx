@@ -28,10 +28,10 @@ FTS5 поиск в локальной SQLite KB. Если KB пуста — ав
 ### 2. Если KB отключена или пуста — fallback на gh CLI
 
 ```bash
-gh search issues "$ARGUMENTS" --owner VladPatr96 --label lesson --json number,title,body,repository --limit 15
-gh search issues "$ARGUMENTS" --owner VladPatr96 --label solution --json number,title,body,repository --limit 10
-gh search issues "$ARGUMENTS" --owner VladPatr96 --label session --json number,title,body,repository --limit 10
-gh search issues "$ARGUMENTS" --owner VladPatr96 --label consilium --json number,title,body,repository --limit 5
+gh search issues "$ARGUMENTS" --owner {{GITHUB_OWNER}} --label lesson --json number,title,body,repository --limit 15
+gh search issues "$ARGUMENTS" --owner {{GITHUB_OWNER}} --label solution --json number,title,body,repository --limit 10
+gh search issues "$ARGUMENTS" --owner {{GITHUB_OWNER}} --label session --json number,title,body,repository --limit 10
+gh search issues "$ARGUMENTS" --owner {{GITHUB_OWNER}} --label consilium --json number,title,body,repository --limit 5
 ```
 
 ### 4. Показать результаты

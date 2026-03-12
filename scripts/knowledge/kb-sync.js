@@ -1,7 +1,7 @@
 /**
  * kb-sync.js — Git synchronization for knowledge base.
  *
- * Syncs ~/.config/ctx/knowledge/ with VladPatr96/ctx-knowledge repo.
+ * Syncs ~/.config/ctx/knowledge/ with the configured ctx-knowledge repo.
  * - ensureRepo(): clone or create repo on first run
  * - pull(): background git pull --rebase at session start
  * - push(): git add + commit + push on session save
@@ -12,7 +12,19 @@ import { existsSync, mkdirSync, readdirSync, renameSync, rmSync } from 'node:fs'
 import { basename, join } from 'node:path';
 import { runCommand, runCommandSync } from '../utils/shell.js';
 
-const DEFAULT_REPO = 'VladPatr96/ctx-knowledge';
+let _defaultKbRepo = undefined;
+function resolveDefaultKbRepo() {
+  if (_defaultKbRepo !== undefined) return _defaultKbRepo;
+  try {
+    // Synchronous fallback: check env and git config
+    const owner = process.env.GITHUB_OWNER || process.env.CTX_GITHUB_OWNER;
+    _defaultKbRepo = owner ? `${owner}/ctx-knowledge` : null;
+    return _defaultKbRepo;
+  } catch {
+    _defaultKbRepo = null;
+    return null;
+  }
+}
 
 export class KbSync {
   constructor(options = {}) {
@@ -20,7 +32,7 @@ export class KbSync {
       process.env.HOME || process.env.USERPROFILE || '.',
       '.config', 'ctx', 'knowledge'
     );
-    this.repoName = options.repoName || process.env.CTX_KB_REPO || DEFAULT_REPO;
+    this.repoName = options.repoName || process.env.CTX_KB_REPO || resolveDefaultKbRepo();
     this.autoSync = !parseBool(process.env.CTX_KB_AUTO_SYNC === '0'
       ? '1' // inverted: CTX_KB_AUTO_SYNC=0 means disabled
       : process.env.CTX_KB_AUTO_SYNC || '');

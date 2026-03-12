@@ -1,0 +1,159 @@
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { createTeamKnowledgeBoundaryBrief } from '../contracts/team-knowledge-brief-schemas.js';
+
+export function buildTeamKnowledgeBoundaryBrief({
+  now = new Date().toISOString(),
+} = {}) {
+  return createTeamKnowledgeBoundaryBrief({
+    generatedAt: now,
+    title: 'Shared Knowledge Boundary and Access Model',
+    thesis: 'CTX should keep single-user runtime memory local and operational, while shared team knowledge remains an explicitly separate workspace layer with governance and non-goals documented before any enterprise execution work begins.',
+    boundaries: [
+      {
+        id: 'single_user_runtime',
+        title: 'Single-user runtime memory',
+        summary: 'The current runtime remains the canonical owner of pipeline state, session memory, local KB snapshots, and operator surfaces for one user in one workspace.',
+        ownership: [
+          'local pipeline state in .data/',
+          'local knowledge artifacts and session exports',
+          'user-scoped provider setup and recovery controls',
+        ],
+        writePath: 'Local runtime and repository-backed artifacts only.',
+        syncBoundary: 'No implicit cross-user sync; GitHub issues and explicit exports remain the durable handoff path.',
+        includedCapabilities: [
+          'single-user KB search and continuity',
+          'local session and decision capture',
+          'operator-facing runtime controls',
+        ],
+        excludedCapabilities: [
+          'shared write concurrency',
+          'workspace-level permissions',
+          'multi-tenant policy enforcement',
+        ],
+      },
+      {
+        id: 'shared_team_knowledge',
+        title: 'Shared team knowledge workspace',
+        summary: 'A future shared layer may expose curated knowledge, reusable templates, and governed decision artifacts, but it must sit above the single-user runtime rather than replacing it.',
+        ownership: [
+          'workspace-scoped knowledge entries',
+          'reviewed templates and approved exports',
+          'membership and governance metadata',
+        ],
+        writePath: 'Explicit publish/promote flows from local runtime artifacts into a shared workspace.',
+        syncBoundary: 'Shared knowledge sync is opt-in, reviewable, and policy-governed instead of automatic runtime replication.',
+        includedCapabilities: [
+          'approved shared knowledge entries',
+          'workspace template catalogs',
+          'member-visible decision archives',
+        ],
+        excludedCapabilities: [
+          'direct mutation of another user runtime state',
+          'implicit provider credential sharing',
+          'hidden background replication from local KB to team storage',
+        ],
+      },
+      {
+        id: 'enterprise_deferred',
+        title: 'Enterprise and deferred scope',
+        summary: 'Compliance, tenancy, marketplace, and community-scale collaboration remain deferred research tracks and must not leak requirements into the current Phase 0-2 runtime.',
+        ownership: [
+          'tenant isolation and compliance policy',
+          'audit/legal controls beyond operator runtime needs',
+          'marketplace and external sharing concerns',
+        ],
+        writePath: 'No committed implementation path in the current roadmap.',
+        syncBoundary: 'Explicitly outside the single-user runtime and shared-team brief until a later ADR approves the direction.',
+        includedCapabilities: [
+          'future tenancy design',
+          'future enterprise governance questions',
+          'future marketplace/community packaging questions',
+        ],
+        excludedCapabilities: [
+          'current milestone commitments',
+          'Phase 0-2 runtime architecture constraints',
+          'automatic schema requirements for today`s local KB',
+        ],
+      },
+    ],
+    accessModel: {
+      roles: [
+        {
+          id: 'workspace_owner',
+          title: 'Workspace owner',
+          summary: 'Owns membership, governance policy, and approval rules for what leaves the single-user runtime and becomes shared.',
+          permissions: ['manage_members', 'manage_policies', 'read_shared_knowledge', 'write_shared_knowledge', 'publish_templates', 'approve_exports'],
+          constraints: [
+            'Must not bypass explicit publish/review boundaries for local runtime artifacts.',
+            'Owns policy defaults, not another user`s private runtime state.',
+          ],
+        },
+        {
+          id: 'contributor',
+          title: 'Contributor',
+          summary: 'Can propose or edit shared knowledge within workspace policy, but does not control governance rules.',
+          permissions: ['read_shared_knowledge', 'write_shared_knowledge', 'publish_templates'],
+          constraints: [
+            'Cannot change workspace membership or policy.',
+            'Export or publish actions can still require owner approval.',
+          ],
+        },
+        {
+          id: 'viewer',
+          title: 'Viewer',
+          summary: 'Can read approved shared knowledge and templates without mutating shared state.',
+          permissions: ['read_shared_knowledge'],
+          constraints: [
+            'No direct write or publish capability.',
+            'No access to another user`s local runtime state or credentials.',
+          ],
+        },
+      ],
+      governanceAssumptions: [
+        'Shared knowledge is promoted from local artifacts through explicit publish flows.',
+        'Local provider credentials and private runtime state never become shared workspace defaults.',
+        'Review and approval apply to shared exports/templates, not to a user`s private session loop.',
+      ],
+      rolloutGuards: [
+        'Do not add team-write semantics to the current local KB or pipeline state machine.',
+        'Do not require enterprise tenancy or compliance design to finish current roadmap work.',
+        'Keep marketplace/community packaging as research until the shared workspace boundary proves useful.',
+      ],
+    },
+    nonGoals: [
+      'Replacing the current single-user runtime with a multi-user state machine.',
+      'Sharing provider API keys, local model configs, or per-user recovery controls across a workspace.',
+      'Auto-syncing every local KB write into a shared database.',
+      'Committing to marketplace, tenant, or compliance features in the current build plan.',
+    ],
+  });
+}
+
+export function writeTeamKnowledgeBoundaryBrief({
+  outputPath = 'docs/research/team-shared-knowledge-boundary.json',
+  now,
+} = {}) {
+  const artifact = buildTeamKnowledgeBoundaryBrief({ now });
+  const resolvedOutput = resolve(outputPath);
+  mkdirSync(dirname(resolvedOutput), { recursive: true });
+  writeFileSync(resolvedOutput, `${JSON.stringify(artifact, null, 2)}\n`, 'utf8');
+  return artifact;
+}
+
+function isMainModule() {
+  return Boolean(process.argv[1]) && import.meta.url === pathToFileURL(resolve(process.argv[1])).href;
+}
+
+if (isMainModule()) {
+  const args = process.argv.slice(2);
+  const writeIndex = args.indexOf('--write');
+  const outputPath = writeIndex >= 0 && args[writeIndex + 1]
+    ? args[writeIndex + 1]
+    : null;
+  const artifact = outputPath
+    ? writeTeamKnowledgeBoundaryBrief({ outputPath })
+    : buildTeamKnowledgeBoundaryBrief();
+  process.stdout.write(`${JSON.stringify(artifact, null, 2)}\n`);
+}

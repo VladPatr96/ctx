@@ -56,6 +56,21 @@ export class ShadowStore extends StorageAdapter {
     }
   }
 
+  readLog(limit = 50) {
+    if (!this.shouldReadFromMirror()) {
+      return this.primary.readLog(limit);
+    }
+
+    try {
+      const mirrored = this.mirror.readLog(limit);
+      this.stats.read_sqlite_ok += 1;
+      return mirrored;
+    } catch (err) {
+      this.stats.read_sqlite_fail += 1;
+      return this.readPrimaryLogFallback(limit, 'sqlite_read_error', err);
+    }
+  }
+
   shouldReadFromMirror() {
     if (!this.mirror) return false;
     return this.readSource === 'sqlite' || this.readSource === 'auto';
@@ -73,6 +88,20 @@ export class ShadowStore extends StorageAdapter {
       error: err ? err.message : null
     });
     return this.primary.readPipeline(fallbackValue);
+  }
+
+  readPrimaryLogFallback(limit, reason, err = null) {
+    this.stats.read_fallback_json += 1;
+    const suffix = err ? `: ${err.message}` : '';
+    this.warn(`Shadow read fallback to JSON during readLog (${reason})${suffix}`);
+    this.logPrimary({
+      action: 'shadow_read_fallback',
+      message: 'SQLite read failed; served JSON primary',
+      operation: 'readLog',
+      reason,
+      error: err ? err.message : null
+    });
+    return this.primary.readLog(limit);
   }
 
   writePipeline(pipeline) {

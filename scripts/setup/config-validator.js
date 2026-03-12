@@ -20,8 +20,6 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const ROOT_DIR = join(__dirname, '..', '..');
 
-const HOME = process.env.HOME || process.env.USERPROFILE || '';
-
 /**
  * Validation result structure
  * @typedef {Object} ValidationResult
@@ -149,9 +147,10 @@ function validateClaude(provider) {
 function validateCodex(provider) {
   const details = {};
   const warnings = [];
+  const home = resolveHomeDir();
 
   // Check config directory
-  const configDir = join(HOME, '.codex');
+  const configDir = join(home, '.codex');
   details.configDir = existsSync(configDir);
   if (!details.configDir) {
     warnings.push('~/.codex directory not found');
@@ -204,11 +203,12 @@ function validateCodex(provider) {
 function validateGemini(provider) {
   const details = {};
   const warnings = [];
+  const home = resolveHomeDir();
 
   // Check config directories
   const configDirs = [
-    join(HOME, '.config', 'gemini-cli'),
-    join(HOME, '.gemini')
+    join(home, '.config', 'gemini-cli'),
+    join(home, '.gemini')
   ];
   details.configDir = configDirs.some(existsSync);
   if (!details.configDir) {
@@ -262,9 +262,10 @@ function validateGemini(provider) {
 function validateOpenCode(provider) {
   const details = {};
   const warnings = [];
+  const home = resolveHomeDir();
 
   // Check config directory
-  const configDir = join(HOME, '.config', 'opencode');
+  const configDir = join(home, '.config', 'opencode');
   details.configDir = existsSync(configDir);
   if (!details.configDir) {
     warnings.push('~/.config/opencode directory not found');
@@ -388,4 +389,8 @@ export function getValidationSummary(validations) {
   }
 
   return summary;
+}
+
+function resolveHomeDir() {
+  return process.env.HOME || process.env.USERPROFILE || '';
 }

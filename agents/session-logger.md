@@ -23,7 +23,7 @@ gh issue create --title "Session: YYYY-MM-DD — описание" --label "sess
 
 ### 2. В центральный репо (уроки)
 ```bash
-gh issue create -R VladPatr96/my_claude_code --title "Session: project YYYY-MM-DD — уроки" --label "lesson,project:<name>" --body "<тело>"
+gh issue create -R {{GITHUB_OWNER}}/{{CTX_CENTRAL_REPO}} --title "Session: project YYYY-MM-DD — уроки" --label "lesson,project:<name>" --body "<тело>"
 ```
 
 ## Формат Issue Body

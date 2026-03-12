@@ -1,26 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync, existsSync, writeFileSync } from 'node:fs';
+import { rmSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { tmpdir } from 'node:os';
 import { execFileSync } from 'node:child_process';
+import { createTempGitRepo } from './helpers/git-test-repo.mjs';
 
 // Must set env BEFORE importing the module (lazy getters read env)
 const origRoot = process.env.CLAUDE_PLUGIN_ROOT;
 const origData = process.env.CTX_DATA_DIR;
 
-function createTempRepo() {
-  const dir = mkdtempSync(join(tmpdir(), 'wt-test-'));
-  execFileSync('git', ['init', dir], { encoding: 'utf-8' });
-  execFileSync('git', ['checkout', '-b', 'master'], { cwd: dir, encoding: 'utf-8' });
-  // Configure git user for commits
-  execFileSync('git', ['config', 'user.email', 'test@test.com'], { cwd: dir, encoding: 'utf-8' });
-  execFileSync('git', ['config', 'user.name', 'Test'], { cwd: dir, encoding: 'utf-8' });
-  // Add .gitignore so .data/ and .worktrees/ don't pollute status
-  writeFileSync(join(dir, '.gitignore'), '.data/\n.worktrees/\n');
-  execFileSync('git', ['add', '.gitignore'], { cwd: dir, encoding: 'utf-8' });
-  execFileSync('git', ['commit', '-m', 'init'], { cwd: dir, encoding: 'utf-8' });
-  return dir;
+function createTempRepo(opts = {}) {
+  return createTempGitRepo('wt-test-', opts);
 }
 
 function setupEnv(repoDir) {
@@ -78,6 +68,22 @@ test('createWorktree — lifecycle: create + verify directory + state', async ()
     // Verify branch exists
     const branches = execFileSync('git', ['branch'], { cwd: repo, encoding: 'utf-8' });
     assert.ok(branches.includes('agent/test-agent'), 'Branch should be created');
+  } finally {
+    restoreEnv();
+    rmSync(repo, { recursive: true, force: true });
+  }
+});
+
+test('createWorktree — auto-detects main when baseBranch is omitted', async () => {
+  const repo = createTempRepo({ defaultBranch: 'main' });
+  try {
+    setupEnv(repo);
+    const mod = await loadModule();
+    const result = await mod.createWorktree('main-agent');
+    const status = await mod.getWorktree('main-agent');
+
+    assert.equal(result.status, 'created');
+    assert.equal(status.baseBranch, 'main');
   } finally {
     restoreEnv();
     rmSync(repo, { recursive: true, force: true });

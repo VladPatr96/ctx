@@ -107,6 +107,25 @@ export class FailoverStore extends StorageAdapter {
     }
   }
 
+  readLog(limit = 50) {
+    const route = this.getRouteMode();
+    if (route === 'json_rollback') {
+      return this.runBackupOnly('readLog', () => this.backup.readLog(limit));
+    }
+
+    try {
+      const value = this.primary.readLog(limit);
+      this.markPrimarySuccess();
+      return value;
+    } catch (err) {
+      return this.runFallback(
+        'readLog',
+        err,
+        () => this.backup.readLog(limit)
+      );
+    }
+  }
+
   writePipeline(pipeline) {
     const route = this.getRouteMode();
     if (route === 'json_rollback') {

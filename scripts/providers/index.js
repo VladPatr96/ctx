@@ -18,13 +18,20 @@ import opencode from './opencode.js';
 import codex from './codex.js';
 import { discoverModels, discoverAllModels, discoverAllModelsAsync, validateModel } from './model-discovery.js';
 import { recordUsage } from '../cost-tracking/index.js';
+import { createProviderAdapter } from './provider-modes.js';
+import { buildProviderExtensibilityInventory } from '../contracts/provider-extensibility-schemas.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const HEALTH_FILE = join(__dirname, '..', '..', '.data', 'provider-health.json');
 const CIRCUIT_THRESHOLD = 3;
 const CIRCUIT_RESET_MS = 5 * 60 * 1000; // 5 minutes
 
-const providers = { claude, gemini, opencode, codex };
+const providers = Object.freeze({
+  claude: createProviderAdapter(claude),
+  gemini: createProviderAdapter(gemini),
+  opencode: createProviderAdapter(opencode),
+  codex: createProviderAdapter(codex),
+});
 
 function toNonNegativeInt(value, fallback = 0) {
   const parsed = Number.parseInt(String(value ?? ''), 10);
@@ -126,9 +133,13 @@ function recordFailure(providerName, latencyMs) {
 export function listProviders() {
   return Object.values(providers).map(p => ({
     name: p.name,
+    mode: p.mode,
+    adapter: p.adapter,
     transport: p.transport,
+    executionTransport: p.executionTransport,
     capabilities: p.capabilities,
     models: p.models,
+    lifecycle: p.lifecycle,
     circuitOpen: isCircuitOpen(p.name)
   }));
 }
@@ -159,6 +170,26 @@ export async function listModelsAsync(providerName) {
  */
 export function getProvider(name) {
   return providers[name] || null;
+}
+
+export function listProviderModeTargets() {
+  return Object.values(providers).map(provider => provider.contract);
+}
+
+export function listProviderExtensibilityInventory() {
+  return buildProviderExtensibilityInventory({
+    providers: Object.values(providers).map((provider) => ({
+      provider: provider.name,
+      mode: provider.mode,
+      adapter: provider.adapter,
+      transport: provider.transport ?? null,
+      executionTransport: provider.executionTransport,
+      lifecycle: provider.lifecycle,
+      capabilities: provider.capabilities,
+      notes: provider.contract?.notes || `${provider.name} provider registry entry`,
+      modelInfo: discoverModels(provider.name),
+    })),
+  });
 }
 
 /**
@@ -262,4 +293,15 @@ export async function healthCheckAll() {
 export { route, routeMulti, delegate, setLead } from './router.js';
 export { discoverModels, validateModel } from './model-discovery.js';
 
-export default { listProviders, listModels, listModelsAsync, getProvider, invoke, invokeAll, healthCheckAll, validateModel };
+export default {
+  listProviders,
+  listModels,
+  listModelsAsync,
+  getProvider,
+  invoke,
+  invokeAll,
+  healthCheckAll,
+  validateModel,
+  listProviderModeTargets,
+  listProviderExtensibilityInventory,
+};
