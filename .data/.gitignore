@@ -1,0 +1,19 @@
+# Debug & temporary files
+*.tmp
+*debug*
+check_js*
+check-js*
+served_script*
+find_escapes*
+test_render*
+
+# Logs
+*.err.log
+*.out.log
+
+# SQLite WAL (transient, auto-generated)
+*.sqlite-wal
+*.sqlite-shm
+
+# Dashboard token (local only)
+.dashboard-token

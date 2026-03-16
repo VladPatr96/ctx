@@ -5,7 +5,9 @@
   "type": "module",
   "main": "scripts/ctx-mcp-hub.js",
   "bin": {
-    "ctx": "scripts/ctx-cli.js"
+    "ctx": "scripts/ctx-cli.js",
+    "ctx-plugin": "scripts/ctx-setup.js",
+    "ctx-install": "scripts/ctx-setup.js"
   },
   "exports": {
     ".": "./scripts/ctx-mcp-hub.js",
