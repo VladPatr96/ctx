@@ -505,30 +505,58 @@ async function main() {
 
   // Step 6: Spawn agents — с задачей или idle
   const spawnedProviders = [];
-  const spawnTask = isIdle ? '' : taskText;
+  const skippedProviders = [];
+
+  function canSpawnIdle(providerId) {
+    return PROVIDERS[providerId]?.hasMcp === true;
+  }
+
+  function getSpawnTask(providerId) {
+    if (!isIdle) return taskText;
+    // Idle: только MCP-провайдеры могут стартовать без задачи
+    if (canSpawnIdle(providerId)) return '';
+    return null; // skip — не может idle
+  }
 
   if (terminal) {
     // Lead — первый сплит
-    try {
-      const result = await spawnSplit(terminal, lead.id, cwd, 0, chatUrl, spawnTask);
-      const mode = result.idle ? `${CYAN}idle${RESET}` : `${GREEN}task${RESET}`;
-      chat.postSystem(`${lead.color}${lead.name}${RESET} (Lead) → ${result.terminal} split [${mode}]`);
-      spawnedProviders.push({ id: lead.id, name: lead.name, role: 'lead' });
-    } catch (err) {
-      chat.postError('system', null, `Lead ${lead.name}: ${err.message}`);
+    const leadTask = getSpawnTask(lead.id);
+    if (leadTask === null) {
+      chat.postSystem(`${YELLOW}⚠${RESET} ${lead.color}${lead.name}${RESET} (Lead) — нет MCP, idle невозможен. Пропущен.`);
+      skippedProviders.push({ id: lead.id, name: lead.name, reason: 'no MCP' });
+    } else {
+      try {
+        const result = await spawnSplit(terminal, lead.id, cwd, 0, chatUrl, leadTask);
+        const mode = result.idle ? `${CYAN}idle${RESET}` : `${GREEN}task${RESET}`;
+        chat.postSystem(`${lead.color}${lead.name}${RESET} (Lead) → ${result.terminal} split [${mode}]`);
+        spawnedProviders.push({ id: lead.id, name: lead.name, role: 'lead' });
+      } catch (err) {
+        chat.postError('system', null, `Lead ${lead.name}: ${err.message}`);
+      }
     }
 
     // Team members — дополнительные сплиты
-    for (let i = 0; i < teamMembers.length; i++) {
-      const member = teamMembers[i];
+    let splitIdx = spawnedProviders.length;
+    for (const member of teamMembers) {
+      const memberTask = getSpawnTask(member.id);
+      if (memberTask === null) {
+        chat.postSystem(`${YELLOW}⚠${RESET} ${member.color}${member.name}${RESET} — нет MCP, idle невозможен. Пропущен.`);
+        skippedProviders.push({ id: member.id, name: member.name, reason: 'no MCP' });
+        continue;
+      }
       try {
-        const result = await spawnSplit(terminal, member.id, cwd, i + 1, chatUrl, spawnTask);
+        const result = await spawnSplit(terminal, member.id, cwd, splitIdx, chatUrl, memberTask);
         const mode = result.idle ? `${CYAN}idle${RESET}` : `${GREEN}task${RESET}`;
         chat.postSystem(`${member.color}${member.name}${RESET} → ${result.terminal} split [${mode}]`);
         spawnedProviders.push({ id: member.id, name: member.name, role: 'member' });
+        splitIdx++;
       } catch (err) {
         chat.postError('system', null, `${member.name}: ${err.message}`);
       }
+    }
+
+    if (skippedProviders.length > 0 && isIdle) {
+      chat.postSystem(`${DIM}Подсказка: ${skippedProviders.map(p => p.name).join(', ')} можно запустить с задачей через /send${RESET}`);
     }
   }
 
@@ -554,7 +582,7 @@ async function main() {
   printChatHelp();
 
   // Step 7: Main screen = live chat monitor
-  await runChatMonitor(chat, chatServer, chatUrl, terminal, spawnedProviders, sseConnection);
+  await runChatMonitor(chat, chatServer, chatUrl, terminal, spawnedProviders, skippedProviders, cwd, sseConnection);
 }
 
 // ==================== Chat help ====================
@@ -577,7 +605,7 @@ function printChatHelp() {
 
 // ==================== Chat monitor ====================
 
-async function runChatMonitor(chat, chatServer, chatUrl, terminal, spawnedProviders, sseConnection) {
+async function runChatMonitor(chat, chatServer, chatUrl, terminal, spawnedProviders, skippedProviders, cwd, sseConnection) {
   const rl = createInterface({
     input: process.stdin,
     output: process.stdout,
@@ -693,27 +721,44 @@ async function runChatMonitor(chat, chatServer, chatUrl, terminal, spawnedProvid
 
       // /task <text> — отправить задачу ВСЕМ агентам через chat server
       if (cmd.startsWith('/task ')) {
-        const taskText = cmd.substring(6).trim();
-        if (!taskText) {
+        const broadcastText = cmd.substring(6).trim();
+        if (!broadcastText) {
           console.log(`  ${YELLOW}Укажите задачу: /task <текст>${RESET}`);
           askNext();
           return;
         }
 
-        // Пост через HTTP — все агенты увидят через ctx_chat_history
+        // Пост через HTTP — MCP-агенты увидят через ctx_chat_history
         const result = await postToServer(chatUrl, {
           role: 'lead',
           agent: 'User',
           type: 'delegation',
-          text: taskText,
+          text: broadcastText,
           target: 'все агенты',
         });
 
         if (result) {
-          chat.postDelegation('lead', 'User', taskText, 'все агенты');
-          chat.postSystem('Задача опубликована на Chat Server — агенты получат через MCP (ctx_chat_history)');
+          chat.postDelegation('lead', 'User', broadcastText, 'все агенты');
+          chat.postSystem('Задача опубликована на Chat Server — MCP-агенты получат через ctx_chat_history');
         } else {
           chat.postError('system', null, 'Не удалось отправить на Chat Server');
+        }
+
+        // Пропущенные non-MCP провайдеры — спавним с задачей
+        if (skippedProviders.length > 0 && terminal) {
+          const toSpawn = [...skippedProviders]; // копируем, т.к. мутируем
+          for (const skipped of toSpawn) {
+            chat.postSystem(`${skipped.name} (no MCP) — запускаю сплит с задачей...`);
+            try {
+              const res = await spawnSplit(terminal, skipped.id, cwd, spawnedProviders.length, chatUrl, broadcastText);
+              chat.postSystem(`${PROVIDERS[skipped.id]?.color || ''}${skipped.name}${RESET} → ${res.terminal} split [${GREEN}task${RESET}]`);
+              spawnedProviders.push({ id: skipped.id, name: skipped.name, role: 'member' });
+              const idx = skippedProviders.findIndex(p => p.id === skipped.id);
+              if (idx !== -1) skippedProviders.splice(idx, 1);
+            } catch (err) {
+              chat.postError('system', null, `${skipped.name}: ${err.message}`);
+            }
+          }
         }
         askNext();
         return;
@@ -723,38 +768,57 @@ async function runChatMonitor(chat, chatServer, chatUrl, terminal, spawnedProvid
       if (cmd.startsWith('/send ')) {
         const parts = cmd.substring(6).trim().split(/\s+/);
         const providerQuery = parts[0];
-        const taskText = parts.slice(1).join(' ');
+        const sendTaskText = parts.slice(1).join(' ');
 
-        if (!providerQuery || !taskText) {
+        if (!providerQuery || !sendTaskText) {
+          const allAvailable = [...spawnedProviders.map(p => p.id), ...skippedProviders.map(p => p.id)];
           console.log(`  ${YELLOW}Формат: /send <провайдер> <текст>${RESET}`);
-          console.log(`  ${DIM}Доступные: ${spawnedProviders.map(p => p.id).join(', ')}${RESET}`);
+          console.log(`  ${DIM}Доступные: ${allAvailable.join(', ')}${RESET}`);
           askNext();
           return;
         }
 
-        const target = findProvider(providerQuery);
-        if (!target) {
-          console.log(`  ${YELLOW}Провайдер "${providerQuery}" не найден. Доступные: ${spawnedProviders.map(p => p.id).join(', ')}${RESET}`);
-          askNext();
-          return;
+        // Ищем среди запущенных
+        let target = findProvider(providerQuery);
+
+        if (target) {
+          // MCP-провайдер — шлём через чат
+          await postToServer(chatUrl, {
+            role: 'lead',
+            agent: 'User',
+            type: 'delegation',
+            text: sendTaskText,
+            target: target.id,
+          });
+          chat.post({
+            role: 'lead',
+            agent: 'User',
+            type: 'delegation',
+            text: `→ ${target.name}: ${sendTaskText}`,
+          });
+          chat.postSystem(`Задача для ${target.name} опубликована → MCP`);
+        } else {
+          // Ищем среди пропущенных (non-MCP) — спавним с задачей
+          const skipped = skippedProviders.find(p =>
+            p.id === providerQuery.toLowerCase() || p.name.toLowerCase().startsWith(providerQuery.toLowerCase())
+          );
+          if (skipped && terminal) {
+            chat.postSystem(`${skipped.name} не имеет MCP — запускаю новый сплит с задачей...`);
+            try {
+              const result = await spawnSplit(terminal, skipped.id, cwd, spawnedProviders.length, chatUrl, sendTaskText);
+              chat.postSystem(`${PROVIDERS[skipped.id]?.color || ''}${skipped.name}${RESET} → ${result.terminal} split [${GREEN}task${RESET}]`);
+              spawnedProviders.push({ id: skipped.id, name: skipped.name, role: 'member' });
+              // Убираем из пропущенных
+              const idx = skippedProviders.findIndex(p => p.id === skipped.id);
+              if (idx !== -1) skippedProviders.splice(idx, 1);
+            } catch (err) {
+              chat.postError('system', null, `${skipped.name}: ${err.message}`);
+            }
+          } else {
+            const allAvailable = [...spawnedProviders.map(p => p.id), ...skippedProviders.map(p => p.id)];
+            console.log(`  ${YELLOW}Провайдер "${providerQuery}" не найден. Доступные: ${allAvailable.join(', ')}${RESET}`);
+          }
         }
-
-        await postToServer(chatUrl, {
-          role: 'lead',
-          agent: 'User',
-          type: 'delegation',
-          text: taskText,
-          target: target.id,
-        });
-
-        chat.post({
-          role: 'lead',
-          agent: 'User',
-          type: 'delegation',
-          text: `→ ${target.name}: ${taskText}`,
-        });
-
-        chat.postSystem(`Задача для ${target.name} опубликована → MCP`);
         askNext();
         return;
       }

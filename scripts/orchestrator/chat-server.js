@@ -63,10 +63,21 @@ export function createChatServer() {
   function handleHistory(req, res) {
     const url = new URL(req.url, `http://${req.headers.host}`);
     const count = Math.min(parseInt(url.searchParams.get('count') || '20', 10), 500);
-    const slice = messages.slice(-count);
+    const typeFilter = url.searchParams.get('type');
+    const roleFilter = url.searchParams.get('role');
+    const sinceFilter = url.searchParams.get('since');
 
+    let filtered = messages;
+    if (typeFilter) filtered = filtered.filter(m => m.type === typeFilter);
+    if (roleFilter) filtered = filtered.filter(m => m.role === roleFilter);
+    if (sinceFilter) {
+      const ts = parseInt(sinceFilter, 10);
+      if (!isNaN(ts)) filtered = filtered.filter(m => m.ts > ts);
+    }
+
+    const slice = filtered.slice(-count);
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ total: messages.length, messages: slice }));
+    res.end(JSON.stringify({ total: filtered.length, messages: slice }));
   }
 
   function handlePing(_req, res) {

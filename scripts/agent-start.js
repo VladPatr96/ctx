@@ -68,11 +68,13 @@ const safePrompt = isIdle
   ? sanitizeForShell(buildIdlePrompt())
   : sanitizeForShell(taskPrompt);
 
-const PROVIDER_CMDS = {
-  claude:   `claude "${safePrompt}" --dangerously-skip-permissions`,
-  gemini:   `gemini -i "${safePrompt}" --yolo`,
-  codex:    `codex "${safePrompt}" --full-auto`,
-  opencode: `opencode --prompt "${safePrompt}"`,
+// hasMcp: провайдеры с MCP могут получать задачи через чат в idle-режиме
+// Без MCP — idle не поддерживается, агент запускается только с задачей
+const PROVIDER_DEFS = {
+  claude:   { cmd: `claude "${safePrompt}" --dangerously-skip-permissions`, hasMcp: true },
+  gemini:   { cmd: `gemini "${safePrompt}" --yolo`, hasMcp: true },
+  codex:    { cmd: `codex exec --ephemeral --skip-git-repo-check "${safePrompt}"`, hasMcp: false },
+  opencode: { cmd: `opencode run "${safePrompt}"`, hasMcp: false },
 };
 
 // ==================== Phone home ====================
@@ -115,41 +117,54 @@ connectToChat();
 startHeartbeat();
 
 // 2. Build command string
-const fullCmd = PROVIDER_CMDS[AGENT_ID];
-if (!fullCmd) {
+const providerDef = PROVIDER_DEFS[AGENT_ID];
+if (!providerDef) {
   console.error(`[agent-start] Unknown provider: ${AGENT_ID}`);
   process.exit(1);
 }
 
-// Debug: показываем что запускаем
-console.log(`[ctx] Agent: ${AGENT_NAME} (${AGENT_ID})`);
-console.log(`[ctx] Mode: ${isIdle ? 'IDLE (waiting for tasks via chat)' : 'TASK'}`);
-console.log(`[ctx] Chat: ${CHAT_URL || 'none'}`);
-console.log(`[ctx] Command: ${fullCmd.slice(0, 120)}${fullCmd.length > 120 ? '...' : ''}`);
-console.log(`[ctx] Starting...\n`);
-
-// 3. Launch CLI — interactive mode, full terminal access
-const child = spawn(fullCmd, [], {
-  stdio: 'inherit',
-  shell: true,
-  cwd: process.cwd(),
-  env: process.env,
-});
-
-child.on('error', (err) => {
-  console.error(`\n[agent-start] FAILED to spawn: ${err.message}`);
-  console.error(`[agent-start] Command was: ${fullCmd.slice(0, 200)}`);
-  console.error(`[agent-start] Press any key to close...`);
+// Idle без MCP не поддерживается — агент не сможет получить задачу
+if (isIdle && !providerDef.hasMcp) {
+  process.stderr.write(`[agent-start] ${AGENT_NAME} не поддерживает MCP — idle-режим недоступен.\n`);
+  process.stderr.write(`[agent-start] Передайте задачу через CTX_TASK_FILE или /send.\n`);
+  process.stderr.write(`[agent-start] Press any key to close...\n`);
   process.stdin.resume();
-});
+  process.stdin.once('data', () => process.exit(1));
+  // Prevent further execution — wait for keypress
+  setTimeout(() => process.exit(1), 300000); // 5 min max
+} else {
+  const fullCmd = providerDef.cmd;
 
-child.on('exit', (code) => {
-  if (code !== 0) {
-    console.error(`\n[agent-start] CLI exited with code ${code}`);
+  // Debug: показываем что запускаем
+  console.log(`[ctx] Agent: ${AGENT_NAME} (${AGENT_ID})`);
+  console.log(`[ctx] Mode: ${isIdle ? 'IDLE (waiting for tasks via chat)' : 'TASK'}`);
+  console.log(`[ctx] Chat: ${CHAT_URL || 'none'}`);
+  console.log(`[ctx] Command: ${fullCmd.slice(0, 120)}${fullCmd.length > 120 ? '...' : ''}`);
+  console.log(`[ctx] Starting...\n`);
+
+  // 3. Launch CLI — interactive mode, full terminal access
+  const child = spawn(fullCmd, [], {
+    stdio: 'inherit',
+    shell: true,
+    cwd: process.cwd(),
+    env: process.env,
+  });
+
+  child.on('error', (err) => {
+    console.error(`\n[agent-start] FAILED to spawn: ${err.message}`);
     console.error(`[agent-start] Command was: ${fullCmd.slice(0, 200)}`);
     console.error(`[agent-start] Press any key to close...`);
     process.stdin.resume();
-  } else {
-    process.exit(0);
-  }
-});
+  });
+
+  child.on('exit', (code) => {
+    if (code !== 0) {
+      console.error(`\n[agent-start] CLI exited with code ${code}`);
+      console.error(`[agent-start] Command was: ${fullCmd.slice(0, 200)}`);
+      console.error(`[agent-start] Press any key to close...`);
+      process.stdin.resume();
+    } else {
+      process.exit(0);
+    }
+  });
+}
