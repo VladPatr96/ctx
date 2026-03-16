@@ -6,7 +6,7 @@ import {
   validateModel,
   getModelIds,
   _clearCache
-} from '../scripts/providers/model-discovery.js';
+} from '../src/providers/model-discovery.js';
 
 // ---- discoverModels ----
 

@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { createCacheStore } from '../scripts/cache/cache-store.js';
+import { createCacheStore } from '../src/core/cache/cache-store.js';
 
 const require = createRequire(import.meta.url);
 

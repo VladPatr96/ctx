@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { createStorageAdapter } from '../scripts/storage/index.js';
-import { createDashboardStateStore } from '../scripts/storage/dashboard-state-store.js';
+import { createStorageAdapter } from '../src/core/storage/index.js';
+import { createDashboardStateStore } from '../src/core/storage/dashboard-state-store.js';
 
 function writeJson(path, value) {
   writeFileSync(path, JSON.stringify(value, null, 2), 'utf8');

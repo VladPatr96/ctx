@@ -4,7 +4,7 @@ import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { registerCtxTools } from '../scripts/mcp/register-ctx-tools.js';
+import { registerCtxTools } from '../src/tools/register.js';
 
 function createRegistrySandbox() {
   const root = mkdtempSync(join(tmpdir(), 'ctx-mcp-tools-'));

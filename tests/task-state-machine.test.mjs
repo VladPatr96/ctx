@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createTaskRecord, transitionTask } from '../scripts/runtime/task-state-machine.js';
+import { createTaskRecord, transitionTask } from '../src/runtime/task-state-machine.js';
 
 test('task state machine supports retryable failure lifecycle', () => {
   let task = createTaskRecord({

@@ -5,7 +5,7 @@ import {
   buildConsiliumReplayExport,
   buildConsiliumReplayKnowledgeContext,
   createConsiliumReplayArchive,
-} from '../scripts/contracts/consilium-replay-schemas.js';
+} from '../src/contracts/consilium-replay-schemas.js';
 
 test('buildConsiliumReplayArchive normalizes decision history, rounds, and archive references', () => {
   const run = {

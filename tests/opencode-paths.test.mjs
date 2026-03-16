@@ -9,7 +9,7 @@ import {
   findOpenCodeSkillsDir,
   getOpenCodeSkillsDirCandidates,
   hasOpenCodeCtxInstall,
-} from '../scripts/setup/opencode-paths.js';
+} from '../src/setup/opencode-paths.js';
 
 const ROOT_DIR = fileURLToPath(new URL('..', import.meta.url));
 

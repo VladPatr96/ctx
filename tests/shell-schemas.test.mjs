@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createShellSummary, ShellSummarySchema } from '../scripts/contracts/shell-schemas.js';
+import { createShellSummary, ShellSummarySchema } from '../src/contracts/shell-schemas.js';
 
 test('createShellSummary normalizes shell session, storage, and provider telemetry', () => {
   const summary = createShellSummary({

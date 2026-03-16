@@ -1,7 +1,7 @@
-import { LayoutDashboard, BookOpen, Users, GitBranch, Settings, Terminal, Workflow, Bot, MessageSquareMore, type LucideIcon } from 'lucide-react';
+import { LayoutDashboard, BookOpen, Users, GitBranch, Settings, Terminal, Workflow, Bot, MessageSquareMore, Command, type LucideIcon } from 'lucide-react';
 import { SHELL_TABS } from '../../../../scripts/contracts/shell-navigation.js';
 
-export type AppTab = 'dashboard' | 'knowledge' | 'agents' | 'routing' | 'devpipeline' | 'orchestrator' | 'debates' | 'settings' | 'terminal';
+export type AppTab = 'command' | 'dashboard' | 'knowledge' | 'agents' | 'routing' | 'devpipeline' | 'orchestrator' | 'debates' | 'settings' | 'terminal';
 
 interface SidebarProps {
   activeTab: AppTab;
@@ -9,6 +9,7 @@ interface SidebarProps {
 }
 
 const TAB_ICONS: Record<string, LucideIcon> = {
+  command: Command,
   'layout-dashboard': LayoutDashboard,
   'book-open': BookOpen,
   users: Users,

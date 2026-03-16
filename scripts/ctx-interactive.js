@@ -227,14 +227,22 @@ async function detectTerminal() {
  * Пишет промпт задачи в temp файл → agent-start.js читает его и запускает CLI.
  * stdio: inherit → пользователь видит нативный UI провайдера.
  */
+/**
+ * Запустить провайдера в сплите.
+ * - taskText заполнен → пишем task file, агент стартует с задачей
+ * - taskText пустой → idle режим, агент ждёт задачи через MCP чат
+ */
 async function spawnSplit(terminal, provider, cwd, index, chatUrl, taskText) {
   const providerName = PROVIDERS[provider]?.name || provider;
   const agentStart = join(__dirname, 'agent-start.js').replace(/\//g, '\\');
 
-  // Записываем промпт задачи в temp файл (обходим проблемы с кавычками в cmd)
-  const taskPrompt = buildTaskPrompt(provider, taskText, chatUrl);
-  const taskFile = join(tmpdir(), `ctx-task-${provider}-${Date.now()}.txt`).replace(/\//g, '\\');
-  writeFileSync(taskFile, taskPrompt, 'utf-8');
+  // Записываем промпт задачи в temp файл (только если есть задача)
+  let taskFile = '';
+  if (taskText) {
+    const taskPrompt = buildTaskPrompt(provider, taskText, chatUrl);
+    taskFile = join(tmpdir(), `ctx-task-${provider}-${Date.now()}.txt`).replace(/\//g, '\\');
+    writeFileSync(taskFile, taskPrompt, 'utf-8');
+  }
 
   // Первый сплит — вертикальный, остальные — горизонтальные
   const wtDir = index === 0 ? '-V' : '-H';
@@ -242,12 +250,13 @@ async function spawnSplit(terminal, provider, cwd, index, chatUrl, taskText) {
   switch (terminal) {
     case 'wt': {
       const winCwd = cwd.replace(/\//g, '\\');
-      const envSetup = [
+      const envParts = [
         `set CTX_CHAT_URL=${chatUrl}`,
         `set CTX_AGENT_ID=${provider}`,
         `set CTX_AGENT_NAME=${providerName}`,
-        `set CTX_TASK_FILE=${taskFile}`,
-      ].join('&& ');
+      ];
+      if (taskFile) envParts.push(`set CTX_TASK_FILE=${taskFile}`);
+      const envSetup = envParts.join('&& ');
       const args = [
         '-w', '0', 'sp', wtDir,
         '-d', winCwd,
@@ -263,28 +272,38 @@ async function spawnSplit(terminal, provider, cwd, index, chatUrl, taskText) {
         child.on('error', reject);
         setTimeout(resolve, 5000);
       });
-      return { provider, status: 'spawned', terminal: 'wt' };
+      return { provider, status: 'spawned', terminal: 'wt', idle: !taskText };
     }
 
     case 'tmux': {
       const startPath = join(__dirname, 'agent-start.js');
-      const taskFileUnix = taskFile.replace(/\\/g, '/');
-      const shellCmd = `export CTX_CHAT_URL="${chatUrl}" CTX_AGENT_ID="${provider}" CTX_AGENT_NAME="${providerName}" CTX_TASK_FILE="${taskFileUnix}" && cd "${cwd}" && node "${startPath}"`;
+      const envExports = [
+        `CTX_CHAT_URL="${chatUrl}"`,
+        `CTX_AGENT_ID="${provider}"`,
+        `CTX_AGENT_NAME="${providerName}"`,
+      ];
+      if (taskFile) envExports.push(`CTX_TASK_FILE="${taskFile.replace(/\\/g, '/')}"`);
+      const shellCmd = `export ${envExports.join(' ')} && cd "${cwd}" && node "${startPath}"`;
       const dir = index === 0 ? '-h' : '-v';
       await execFileP('tmux', ['split-window', dir, '-d', 'bash', '-c', shellCmd], { timeout: 10000 });
-      return { provider, status: 'spawned', terminal: 'tmux' };
+      return { provider, status: 'spawned', terminal: 'tmux', idle: !taskText };
     }
 
     case 'wezterm': {
       const startPath = join(__dirname, 'agent-start.js');
-      const taskFileUnix = taskFile.replace(/\\/g, '/');
+      const envExports = [
+        `CTX_CHAT_URL="${chatUrl}"`,
+        `CTX_AGENT_ID="${provider}"`,
+        `CTX_AGENT_NAME="${providerName}"`,
+      ];
+      if (taskFile) envExports.push(`CTX_TASK_FILE="${taskFile.replace(/\\/g, '/')}"`);
       const dir = index === 0 ? '--right' : '--bottom';
-      const shellCmd = `export CTX_CHAT_URL="${chatUrl}" CTX_AGENT_ID="${provider}" CTX_AGENT_NAME="${providerName}" CTX_TASK_FILE="${taskFileUnix}" && node "${startPath}"`;
+      const shellCmd = `export ${envExports.join(' ')} && node "${startPath}"`;
       await execFileP('wezterm', [
         'cli', 'split-pane', dir, '--cwd', cwd,
         '--', 'bash', '-c', shellCmd,
       ], { timeout: 10000 });
-      return { provider, status: 'spawned', terminal: 'wezterm' };
+      return { provider, status: 'spawned', terminal: 'wezterm', idle: !taskText };
     }
 
     default:
@@ -425,16 +444,16 @@ async function main() {
 
   printBox('Запуск консилиума', summaryItems);
 
-  // Step 5: Enter task — агенты запустятся с этой задачей
+  // Step 5: Enter task (optional — можно запустить idle)
   console.log();
-  console.log(`  ${BOLD}Введите задачу для команды:${RESET}`);
+  console.log(`  ${BOLD}Введите задачу для команды ${DIM}(Enter = idle режим, задачи через чат)${RESET}:`);
   const taskText = await prompt.ask(`  ${CYAN}▸${RESET} Задача: `);
-  if (!taskText.trim()) {
-    console.log(`\n  ${YELLOW}Задача не указана. Отменено.${RESET}`);
-    prompt.close();
-    process.exit(0);
+  const isIdle = !taskText.trim();
+  if (isIdle) {
+    console.log(`\n  ${CYAN}◎${RESET} Idle режим — агенты стартуют без задачи, используйте ${GREEN}/task${RESET} для назначения\n`);
+  } else {
+    console.log(`\n  ${GREEN}✓${RESET} Задача: ${taskText}\n`);
   }
-  console.log(`\n  ${GREEN}✓${RESET} Задача: ${taskText}\n`);
 
   prompt.close();
 
@@ -477,16 +496,23 @@ async function main() {
   });
 
   chat.separator('Запуск агентов');
-  chat.postSystem(`Задача: ${taskText}`);
+  if (isIdle) {
+    chat.postSystem('Режим: IDLE — агенты стартуют без задачи');
+    chat.postSystem(`Используйте ${GREEN}/task${RESET} или ${GREEN}/send${RESET} для назначения задач`);
+  } else {
+    chat.postSystem(`Задача: ${taskText}`);
+  }
 
-  // Step 6: Spawn agents с задачей — каждый CLI запускается в интерактивном режиме
+  // Step 6: Spawn agents — с задачей или idle
   const spawnedProviders = [];
+  const spawnTask = isIdle ? '' : taskText;
 
   if (terminal) {
     // Lead — первый сплит
     try {
-      const result = await spawnSplit(terminal, lead.id, cwd, 0, chatUrl, taskText);
-      chat.postSystem(`${lead.color}${lead.name}${RESET} (Lead) → ${result.terminal} split`);
+      const result = await spawnSplit(terminal, lead.id, cwd, 0, chatUrl, spawnTask);
+      const mode = result.idle ? `${CYAN}idle${RESET}` : `${GREEN}task${RESET}`;
+      chat.postSystem(`${lead.color}${lead.name}${RESET} (Lead) → ${result.terminal} split [${mode}]`);
       spawnedProviders.push({ id: lead.id, name: lead.name, role: 'lead' });
     } catch (err) {
       chat.postError('system', null, `Lead ${lead.name}: ${err.message}`);
@@ -496,8 +522,9 @@ async function main() {
     for (let i = 0; i < teamMembers.length; i++) {
       const member = teamMembers[i];
       try {
-        const result = await spawnSplit(terminal, member.id, cwd, i + 1, chatUrl, taskText);
-        chat.postSystem(`${member.color}${member.name}${RESET} → ${result.terminal} split`);
+        const result = await spawnSplit(terminal, member.id, cwd, i + 1, chatUrl, spawnTask);
+        const mode = result.idle ? `${CYAN}idle${RESET}` : `${GREEN}task${RESET}`;
+        chat.postSystem(`${member.color}${member.name}${RESET} → ${result.terminal} split [${mode}]`);
         spawnedProviders.push({ id: member.id, name: member.name, role: 'member' });
       } catch (err) {
         chat.postError('system', null, `${member.name}: ${err.message}`);
@@ -505,7 +532,7 @@ async function main() {
     }
   }
 
-  chat.separator('Агенты работают');
+  chat.separator(isIdle ? 'Агенты готовы — ожидают задачи' : 'Агенты работают');
 
   // Трекинг подключений агентов
   const connectedAgents = new Set();
@@ -517,8 +544,13 @@ async function main() {
     }
   });
 
-  chat.postSystem('Агенты запущены с задачей. Наблюдайте за их работой в сплитах.');
-  chat.postSystem('Результаты от MCP-агентов (Claude, Gemini) появятся в чате автоматически.');
+  if (isIdle) {
+    chat.postSystem('Агенты в idle-режиме. Назначьте задачу через /task или /send.');
+    chat.postSystem('MCP-агенты (Claude, Gemini) будут проверять чат для получения задач.');
+  } else {
+    chat.postSystem('Агенты запущены с задачей. Наблюдайте за их работой в сплитах.');
+    chat.postSystem('Результаты от MCP-агентов (Claude, Gemini) появятся в чате автоматически.');
+  }
   printChatHelp();
 
   // Step 7: Main screen = live chat monitor

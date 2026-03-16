@@ -9,8 +9,8 @@ import {
   createWizardStateSnapshot,
   parseWizardState,
   reconcileWizardState,
-} from '../scripts/contracts/onboarding-schemas.js';
-import { loadState, saveState } from '../scripts/setup/state-manager.js';
+} from '../src/contracts/onboarding-schemas.js';
+import { loadState, saveState } from '../src/setup/state-manager.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);

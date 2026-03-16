@@ -18,10 +18,10 @@ interface TeamBuilderProps {
 const PROVIDERS = ['claude', 'gemini', 'codex', 'opencode'] as const;
 
 const PROVIDER_MODELS: Record<string, string[]> = {
-  claude: ['claude-opus-4-6', 'claude-sonnet-4-6', 'claude-haiku-4-5'],
-  gemini: ['gemini-2.0-flash', 'gemini-2.5-pro'],
-  codex: ['o3', 'o4-mini'],
-  opencode: ['claude-sonnet-4-6', 'gpt-4o']
+  claude: ['claude-opus-4-6', 'claude-sonnet-4-6', 'claude-haiku-4-5-20251001'],
+  gemini: ['gemini-3.1-pro-preview', 'gemini-3-pro-preview', 'gemini-3-flash-preview', 'gemini-2.5-pro', 'gemini-2.5-flash'],
+  codex: ['gpt-5.4'],
+  opencode: ['zai-coding-plan/glm-5', 'zai-coding-plan/glm-4.7-flashx', 'zai/glm-5', 'zai/glm-4.7-flash']
 };
 
 const ROLES = [

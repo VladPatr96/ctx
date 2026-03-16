@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync, writeFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { readJsonFile } from '../scripts/utils/state-io.js';
+import { readJsonFile } from '../src/core/utils/state-io.js';
 
 // ==================== test-state tests ====================
 

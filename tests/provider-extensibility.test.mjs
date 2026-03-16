@@ -3,9 +3,9 @@ import assert from 'node:assert/strict';
 import {
   buildProviderExtensibilityInventory,
   ProviderExtensibilityInventorySchema,
-} from '../scripts/contracts/provider-extensibility-schemas.js';
-import { MODE_LIFECYCLE_CONTRACTS } from '../scripts/providers/provider-modes.js';
-import { listProviderExtensibilityInventory } from '../scripts/providers/index.js';
+} from '../src/contracts/provider-extensibility-schemas.js';
+import { MODE_LIFECYCLE_CONTRACTS } from '../src/providers/provider-modes.js';
+import { listProviderExtensibilityInventory } from '../src/providers/index.js';
 
 test('buildProviderExtensibilityInventory classifies builtin, configurable, and local-model providers', () => {
   const inventory = buildProviderExtensibilityInventory({

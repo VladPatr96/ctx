@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createStepRecord, transitionStep } from '../scripts/runtime/step-state-machine.js';
+import { createStepRecord, transitionStep } from '../src/runtime/step-state-machine.js';
 
 test('step state machine supports retryable failure lifecycle', () => {
   let step = createStepRecord({

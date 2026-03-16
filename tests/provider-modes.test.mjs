@@ -5,12 +5,12 @@ import {
   MODE_LIFECYCLE_CONTRACTS,
   ProviderModeContractSchema,
   createProviderAdapter,
-} from '../scripts/providers/provider-modes.js';
-import { getProvider, listProviderModeTargets, listProviders } from '../scripts/providers/index.js';
-import claude from '../scripts/providers/claude.js';
-import gemini from '../scripts/providers/gemini.js';
-import codex from '../scripts/providers/codex.js';
-import opencode from '../scripts/providers/opencode.js';
+} from '../src/providers/provider-modes.js';
+import { getProvider, listProviderModeTargets, listProviders } from '../src/providers/index.js';
+import claude from '../src/providers/claude.js';
+import gemini from '../src/providers/gemini.js';
+import codex from '../src/providers/codex.js';
+import opencode from '../src/providers/opencode.js';
 
 test('legacy providers map to canonical CLI mode contracts', () => {
   const targets = listProviderModeTargets();

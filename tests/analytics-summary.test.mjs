@@ -4,7 +4,7 @@ import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { buildAnalyticsSummary } from '../scripts/analytics/summary.js';
-import { getDashboardHttpPath } from '../scripts/contracts/dashboard-surface.js';
+import { getDashboardHttpPath } from '../src/contracts/dashboard-surface.js';
 
 function writeJson(path, value) {
   writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`, 'utf8');

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   buildProviderResilienceStatus,
   buildStorageResilienceStatus,
-} from '../scripts/contracts/resilience-schemas.js';
+} from '../src/contracts/resilience-schemas.js';
 
 test('buildStorageResilienceStatus marks rollback and warning states as degraded', () => {
   const degraded = buildStorageResilienceStatus({

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { FailoverStore } from '../scripts/storage/failover-store.js';
+import { FailoverStore } from '../src/core/storage/failover-store.js';
 
 class MemoryStore {
   constructor(options = {}) {

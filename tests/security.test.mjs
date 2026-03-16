@@ -4,7 +4,7 @@ import { mkdtempSync, writeFileSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve, relative } from 'node:path';
 import { createServer } from 'node:http';
-import { resolveAgentDetailsPath } from '../scripts/dashboard-backend.js';
+import { resolveAgentDetailsPath } from '../src/dashboard/server.js';
 
 // Security tests for dashboard-backend.js
 
@@ -63,7 +63,7 @@ function createMockUrl(token) {
 
 test('isAuthorized uses constant-time comparison', async () => {
   // Import the module with access to internal functions
-  const module = await import('../scripts/dashboard-backend.js');
+  const module = await import('../src/dashboard/server.js');
   
   // We need to test the behavior indirectly via HTTP endpoints
   // Create a test to verify auth rejection works consistently
@@ -109,7 +109,7 @@ test('isAuthorized uses constant-time comparison', async () => {
 });
 
 test('Authorization header parsing handles edge cases', async () => {
-  const module = await import('../scripts/dashboard-backend.js');
+  const module = await import('../src/dashboard/server.js');
   
   return new Promise((resolve) => {
     const server = createServer(async (req, res) => {
@@ -148,7 +148,7 @@ test('Authorization header parsing handles edge cases', async () => {
 });
 
 test('Token comparison is length-safe', async () => {
-  const module = await import('../scripts/dashboard-backend.js');
+  const module = await import('../src/dashboard/server.js');
   
   return new Promise((resolve) => {
     const server = createServer(async (req, res) => {

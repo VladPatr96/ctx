@@ -90,6 +90,46 @@ export interface ApiClient {
   getRecommendations(): Promise<Recommendation[]>;
   getBudgetStatus(): Promise<BudgetStatus>;
   getAnalyticsSummary(): Promise<AnalyticsSummary>;
+  getEnvironmentHealth(): Promise<EnvironmentHealth>;
+}
+
+export interface EnvironmentHealth {
+  project: {
+    name: string;
+    path: string;
+    hasPackageJson: boolean;
+    stack: string | null;
+    deps: number;
+  };
+  git: {
+    ok: boolean;
+    branch: string | null;
+    remote: string | null;
+    dirty: number;
+    user: string | null;
+  };
+  github: {
+    authenticated: boolean;
+    statusText: string;
+    repo: {
+      name: string;
+      owner: { login: string };
+      url: string;
+      defaultBranchRef: { name: string } | null;
+    } | null;
+  };
+  providers: Record<string, { available: boolean; version: string | null }>;
+  dependencies: {
+    installed: boolean;
+    count: number;
+  };
+  models: Record<string, {
+    models: Array<{ id: string; alias: string; tier: string; mode?: string; provider?: string }>;
+    defaultModel: string;
+  }>;
+  mcp: {
+    hubAvailable: boolean;
+  };
 }
 
 export interface DevPipelineSpec {
@@ -631,6 +671,13 @@ function createHttpApiClient(tokenInput?: string): ApiClient {
       });
       const payload = await readJson<{ summary?: AnalyticsSummary }>(response);
       return payload.summary || createEmptyAnalyticsSummary();
+    },
+
+    async getEnvironmentHealth() {
+      const response = await fetch(withToken(getDashboardHttpPath('healthEnvironment'), token), {
+        headers: authHeaders
+      });
+      return readJson<EnvironmentHealth>(response);
     }
   };
 }

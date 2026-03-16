@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { ShadowStore } from '../scripts/storage/shadow-store.js';
+import { ShadowStore } from '../src/core/storage/shadow-store.js';
 
 class MemoryStore {
   constructor(options = {}) {

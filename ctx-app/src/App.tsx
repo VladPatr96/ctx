@@ -6,6 +6,7 @@ import { Sidebar } from './components/layout/Sidebar';
 import { ErrorBoundary } from './components/layout/ErrorBoundary';
 import { getShellShortcut } from '../../scripts/contracts/shell-navigation.js';
 
+const CommandCenterPage = lazy(() => import('./pages/CommandCenter').then(m => ({ default: m.CommandCenterPage })));
 const DashboardPage = lazy(() => import('./pages/Dashboard').then(m => ({ default: m.DashboardPage })));
 const KnowledgePage = lazy(() => import('./pages/Knowledge').then(m => ({ default: m.KnowledgePage })));
 const AgentsPage = lazy(() => import('./pages/Agents').then(m => ({ default: m.AgentsPage })));
@@ -79,6 +80,9 @@ function App() {
           {error ? <div className="error-banner">{error}</div> : null}
           <ErrorBoundary key={activeTab}>
             <Suspense fallback={<div className="loading-spinner">Загрузка...</div>}>
+              {activeTab === 'command' ? (
+                <CommandCenterPage client={client} />
+              ) : null}
               {activeTab === 'dashboard' ? (
                 <DashboardPage client={client} onRefresh={refresh} />
               ) : null}

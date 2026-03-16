@@ -5,7 +5,7 @@ import {
   getShellReconnectDelay,
   isShellSnapshotStale,
   shouldRecoverShellSnapshot,
-} from '../scripts/contracts/shell-connection.js';
+} from '../src/contracts/shell-connection.js';
 
 test('getShellReconnectDelay uses exponential backoff with cap', () => {
   assert.equal(getShellReconnectDelay(0), 1000);

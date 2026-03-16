@@ -7,7 +7,7 @@ import { spawnSync } from 'node:child_process';
 import {
   buildProviderMigrationArtifact,
   writeProviderMigrationArtifact,
-} from '../scripts/docs/provider-migration.js';
+} from '../src/docs/provider-migration.js';
 
 test('buildProviderMigrationArtifact returns a schema-valid provider compatibility matrix', () => {
   const artifact = buildProviderMigrationArtifact({

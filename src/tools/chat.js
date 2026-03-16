@@ -197,6 +197,64 @@ export function registerChatTools(server) {
     })();
   }
 
+  // ==================== Poll for tasks (idle mode) ====================
+
+  server.registerTool(
+    'ctx_chat_poll',
+    {
+      description: 'Проверить новые задачи, назначенные этому агенту. Используй в idle-режиме для получения делегированных задач. Возвращает delegation-сообщения, адресованные тебе или всем агентам.',
+      inputSchema: z.object({
+        since: z.number().optional().describe('Timestamp (ms) — показать только сообщения после этого момента'),
+      }).shape,
+    },
+    async ({ since }) => {
+      if (!CHAT_URL) {
+        return {
+          content: [{ type: 'text', text: 'No chat server (CTX_CHAT_URL not set). Poll unavailable.' }],
+        };
+      }
+
+      try {
+        const params = new URLSearchParams({ count: '50', type: 'delegation' });
+        const result = await httpGet(`/chat/history?${params}`);
+
+        // Фильтруем: только задачи для нас или для всех
+        let tasks = (result.messages || []).filter(m => {
+          if (!m.target) return true; // broadcast
+          const t = m.target.toLowerCase();
+          return t === AGENT_ID.toLowerCase()
+            || t === 'все агенты'
+            || t === 'all'
+            || t === '*';
+        });
+
+        // Фильтр по времени
+        if (since) {
+          tasks = tasks.filter(m => m.ts > since);
+        }
+
+        if (tasks.length === 0) {
+          return {
+            content: [{ type: 'text', text: 'Нет новых задач. Продолжай ждать.' }],
+          };
+        }
+
+        return {
+          content: [{ type: 'text', text: JSON.stringify({
+            newTasks: tasks.length,
+            tasks,
+            hint: 'Выполни последнюю задачу. После выполнения отправь результат через ctx_chat_post (type=done).',
+          }, null, 2) }],
+        };
+      } catch (err) {
+        return {
+          content: [{ type: 'text', text: `Poll error: ${err.message}` }],
+          isError: true,
+        };
+      }
+    }
+  );
+
   server.registerTool(
     'ctx_chat_team',
     {

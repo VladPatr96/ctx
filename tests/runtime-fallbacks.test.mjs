@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   buildRuntimeFallbackInventory,
   RuntimeFallbackInventorySchema,
-} from '../scripts/contracts/runtime-fallback-schemas.js';
+} from '../src/contracts/runtime-fallback-schemas.js';
 
 test('buildRuntimeFallbackInventory marks json backup and local-model candidates as offline-ready', () => {
   const inventory = buildRuntimeFallbackInventory({

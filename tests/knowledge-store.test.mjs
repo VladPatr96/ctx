@@ -8,11 +8,11 @@ import { join } from 'node:path';
 let StoreClass;
 let storeMode;
 try {
-  const mod = await import('../scripts/knowledge/knowledge-store.js');
+  const mod = await import('../src/knowledge/knowledge-store.js');
   StoreClass = mod.KnowledgeStore;
   storeMode = 'sqlite';
 } catch {
-  const mod = await import('../scripts/knowledge/kb-json-fallback.js');
+  const mod = await import('../src/knowledge/kb-json-fallback.js');
   StoreClass = mod.JsonKnowledgeStore;
   storeMode = 'json';
 }
@@ -620,7 +620,7 @@ test(`KnowledgeStore (${storeMode}): ON DELETE CASCADE removes links`, () => {
 // ==================== Sync queue tests ====================
 
 test('KbSync: queuePush accumulates, flush drains', async () => {
-  const { KbSync } = await import('../scripts/knowledge/kb-sync.js');
+  const { KbSync } = await import('../src/knowledge/kb-sync.js');
   const sync = new KbSync({ repoDir: mkdtempSync(join(tmpdir(), 'ctx-sync-')) });
 
   // Override push to track calls
@@ -640,7 +640,7 @@ test('KbSync: queuePush accumulates, flush drains', async () => {
 });
 
 test('KbSync: backoff increases interval on errors', async () => {
-  const { KbSync } = await import('../scripts/knowledge/kb-sync.js');
+  const { KbSync } = await import('../src/knowledge/kb-sync.js');
   const sync = new KbSync({ repoDir: mkdtempSync(join(tmpdir(), 'ctx-sync-')) });
 
   sync.push = async () => { return { status: 'error', error: 'network' }; };

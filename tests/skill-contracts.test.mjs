@@ -8,8 +8,8 @@ import { fileURLToPath } from 'node:url';
 import {
   loadSkillCommandHandler,
   validateSkillContracts,
-} from '../scripts/skills/skill-contracts.js';
-import { registerSkillTools } from '../scripts/skills/skill-loader.js';
+} from '../src/skills/skill-contracts.js';
+import { registerSkillTools } from '../src/skills/skill-loader.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);

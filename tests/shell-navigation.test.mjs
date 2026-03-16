@@ -15,7 +15,7 @@ import {
   readStoredShellTab,
   readStoredShellTheme,
   resolveInitialShellTab,
-} from '../scripts/contracts/shell-navigation.js';
+} from '../src/contracts/shell-navigation.js';
 
 test('shell tab registry keeps unique ids and includes the default tab', () => {
   const ids = SHELL_TABS.map((tab) => tab.id);
@@ -30,13 +30,13 @@ test('resolveInitialShellTab prefers query tab over stored tab and falls back sa
 
   assert.equal(resolveInitialShellTab({ search: '?tab=knowledge', storage }), 'knowledge');
   assert.equal(resolveInitialShellTab({ search: '?tab=unknown', storage }), 'terminal');
-  assert.equal(resolveInitialShellTab({ search: '', storage: createMemoryStorage({}) }), 'dashboard');
+  assert.equal(resolveInitialShellTab({ search: '', storage: createMemoryStorage({}) }), 'command');
 });
 
 test('buildShellSearch preserves unrelated params and writes canonical tab ids', () => {
   assert.equal(buildShellSearch('?token=abc', 'knowledge'), '?token=abc&tab=knowledge');
   assert.equal(buildShellSearch('?tab=bad&mode=dev', 'terminal'), '?tab=terminal&mode=dev');
-  assert.equal(buildShellSearch('', 'invalid-tab'), '?tab=dashboard');
+  assert.equal(buildShellSearch('', 'invalid-tab'), '?tab=command');
 });
 
 test('theme and tab persistence normalize invalid values before writing and reading', () => {
@@ -51,7 +51,7 @@ test('theme and tab persistence normalize invalid values before writing and read
 
   persistShellTab(storage, 'nope');
   persistShellTheme(storage, 'sepia');
-  assert.equal(readStoredShellTab(storage), 'dashboard');
+  assert.equal(readStoredShellTab(storage), 'command');
   assert.equal(readStoredShellTheme(storage), 'dark');
 });
 
@@ -60,7 +60,7 @@ test('shortcut registry is wired to canonical shell tabs', () => {
   assert.deepEqual(getShellShortcut('k'), SHELL_SHORTCUTS.k);
   assert.equal(getShellShortcut('x'), null);
   assert.equal(normalizeShellTab('agents'), 'agents');
-  assert.equal(normalizeShellTab('bad'), 'dashboard');
+  assert.equal(normalizeShellTab('bad'), 'command');
   assert.equal(normalizeShellTheme('LIGHT'), 'light');
   assert.equal(normalizeShellTheme('contrast'), 'dark');
 });

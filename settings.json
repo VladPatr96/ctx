@@ -1,4 +1,5 @@
 {
+  "suppress_windows_10_warning": true,
   "language": "Russian",
   "statusLine": {
     "type": "command",

@@ -5,8 +5,8 @@ import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { listCliCommands } from '../scripts/cli/command-manifest.js';
-import { listMcpTools } from '../scripts/mcp/tool-manifest.js';
-import { buildInterfaceReference, writeInterfaceReference } from '../scripts/docs/interface-reference.js';
+import { listMcpTools } from '../src/tools/tool-manifest.js';
+import { buildInterfaceReference, writeInterfaceReference } from '../src/docs/interface-reference.js';
 
 test('listCliCommands exposes built-in and skill-derived CLI surfaces', () => {
   const commands = listCliCommands();

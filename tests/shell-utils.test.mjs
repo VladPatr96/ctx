@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { runCommand } from '../scripts/utils/shell.js';
+import { runCommand } from '../src/core/utils/shell.js';
 
 test('runCommand keeps special characters in arguments literal', async () => {
   const payload = 'a";&|^%$()[]{}';

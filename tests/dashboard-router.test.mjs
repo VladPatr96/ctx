@@ -5,9 +5,9 @@ import { once, EventEmitter } from 'node:events';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { broadcast, createRouter, resetDashboardRuntimeCachesForTests, sseConnect, state } from '../scripts/dashboard-backend.js';
-import { createEvalStore } from '../scripts/evaluation/eval-store.js';
-import { buildConsiliumObservabilitySnapshot } from '../scripts/contracts/consilium-observability.js';
+import { broadcast, createRouter, resetDashboardRuntimeCachesForTests, sseConnect, state } from '../src/dashboard/server.js';
+import { createEvalStore } from '../src/evaluation/eval-store.js';
+import { buildConsiliumObservabilitySnapshot } from '../src/contracts/consilium-observability.js';
 
 const TOKEN = 'test-dashboard-token';
 
@@ -803,7 +803,7 @@ test('GET /api/kb/continuity/:project returns continuity digest with snapshot me
     });
     assert.equal(saveSession.status, 200);
 
-    const { createKnowledgeStore } = await import('../scripts/knowledge/kb-json-fallback.js');
+    const { createKnowledgeStore } = await import('../src/knowledge/kb-json-fallback.js');
     const runtime = await createKnowledgeStore({ dbPath: process.env.CTX_KB_PATH });
     runtime.store.saveSnapshot('ctx-continuity', {
       branch: 'codex/continuity',
@@ -882,7 +882,7 @@ test('GET /api/kb/export/:project returns project export artifact', async () => 
       })
     });
 
-    const { createKnowledgeStore } = await import('../scripts/knowledge/kb-json-fallback.js');
+    const { createKnowledgeStore } = await import('../src/knowledge/kb-json-fallback.js');
     const runtime = await createKnowledgeStore({ dbPath: process.env.CTX_KB_PATH });
     runtime.store.saveSnapshot('ctx-export', {
       branch: 'codex/export',
@@ -931,7 +931,7 @@ test('GET /api/kb/suggestions/:project returns archive-backed suggestions and te
       })
     });
 
-    const { createKnowledgeStore } = await import('../scripts/knowledge/kb-json-fallback.js');
+    const { createKnowledgeStore } = await import('../src/knowledge/kb-json-fallback.js');
     const runtime = await createKnowledgeStore({ dbPath: process.env.CTX_KB_PATH });
     runtime.store.saveSnapshot('ctx-suggest', {
       branch: 'codex/suggest',

@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { isValidAgentName, resolveGeneratedAgentPath } from '../scripts/tools/agents.js';
-import { resolveAgentDetailsPath } from '../scripts/dashboard-backend.js';
+import { isValidAgentName, resolveGeneratedAgentPath } from '../src/tools/agents.js';
+import { resolveAgentDetailsPath } from '../src/dashboard/server.js';
 
 test('agent name validation accepts kebab-case and rejects traversal patterns', () => {
   assert.equal(isValidAgentName('security-reviewer'), true);

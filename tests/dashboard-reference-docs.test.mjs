@@ -8,11 +8,11 @@ import {
   getDashboardHttpPath,
   listDashboardDesktopIpcMethods,
   listDashboardHttpEndpoints,
-} from '../scripts/contracts/dashboard-surface.js';
+} from '../src/contracts/dashboard-surface.js';
 import {
   buildDashboardDesktopReference,
   writeDashboardDesktopReference,
-} from '../scripts/docs/dashboard-reference.js';
+} from '../src/docs/dashboard-reference.js';
 
 test('dashboard surface manifest exposes canonical endpoints, params, and IPC methods', () => {
   const endpoints = listDashboardHttpEndpoints();
@@ -42,7 +42,7 @@ test('buildDashboardDesktopReference exports code-backed dashboard and desktop b
 
   assert.equal(artifact.desktop.runtime.name, 'ctx-app');
   assert.equal(artifact.desktop.runtime.version, '1.2.3');
-  assert.equal(artifact.desktop.navigation.defaultTab, 'dashboard');
+  assert.equal(artifact.desktop.navigation.defaultTab, 'command');
   assert.ok(artifact.desktop.navigation.tabs.some((tab) => tab.id === 'terminal'));
   assert.ok(artifact.desktop.shellSummaryContract.topLevelFields.includes('providers'));
   assert.equal(artifact.desktop.ipc.summary.total, 2);

@@ -6,8 +6,8 @@ import {
   flush,
   getBufferSize,
   _resetForTest
-} from '../scripts/evaluation/routing-logger.js';
-import { detectAnomalies } from '../scripts/evaluation/routing-anomaly.js';
+} from '../src/evaluation/routing-logger.js';
+import { detectAnomalies } from '../src/evaluation/routing-anomaly.js';
 
 // ---- routing-logger ----
 

@@ -13,7 +13,7 @@ import {
   createRoutingDecisionLogRecord,
   parseStepRecord,
   parseTaskRecord,
-} from '../scripts/contracts/runtime-schemas.js';
+} from '../src/contracts/runtime-schemas.js';
 
 async function loadRouterWithEnv(dataDir) {
   const id = Date.now() + Math.random();

@@ -5,7 +5,7 @@ import {
   parseStructuredResponse,
   parseStructuredResponseV2,
   createRoundOrchestrator
-} from '../scripts/consilium/round-orchestrator.js';
+} from '../src/consilium/round-orchestrator.js';
 import {
   buildR1Prompt,
   buildFollowUpPrompt,
@@ -14,16 +14,16 @@ import {
   buildSmartSynthesisPrompt,
   formatAnonymizedResponses,
   formatClaimsBlock
-} from '../scripts/consilium/prompts.js';
+} from '../src/consilium/prompts.js';
 import {
   buildClaimGraph,
   formatClaimGraph
-} from '../scripts/consilium/claim-graph.js';
+} from '../src/consilium/claim-graph.js';
 import {
   buildClaimExtractionPrompt,
   parseClaimExtractionResponse,
   extractClaimsFromResponses
-} from '../scripts/consilium/claim-extractor.js';
+} from '../src/consilium/claim-extractor.js';
 
 // ---- createAliasMap ----
 

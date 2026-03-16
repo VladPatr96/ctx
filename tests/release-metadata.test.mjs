@@ -8,7 +8,7 @@ import {
   buildReleaseMetadata,
   extractPushBranches,
   writeReleaseMetadata,
-} from '../scripts/docs/release-metadata.js';
+} from '../src/docs/release-metadata.js';
 
 test('extractPushBranches supports inline and block workflow syntax', () => {
   assert.deepEqual(

@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { buildRoutingExplainability } from '../scripts/analytics/routing-explainability.js';
-import { createEvalStore } from '../scripts/evaluation/eval-store.js';
+import { createEvalStore } from '../src/evaluation/eval-store.js';
 
 function makeTempDir() {
   return mkdtempSync(join(tmpdir(), 'ctx-routing-explainability-'));

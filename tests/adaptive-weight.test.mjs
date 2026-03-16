@@ -8,7 +8,7 @@ import {
   feedbackSignal,
   adaptiveScore,
   rankCandidates
-} from '../scripts/evaluation/adaptive-weight.js';
+} from '../src/evaluation/adaptive-weight.js';
 
 // ---- latencyScore ----
 

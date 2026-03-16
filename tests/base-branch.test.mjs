@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { rmSync } from 'node:fs';
 import { createTempGitRepo } from './helpers/git-test-repo.mjs';
-import { detectBaseBranch, resolveBaseBranch } from '../scripts/orchestrator/base-branch.js';
+import { detectBaseBranch, resolveBaseBranch } from '../src/orchestrator/base-branch.js';
 
 test('detectBaseBranch prefers a local main branch when present', async () => {
   const repo = createTempGitRepo('ctx-base-branch-main-', { defaultBranch: 'main' });

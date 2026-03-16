@@ -7,8 +7,8 @@ import { join, resolve } from 'node:path';
 import {
   buildOrchestrationBoundaryBrief,
   writeOrchestrationBoundaryBrief,
-} from '../scripts/docs/orchestration-boundary-brief.js';
-import { OrchestrationBoundaryBriefSchema } from '../scripts/contracts/orchestration-boundary-brief-schemas.js';
+} from '../src/docs/orchestration-boundary-brief.js';
+import { OrchestrationBoundaryBriefSchema } from '../src/contracts/orchestration-boundary-brief-schemas.js';
 
 test('buildOrchestrationBoundaryBrief returns a schema-valid brief with explicit runtime and product boundaries', () => {
   const artifact = buildOrchestrationBoundaryBrief({

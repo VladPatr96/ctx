@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { createEvalStore } from '../scripts/evaluation/eval-store.js';
-import { writeJsonAtomic, readJsonFile } from '../scripts/utils/state-io.js';
+import { createEvalStore } from '../src/evaluation/eval-store.js';
+import { writeJsonAtomic, readJsonFile } from '../src/core/utils/state-io.js';
 
 function makeTempDir() {
   return mkdtempSync(join(tmpdir(), 'ctx-routing-test-'));

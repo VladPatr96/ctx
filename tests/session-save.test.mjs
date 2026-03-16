@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { extractSections, saveSessionContext } from '../scripts/ctx-session-save.js';
+import { extractSections, saveSessionContext } from '../src/knowledge/session-save.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);

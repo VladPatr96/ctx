@@ -7,8 +7,8 @@ import { join, resolve } from 'node:path';
 import {
   buildTeamKnowledgeBoundaryBrief,
   writeTeamKnowledgeBoundaryBrief,
-} from '../scripts/docs/team-knowledge-brief.js';
-import { TeamKnowledgeBoundaryBriefSchema } from '../scripts/contracts/team-knowledge-brief-schemas.js';
+} from '../src/docs/team-knowledge-brief.js';
+import { TeamKnowledgeBoundaryBriefSchema } from '../src/contracts/team-knowledge-brief-schemas.js';
 
 test('buildTeamKnowledgeBoundaryBrief returns a schema-valid brief with explicit boundaries and non-goals', () => {
   const artifact = buildTeamKnowledgeBoundaryBrief({

@@ -4,7 +4,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { mkdtempSync } from 'node:fs';
-import { createStorageAdapter } from '../scripts/storage/index.js';
+import { createStorageAdapter } from '../src/core/storage/index.js';
 
 test('createStorageAdapter falls back to json on unknown mode', () => {
   const warnings = [];

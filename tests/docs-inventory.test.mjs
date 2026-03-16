@@ -4,7 +4,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { spawnSync } from 'node:child_process';
-import { buildDocsInventory, classifyDocSurface, writeDocsInventory } from '../scripts/docs/build-docs-inventory.js';
+import { buildDocsInventory, classifyDocSurface, writeDocsInventory } from '../src/docs/build-docs-inventory.js';
 
 test('classifyDocSurface maps canonical, migrate, and source material buckets', () => {
   assert.deepEqual(

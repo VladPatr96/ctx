@@ -7,9 +7,9 @@ import {
   createStorageRuntimeConfig,
   normalizeRoutingConfig,
   consumeRoutingOverride,
-} from '../scripts/contracts/config-schemas.js';
-import { createStorageAdapter } from '../scripts/storage/index.js';
-import { writeJsonAtomic } from '../scripts/utils/state-io.js';
+} from '../src/contracts/config-schemas.js';
+import { createStorageAdapter } from '../src/core/storage/index.js';
+import { writeJsonAtomic } from '../src/core/utils/state-io.js';
 
 function makeTempDir(prefix) {
   return mkdtempSync(join(tmpdir(), prefix));

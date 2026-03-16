@@ -1,14 +1,20 @@
 #!/usr/bin/env node
 /**
- * Agent Start — запускает CLI провайдера в ИНТЕРАКТИВНОМ режиме с задачей.
+ * Agent Start — запускает CLI провайдера в интерактивном режиме.
  *
- * 1. Читает задачу из файла CTX_TASK_FILE
- * 2. HTTP connect к chat server (phone-home)
- * 3. Запускает CLI с задачей (stdio: inherit — полный доступ к терминалу, нативный UI)
- * 4. Фоновый heartbeat
+ * Два режима:
+ *   A) С задачей: CTX_TASK_FILE → CLI получает промпт при запуске
+ *   B) Idle: без задачи → CLI стартует в интерактивном режиме,
+ *      агент получает задачи через MCP чат (ctx_chat_history)
+ *
+ * Flow:
+ *   1. (Опционально) читает задачу из CTX_TASK_FILE
+ *   2. HTTP connect к chat server (phone-home)
+ *   3. Запускает CLI (stdio: inherit — полный доступ к терминалу)
+ *   4. Фоновый heartbeat
  *
  * Env vars:
- *   CTX_TASK_FILE  — путь к файлу с промптом задачи
+ *   CTX_TASK_FILE  — путь к файлу с промптом задачи (опционально)
  *   CTX_CHAT_URL   — chat server URL
  *   CTX_AGENT_ID   — provider id
  *   CTX_AGENT_NAME — human-readable name
@@ -22,32 +28,45 @@ const AGENT_ID = process.env.CTX_AGENT_ID || 'unknown';
 const AGENT_NAME = process.env.CTX_AGENT_NAME || AGENT_ID;
 const TASK_FILE = process.env.CTX_TASK_FILE || '';
 
-// ==================== Read task ====================
+// ==================== Read task (optional) ====================
 
 let taskPrompt = '';
 if (TASK_FILE) {
   try {
     taskPrompt = readFileSync(TASK_FILE, 'utf-8').trim();
-  } catch (err) {
-    console.error(`[agent-start] Cannot read task file: ${err.message}`);
-    process.exit(1);
+  } catch {
+    // Task file missing is OK in idle mode
   }
 }
 
-if (!taskPrompt) {
-  console.error('[agent-start] No task prompt (CTX_TASK_FILE empty or missing)');
-  process.exit(1);
-}
+const isIdle = !taskPrompt;
 
 // ==================== Build command ====================
-// shell: true + полная строка команды с кавычками вокруг промпта.
-// Так промпт передаётся как ОДИН аргумент, независимо от пробелов.
 
-const safePrompt = taskPrompt
-  .replace(/[\r\n]+/g, ' ')   // убираем переносы строк
-  .replace(/"/g, '')           // убираем кавычки (ломают cmd.exe)
-  .replace(/[<>|&^]/g, '')    // убираем спецсимволы cmd.exe
-  .trim();
+function buildIdlePrompt() {
+  return [
+    `Ты ${AGENT_NAME} (${AGENT_ID}), участник мульти-агентной команды CTX.`,
+    `Проект: ${process.cwd()}`,
+    ``,
+    `Ты запущен в IDLE режиме — жди задачу.`,
+    `Проверяй чат через MCP-инструмент ctx_chat_history (type=delegation).`,
+    `Когда увидишь задачу для тебя (target=${AGENT_ID} или target=все агенты) — выполни её.`,
+    `После выполнения отправь результат через ctx_chat_post (type=done).`,
+    `Между проверками жди 10 секунд.`,
+  ].join(' ');
+}
+
+function sanitizeForShell(text) {
+  return text
+    .replace(/[\r\n]+/g, ' ')
+    .replace(/"/g, '')
+    .replace(/[<>|&^]/g, '')
+    .trim();
+}
+
+const safePrompt = isIdle
+  ? sanitizeForShell(buildIdlePrompt())
+  : sanitizeForShell(taskPrompt);
 
 const PROVIDER_CMDS = {
   claude:   `claude "${safePrompt}" --dangerously-skip-permissions`,
@@ -102,8 +121,14 @@ if (!fullCmd) {
   process.exit(1);
 }
 
+// Debug: показываем что запускаем
+console.log(`[ctx] Agent: ${AGENT_NAME} (${AGENT_ID})`);
+console.log(`[ctx] Mode: ${isIdle ? 'IDLE (waiting for tasks via chat)' : 'TASK'}`);
+console.log(`[ctx] Chat: ${CHAT_URL || 'none'}`);
+console.log(`[ctx] Command: ${fullCmd.slice(0, 120)}${fullCmd.length > 120 ? '...' : ''}`);
+console.log(`[ctx] Starting...\n`);
+
 // 3. Launch CLI — interactive mode, full terminal access
-// shell: true + полная строка → кавычки вокруг промпта сохраняются
 const child = spawn(fullCmd, [], {
   stdio: 'inherit',
   shell: true,
@@ -112,10 +137,19 @@ const child = spawn(fullCmd, [], {
 });
 
 child.on('error', (err) => {
-  console.error(`[agent-start] Failed to spawn: ${err.message}`);
-  process.exit(1);
+  console.error(`\n[agent-start] FAILED to spawn: ${err.message}`);
+  console.error(`[agent-start] Command was: ${fullCmd.slice(0, 200)}`);
+  console.error(`[agent-start] Press any key to close...`);
+  process.stdin.resume();
 });
 
 child.on('exit', (code) => {
-  process.exit(code ?? 0);
+  if (code !== 0) {
+    console.error(`\n[agent-start] CLI exited with code ${code}`);
+    console.error(`[agent-start] Command was: ${fullCmd.slice(0, 200)}`);
+    console.error(`[agent-start] Press any key to close...`);
+    process.stdin.resume();
+  } else {
+    process.exit(0);
+  }
 });

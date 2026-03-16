@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { parseDataPatch } from '../scripts/tools/pipeline.js';
-import { TASK_FULL_SCHEMA } from '../scripts/dashboard-actions.js';
+import { parseDataPatch } from '../src/tools/pipeline.js';
+import { TASK_FULL_SCHEMA } from '../src/dashboard/actions.js';
 
 test('parseDataPatch accepts allowed fields', () => {
   const patch = parseDataPatch({

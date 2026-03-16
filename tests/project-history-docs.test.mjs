@@ -7,7 +7,7 @@ import { spawnSync } from 'node:child_process';
 import {
   buildProjectHistoryArtifact,
   writeProjectHistoryArtifact,
-} from '../scripts/docs/project-history.js';
+} from '../src/docs/project-history.js';
 
 test('buildProjectHistoryArtifact exports sessions and ADR decisions into one schema-valid artifact', () => {
   const rootDir = mkdtempSync(join(tmpdir(), 'ctx-project-history-build-'));

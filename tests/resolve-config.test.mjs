@@ -22,7 +22,7 @@ describe('resolve-config', async () => {
 
   beforeEach(async () => {
     resetEnv();
-    const mod = await import('../scripts/config/resolve-config.js');
+    const mod = await import('../src/core/config/resolve-config.js');
     resolveConfig = mod.resolveConfig;
     findGitRoot = mod.findGitRoot;
     resolveHome = mod.resolveHome;
@@ -115,7 +115,7 @@ describe('resolve-config', async () => {
   it('resolveConfigStrict throws when githubOwner missing', async () => {
     delete process.env.GITHUB_OWNER;
     delete process.env.CTX_GITHUB_OWNER;
-    const { resolveConfigStrict } = await import('../scripts/config/resolve-config.js');
+    const { resolveConfigStrict } = await import('../src/core/config/resolve-config.js');
     // Only throws if gh CLI also can't detect
     // So we test with detectGh: false
     assert.throws(() => resolveConfigStrict({ detectGh: false }), /GITHUB_OWNER/);
