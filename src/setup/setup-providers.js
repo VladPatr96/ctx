@@ -15,6 +15,7 @@ import { join, dirname, resolve, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { detectProviders } from './provider-detector.js';
+import { probeProviders, probeProvider } from './provider-probe.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -300,6 +301,7 @@ CTX Universal Installer — plugin for all AI CLI systems
 Usage:
   npx ctx-plugin install             Auto-detect & configure all providers
   npx ctx-plugin install claude      Configure specific provider
+  npx ctx-plugin install --interactive  Interactive setup wizard
   npx ctx-plugin install --probe     Print detection status as JSON
 
 Supported providers:
@@ -323,9 +325,29 @@ function main() {
     process.exit(0);
   }
 
+  if (args.includes('--interactive') || args.includes('-i')) {
+    import('./wizard.js').catch((err) => {
+      console.error('Failed to launch interactive wizard:', err.message);
+      process.exit(1);
+    });
+    return;
+  }
+
   if (args.includes('--probe')) {
-    const detected = detectProviders();
-    console.log(JSON.stringify(detected, null, 2));
+    const probeIdx = args.indexOf('--probe');
+    const target = args[probeIdx + 1];
+
+    if (target && target !== 'all') {
+      try {
+        const probe = probeProvider(target);
+        console.log(JSON.stringify(probe, null, 2));
+      } catch (err) {
+        console.log(JSON.stringify({ error: err.message, id: target }, null, 2));
+      }
+    } else {
+      const probes = probeProviders();
+      console.log(JSON.stringify(probes, null, 2));
+    }
     process.exit(0);
   }
 

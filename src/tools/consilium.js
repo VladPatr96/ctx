@@ -368,6 +368,10 @@ export function registerConsiliumTools(server, { getResults, saveResults, DATA_D
             provider,
             task: promptTemplate,
             cwd,
+            promptFile,
+            responseFile,
+            logFile,
+            model: providerModels[provider] || undefined,
           });
         }
 
@@ -414,14 +418,42 @@ export function registerConsiliumTools(server, { getResults, saveResults, DATA_D
         };
         writeFileSync(join(runDir, 'meta.json'), JSON.stringify(meta, null, 2), 'utf-8');
 
-        // 7. Spawn terminal splits
-        let spawnResult = { terminal: null, spawned: [], failed: [] };
-        try {
-          const { spawnAgentSplits } = await import('../orchestrator/terminal-spawner.js');
-          spawnResult = await spawnAgentSplits(agents, { cwd });
-        } catch (err) {
-          spawnResult = { terminal: null, error: err.message };
-        }
+        // 7. Run providers: direct invoke (headless) with terminal fallback
+        let spawnResult = { terminal: 'direct', spawned: 0, failed: 0, agents: [] };
+        const providerResults = {};
+
+        // Primary: direct invoke via provider.invoke() — most reliable
+        const invokePromises = agents.map(async (agent) => {
+          const startMs = Date.now();
+          try {
+            const result = await invoke(agent.provider, agent.task, {
+              model: agent.model,
+              timeout: 120000,
+              cwd,
+            });
+            const elapsed = Date.now() - startMs;
+            if (result.status === 'success' && result.response) {
+              // Write response to file
+              writeFileSync(agent.responseFile, result.response, 'utf-8');
+              providerResults[agent.provider] = { status: 'success', elapsed, model: result.model };
+              return { agentId: agent.agentId, provider: agent.provider, status: 'success', terminal: 'direct' };
+            }
+            // Write error info
+            writeFileSync(agent.responseFile, `Error: ${result.error || 'empty response'}\n${result.detail || ''}`, 'utf-8');
+            providerResults[agent.provider] = { status: 'error', error: result.error, elapsed };
+            return { agentId: agent.agentId, provider: agent.provider, status: 'error', error: result.error, terminal: 'direct' };
+          } catch (err) {
+            providerResults[agent.provider] = { status: 'error', error: err.message, elapsed: Date.now() - startMs };
+            writeFileSync(agent.responseFile, `Error: ${err.message}`, 'utf-8');
+            return { agentId: agent.agentId, provider: agent.provider, status: 'error', error: err.message, terminal: 'direct' };
+          }
+        });
+
+        // Run all providers in parallel
+        const results = await Promise.allSettled(invokePromises);
+        spawnResult.agents = results.map(r => r.status === 'fulfilled' ? r.value : { status: 'error', error: r.reason?.message });
+        spawnResult.spawned = spawnResult.agents.filter(a => a.status === 'success').length;
+        spawnResult.failed = spawnResult.agents.filter(a => a.status === 'error').length;
 
         // 8. Update metadata with spawn status
         meta.status = 'running';
@@ -476,7 +508,10 @@ export function registerConsiliumTools(server, { getResults, saveResults, DATA_D
                 meta: join(runDir, 'meta.json'),
                 synthesis: synthesisPath,
               },
-              instructions: 'Провайдеры запущены в терминальных окнах. Дождись ответов, затем прочитай файлы ответов (.md) и заполни synthesis.md. Сохрани synthesis.md в базу знаний через ctx_save_lesson.',
+              providerResults,
+              instructions: spawnResult.terminal === 'direct'
+                ? 'Провайдеры завершили работу. Прочитай файлы ответов (.md) и заполни synthesis.md. Сохрани synthesis.md в базу знаний через ctx_save_lesson.'
+                : 'Провайдеры запущены в терминальных окнах. Дождись ответов, затем прочитай файлы ответов (.md) и заполни synthesis.md.',
             }, null, 2)
           }]
         };

@@ -44,7 +44,8 @@ function askSelectProvider(rl, providers) {
   return new Promise((resolve) => {
     console.log('\nAvailable providers:\n');
     providers.forEach((provider, index) => {
-      console.log(`  ${index}. ${provider.name} [${formatReadinessLabel(provider.readiness)}] (${provider.statusLine})`);
+      const line = formatProviderLine(provider);
+      console.log(`  ${index}. ${line} [${formatReadinessLabel(provider.readiness)}]`);
     });
     console.log('');
 
@@ -76,6 +77,19 @@ function showWelcome() {
   }
 }
 
+function cleanVersionString(raw) {
+  if (!raw) return null;
+  // Extract semver-like pattern from version output (e.g. "codex-cli 0.115.0" → "0.115.0")
+  const match = raw.match(/(\d+\.\d+[\w.-]*)/);
+  return match ? match[1] : null;
+}
+
+function formatProviderLine(provider) {
+  const version = cleanVersionString(provider.validation?.details?.version);
+  const versionStr = version ? ` v${version}` : '';
+  return `${provider.name}${versionStr}`;
+}
+
 function showProvidersDetected(providers) {
   const ready = providers.filter((provider) => provider.readiness === 'ready');
   const needsSetup = providers.filter((provider) => provider.readiness === 'needs_setup');
@@ -86,7 +100,9 @@ function showProvidersDetected(providers) {
   if (ready.length > 0) {
     console.log('Ready for CTX:');
     ready.forEach((provider) => {
-      console.log(`  - ${provider.name}: ${provider.statusLine}`);
+      const line = formatProviderLine(provider);
+      const icon = provider.validation?.status === 'valid' ? '+' : '~';
+      console.log(`  [${icon}] ${line}`);
     });
     console.log('');
   }
@@ -94,15 +110,15 @@ function showProvidersDetected(providers) {
   if (needsSetup.length > 0) {
     console.log('Detected, setup recommended:');
     needsSetup.forEach((provider) => {
-      console.log(`  - ${provider.name}: ${provider.statusLine}`);
+      console.log(`  [?] ${formatProviderLine(provider)}: ${provider.statusLine}`);
     });
     console.log('');
   }
 
   if (unavailable.length > 0) {
-    console.log('Unavailable providers:');
+    console.log('Not installed:');
     unavailable.forEach((provider) => {
-      console.log(`  - ${provider.name}: ${provider.statusLine}`);
+      console.log(`  [-] ${provider.name}`);
     });
     console.log('');
   }

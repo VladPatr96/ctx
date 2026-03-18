@@ -66,7 +66,9 @@ export default {
     const config = resolveConfig({ detectGh: false });
     const defaultModel = config.model || PRIMARY_GLM_MODEL;
     const requestedModel = opts.model ? normalizeModel(opts.model) : (defaultModel ? normalizeModel(defaultModel) : null);
-    const args = ['run', String(prompt), '--format', 'json'];
+    // Primary: no --format json (it keeps stream open and hangs).
+    // Token usage is extracted from text patterns instead.
+    const args = ['run', String(prompt)];
     if (requestedModel) args.push('--model', requestedModel);
 
     let result = await runCliWithFallback('opencode', args, {
@@ -76,7 +78,7 @@ export default {
     let modelUsed = requestedModel;
 
     if (!result.success && shouldRetryWithCodingPlan(requestedModel)) {
-      const retryArgs = ['run', String(prompt), '--format', 'json', '--model', FALLBACK_GLM_MODEL];
+      const retryArgs = ['run', String(prompt), '--model', FALLBACK_GLM_MODEL];
       const retry = await runCliWithFallback('opencode', retryArgs, {
         timeout,
         cwd: opts.cwd || process.cwd()
@@ -173,7 +175,7 @@ function normalizeModel(model) {
   if (raw === 'kimi-k2-5' || raw === 'kimi-k2.5' || raw === 'opencode/kimi-k2-5' || raw === 'opencode-go/kimi-k2.5') return KIMI_MODEL;
   if (raw === 'minimax' || raw === 'minimax-m2.5' || raw === 'opencode-go/minimax-m2.5') return 'opencode-go/minimax-m2.5';
   if (raw.includes('/')) return raw;
-  if (raw === 'glm-4.7') return PRIMARY_GLM_MODEL;
+  if (raw === 'glm-4.7') return FALLBACK_GLM_MODEL;
   return `opencode-go/${raw}`;
 }
 

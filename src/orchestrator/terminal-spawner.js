@@ -11,18 +11,52 @@
 
 import { execFile, spawn } from 'node:child_process';
 import { promisify } from 'node:util';
+import { writeFileSync } from 'node:fs';
+import { resolve as resolvePath } from 'node:path';
 
 const execFileP = promisify(execFile);
 const isWin = process.platform === 'win32';
 
 // ==================== Provider CLI commands ====================
 
-const PROVIDER_COMMANDS = {
+// Interactive TUI mode (for manual sessions)
+const PROVIDER_COMMANDS_TUI = {
   claude: { cmd: 'claude', args: ['--dangerously-skip-permissions'], readyMarker: /[❯$>]/ },
   gemini: { cmd: 'gemini', args: ['--yolo'], readyMarker: /Type your message/ },
   codex:  { cmd: 'codex',  args: ['--full-auto'], readyMarker: /[>]/ },
   opencode: { cmd: 'opencode', args: [], readyMarker: /[>]/ },
 };
+
+/**
+ * Headless commands that read prompt from a file (avoids shell escaping issues).
+ * Returns a shell command string that reads promptFile and pipes/passes to CLI.
+ * @param {string} promptFile — path to prompt file on disk
+ * @param {string} model — model to use
+ * @returns {string} shell command
+ */
+const PROVIDER_COMMANDS_HEADLESS = {
+  claude:   (promptFile, model) => {
+    let cmd = `claude -p "$(cat '${promptFile}')" --output-format text --dangerously-skip-permissions`;
+    if (model) cmd += ` --model ${model}`;
+    return cmd;
+  },
+  gemini:   (promptFile, model) => {
+    let cmd = `gemini -p "$(cat '${promptFile}')" -o text`;
+    if (model) cmd += ` -m ${model}`;
+    return cmd;
+  },
+  codex:    (promptFile, model) => {
+    return `codex exec --ephemeral --skip-git-repo-check "$(cat '${promptFile}')"`;
+  },
+  opencode: (promptFile, model) => {
+    let cmd = `opencode run "$(cat '${promptFile}')"`;
+    if (model) cmd += ` --model ${model}`;
+    return cmd;
+  },
+};
+
+// Legacy alias
+const PROVIDER_COMMANDS = PROVIDER_COMMANDS_TUI;
 
 // ==================== Terminal detection ====================
 
@@ -64,8 +98,35 @@ export async function detectTerminal() {
 
 /**
  * Построить команду запуска провайдера с задачей.
+ * @param {string} provider
+ * @param {string} task — промпт (ignored in headless mode if promptFile provided)
+ * @param {string} cwd
+ * @param {object} [opts]
+ * @param {boolean} [opts.headless=false] — headless mode (prompt file → stdout → response file)
+ * @param {string} [opts.promptFile] — путь к файлу промпта (for headless)
+ * @param {string} [opts.responseFile] — файл для записи ответа
+ * @param {string} [opts.logFile] — файл для лога stderr
+ * @param {string} [opts.model] — модель
  */
-function buildProviderCommand(provider, task, cwd) {
+function buildProviderCommand(provider, task, cwd, opts = {}) {
+  const { headless = false, promptFile, responseFile, logFile, model } = opts;
+
+  if (headless && promptFile && PROVIDER_COMMANDS_HEADLESS[provider]) {
+    const builder = PROVIDER_COMMANDS_HEADLESS[provider];
+    // Use absolute paths to avoid CWD issues in terminal spawns
+    const absPFile = resolvePath(cwd || process.cwd(), promptFile).replace(/\\/g, '/');
+    let shellCmd = builder(absPFile, model);
+
+    if (responseFile) {
+      const absResp = resolvePath(cwd || process.cwd(), responseFile).replace(/\\/g, '/');
+      const absLog = logFile ? resolvePath(cwd || process.cwd(), logFile).replace(/\\/g, '/') : '/dev/null';
+      shellCmd = `${shellCmd} > '${absResp}' 2> '${absLog}'`;
+    }
+
+    return { shellCmd, cwd, sendTask: null };
+  }
+
+  // Legacy TUI mode
   const p = PROVIDER_COMMANDS[provider];
   if (!p) throw new Error(`Unknown provider: ${provider}`);
 
@@ -122,13 +183,12 @@ async function spawnTmux(agents, opts = {}) {
 // ==================== Windows Terminal (wt) spawner ====================
 
 async function spawnWt(agents, opts = {}) {
-  const { cwd } = opts;
+  const { cwd, headless = false } = opts;
   const results = [];
 
   for (let i = 0; i < agents.length; i++) {
-    const { provider, task, agentId } = agents[i];
+    const { provider, task, agentId, responseFile, logFile, model } = agents[i];
     const agentCwd = agents[i].cwd || cwd || process.cwd();
-    const { shellCmd } = buildProviderCommand(provider, task, agentCwd);
     const paneName = agentId || `agent-${i}`;
 
     // wt: -V = вертикальный, -H = горизонтальный
@@ -136,7 +196,58 @@ async function spawnWt(agents, opts = {}) {
 
     try {
       const winCwd = agentCwd.replace(/\//g, '\\');
-      const fullCmd = `wt -w 0 sp ${direction} -d "${winCwd}" powershell -ExecutionPolicy Bypass -NoExit -Command "${shellCmd}"`;
+      let fullCmd;
+
+      if (headless && responseFile) {
+        // Headless mode: write a temp .ps1 script (PowerShell handles Cyrillic paths)
+        const promptFile = agents[i].promptFile;
+        if (!promptFile) {
+          results.push({ agentId: paneName, provider, status: 'error', error: 'promptFile required for headless mode', terminal: 'wt' });
+          continue;
+        }
+
+        const absPromptFile = resolvePath(agentCwd, promptFile);
+        const absResponseFile = resolvePath(agentCwd, responseFile);
+        const absLogFile = logFile ? resolvePath(agentCwd, logFile) : null;
+
+        // Build PowerShell-native headless command per provider
+        let cliPsCmd;
+        switch (provider) {
+          case 'claude':
+            cliPsCmd = `claude -p $prompt --output-format text --dangerously-skip-permissions${model ? ` --model ${model}` : ''}`;
+            break;
+          case 'gemini':
+            cliPsCmd = `gemini -p $prompt -o text${model ? ` -m ${model}` : ''}`;
+            break;
+          case 'codex':
+            cliPsCmd = `codex exec --ephemeral --skip-git-repo-check $prompt`;
+            break;
+          case 'opencode':
+            cliPsCmd = `opencode run $prompt${model ? ` --model ${model}` : ''}`;
+            break;
+          default:
+            results.push({ agentId: paneName, provider, status: 'error', error: `No headless command for ${provider}`, terminal: 'wt' });
+            continue;
+        }
+
+        // Write PowerShell script with UTF-8 output
+        const scriptPath = absResponseFile.replace(/\.md$/, '.ps1');
+        const logRedirect = absLogFile ? `2>'${absLogFile}'` : '';
+        const psScript = [
+          '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8',
+          '$OutputEncoding = [System.Text.Encoding]::UTF8',
+          `$prompt = Get-Content -Path '${absPromptFile}' -Raw -Encoding UTF8`,
+          `${cliPsCmd} ${logRedirect} | Out-File -Encoding UTF8NoBOM -FilePath '${absResponseFile}'`,
+        ].join('\n');
+        writeFileSync(scriptPath, psScript, 'utf-8');
+
+        fullCmd = `wt -w 0 sp ${direction} -d "${winCwd}" powershell -ExecutionPolicy Bypass -File "${scriptPath}"`;
+      } else {
+        // TUI mode
+        const { shellCmd } = buildProviderCommand(provider, task, agentCwd);
+        fullCmd = `wt -w 0 sp ${direction} -d "${winCwd}" powershell -ExecutionPolicy Bypass -NoExit -Command "${shellCmd}"`;
+      }
+
       await new Promise((resolve, reject) => {
         const child = spawn(fullCmd, [], { shell: true, stdio: 'ignore' });
         child.on('close', resolve);
@@ -188,14 +299,15 @@ async function spawnWezterm(agents, opts = {}) {
 /**
  * Запустить агентов в визуальных сплитах терминала.
  *
- * @param {Array<{agentId: string, provider: string, task: string, cwd?: string}>} agents
+ * @param {Array<{agentId: string, provider: string, task: string, cwd?: string, responseFile?: string, logFile?: string, model?: string}>} agents
  * @param {object} [opts]
  * @param {'tmux'|'wt'|'wezterm'|'auto'} [opts.terminal='auto'] — терминал
  * @param {string} [opts.cwd] — рабочая директория по умолчанию
+ * @param {boolean} [opts.headless=false] — headless mode (prompt → stdout → file)
  * @returns {Promise<{terminal: string, agents: object[]}>}
  */
 export async function spawnAgentSplits(agents, opts = {}) {
-  const { terminal: requestedTerminal = 'auto', cwd } = opts;
+  const { terminal: requestedTerminal = 'auto', cwd, headless = false } = opts;
 
   if (!agents || agents.length === 0) {
     throw new Error('At least one agent spec is required');
@@ -219,13 +331,13 @@ export async function spawnAgentSplits(agents, opts = {}) {
   let results;
   switch (terminal) {
     case 'tmux':
-      results = await spawnTmux(agents, { cwd });
+      results = await spawnTmux(agents, { cwd, headless });
       break;
     case 'wt':
-      results = await spawnWt(agents, { cwd });
+      results = await spawnWt(agents, { cwd, headless });
       break;
     case 'wezterm':
-      results = await spawnWezterm(agents, { cwd });
+      results = await spawnWezterm(agents, { cwd, headless });
       break;
     default:
       throw new Error(`Unsupported terminal: ${terminal}`);

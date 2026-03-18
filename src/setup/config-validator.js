@@ -35,11 +35,14 @@ const ROOT_DIR = join(__dirname, '..', '..');
  */
 function checkCli(command) {
   try {
-    const result = spawnSync(command, ['--version'], {
+    // Pass as single string with shell: true — required on Windows where
+    // CLI tools are .cmd/.bat scripts from npm global installs.
+    // Using a string (not args array) avoids Node DEP0190 deprecation.
+    const result = spawnSync(`${command} --version`, {
       stdio: 'pipe',
-      shell: false,
+      shell: true,
       encoding: 'utf-8',
-      timeout: 5000
+      timeout: 15000
     });
 
     if (result.status === 0 && result.stdout) {

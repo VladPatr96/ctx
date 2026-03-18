@@ -21,7 +21,7 @@ import { spawn } from 'node:child_process';
 import { existsSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -316,8 +316,9 @@ function runCommandByPrompts(cmd, args, steps, timeout = 10000, options = {}) {
 }
 
 async function getAvailableProviderCount(env) {
+  const importURL = pathToFileURL(join(ROOT_DIR, 'src', 'setup', 'provider-detector.js')).href;
   const script = [
-    "import { detectProviders } from '../../scripts/testing/scripts/setup/provider-detector.js';",
+    `import { detectProviders } from '${importURL}';`,
     "console.log(detectProviders().filter((provider) => provider.available).length);"
   ].join(' ');
 
@@ -325,7 +326,7 @@ async function getAvailableProviderCount(env) {
     NODE_BIN,
     ['--input-type=module', '-e', script],
     '',
-    5000,
+    10000,
     { env }
   );
 
