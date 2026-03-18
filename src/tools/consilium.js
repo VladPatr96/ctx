@@ -244,6 +244,7 @@ export function registerConsiliumTools(server, { getResults, saveResults, DATA_D
       inputSchema: z.object({
         topic: z.string().describe('Тема для обсуждения'),
         providers: z.array(z.string()).default(['claude', 'gemini', 'codex']).describe('Список провайдеров'),
+        models: z.record(z.string(), z.string()).optional().describe('Модель для каждого провайдера: {"claude":"opus-4.6","gemini":"gemini-2.5-pro","opencode":"opencode-go/kimi-k2.5"}'),
         rounds: z.number().min(1).max(4).default(2).describe('Количество раундов (1-4)'),
         projectContext: z.string().optional().describe('Контекст проекта'),
         timeout: z.number().optional().describe('Таймаут на провайдера (мс). Если не задан — рассчитывается автоматически из лимита инструмента'),
@@ -255,7 +256,7 @@ export function registerConsiliumTools(server, { getResults, saveResults, DATA_D
         synthesisProvider: z.string().optional().default('claude').describe('Провайдер для синтеза')
       }).shape,
     },
-    async ({ topic, providers: providersList, rounds, projectContext, timeout, preset, enableClaimExtraction, claimProvider, enableStructuredResponse, enableSmartSynthesis, synthesisProvider }) => {
+    async ({ topic, providers: providersList, models: modelsParam, rounds, projectContext, timeout, preset, enableClaimExtraction, claimProvider, enableStructuredResponse, enableSmartSynthesis, synthesisProvider }) => {
       try {
         // Resolve preset if provided
         let resolvedProviders = providersList;
@@ -297,13 +298,16 @@ export function registerConsiliumTools(server, { getResults, saveResults, DATA_D
           } catch { /* eval store optional */ }
         }
 
-        // Resolve per-provider models from config
+        // Resolve per-provider models: explicit param > config > defaults
         let providerModels = {};
         try {
           const { resolveConfig } = await import('../core/config/resolve-config.js');
           const config = resolveConfig({ detectGh: false });
-          if (config.models) providerModels = config.models;
+          if (config.models) providerModels = { ...config.models };
         } catch { /* config optional */ }
+        if (modelsParam) {
+          providerModels = { ...providerModels, ...modelsParam };
+        }
 
         const { createRoundOrchestrator } = await import('../consilium/round-orchestrator.js');
         const orchestrator = createRoundOrchestrator({

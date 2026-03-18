@@ -25,6 +25,7 @@ description: >
 
 ### Флаги
 - `--providers p1,p2` — выбрать конкретных провайдеров
+- `--models claude=opus-4.6,gemini=gemini-2.5-pro` — выбрать модель для каждого провайдера
 - `--agents a1,a2` — внутренний агентный консилиум
 - `--advisors a1,a2` — Board of Advisors (персоны экспертов)
 - `--preset <name>` — пресет из `consilium.presets.json`
@@ -200,7 +201,7 @@ codex exec --ephemeral --skip-git-repo-check "<промпт-шаблон>" 2>&1 
 
 ### Интерактивный выбор (без флагов)
 
-Вызови AskUserQuestion:
+**Шаг 1:** Вызови AskUserQuestion — выбор режима:
 ```
 Режим консилиума для: "<тема>"
 [A] Все провайдеры — Claude + Gemini + Codex
@@ -210,6 +211,27 @@ codex exec --ephemeral --skip-git-repo-check "<промпт-шаблон>" 2>&1 
 [E] Adversarial Review — skeptic + architect + minimalist (авто-scope по diff)
 [F] Выбрать вручную
 ```
+
+**Шаг 2:** Если выбран режим с провайдерами (A, B, F) — покажи выбор моделей.
+Получи список доступных моделей вызовом `ctx_provider_health` или прочитав конфиг.
+Вызови AskUserQuestion:
+```
+Модели для консилиума (текущие из ctx.config.json):
+
+  Claude:   opus-4.6
+  Gemini:   gemini-2.5-pro
+  Codex:    o3
+  OpenCode: zai-coding-plan/glm-5
+
+[Y] Использовать эти модели
+[M] Изменить модели
+
+Доступные модели OpenCode Go:
+  opencode-go/glm-5, opencode-go/kimi-k2.5, opencode-go/minimax-m2.5
+```
+
+При выборе [M] — попроси пользователя указать модели в формате `provider=model`.
+Передай выбранные модели в параметр `models` MCP tool `ctx_consilium_multi_round`.
 
 ### Многораундовый режим (--rounds N)
 
@@ -256,12 +278,12 @@ codex exec --ephemeral --skip-git-repo-check "<промпт-шаблон>" 2>&1 
 
 ### Предложения провайдеров
 
-| Провайдер | Подход | Ключевая идея |
-|-----------|--------|---------------|
-| Claude    | ...    | ...           |
-| Gemini    | ...    | ...           |
-| OpenCode  | ...    | ...           |
-| Codex     | ...    | ...           |
+| Провайдер | Модель | Подход | Ключевая идея |
+|-----------|--------|--------|---------------|
+| Claude    | opus-4.6 | ...  | ...           |
+| Gemini    | gemini-2.5-pro | ... | ...      |
+| OpenCode  | glm-5  | ...    | ...           |
+| Codex     | o3     | ...    | ...           |
 
 ### Консенсус
 [в чём все согласны]
