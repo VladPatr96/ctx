@@ -63,7 +63,7 @@ export async function init(options = {}) {
   } else {
     const config = {
       githubOwner: githubOwner || '',
-      centralRepo: githubOwner ? `${githubOwner}/my_claude_code` : '',
+      centralRepo: githubOwner ? `${githubOwner}/ctx` : '',
       kbRepo: githubOwner ? `${githubOwner}/ctx-knowledge` : '',
       locale: 'ru',
       dashboardPort: 7331,
@@ -142,7 +142,7 @@ export async function init(options = {}) {
     log('  Заметка: Задайте GITHUB_OWNER в ctx.config.json для полной функциональности.');
     log('');
   }
-  log('  Документация: https://github.com/VladPatr96/my_claude_code#readme');
+  log('  Документация: https://github.com/VladPatr96/ctx#readme');
   log('');
 
   return {

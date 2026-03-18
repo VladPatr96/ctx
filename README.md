@@ -74,7 +74,7 @@ npx ctx-plugin init
 ```json
 {
   "githubOwner": "ваш-github-пользователь",
-  "centralRepo": "ваш-github-пользователь/my_claude_code",
+  "centralRepo": "ваш-github-пользователь/ctx",
   "kbRepo": "ваш-github-пользователь/ctx-knowledge",
   "locale": "ru",
   "dashboardPort": 7331
@@ -88,7 +88,7 @@ npx ctx-plugin init
 | Переменная | По умолчанию | Описание |
 |------------|-------------|----------|
 | `GITHUB_OWNER` | авто-детект | GitHub username для хранения issues |
-| `CTX_CENTRAL_REPO` | `$GITHUB_OWNER/my_claude_code` | Центральный репо знаний |
+| `CTX_CENTRAL_REPO` | `$GITHUB_OWNER/ctx` | Центральный репо знаний |
 | `CTX_DATA_DIR` | `.data` | Директория данных |
 | `CTX_LOCALE` | `ru` | Язык промптов (`en` или `ru`) |
 | `CTX_ADAPTIVE_ROUTING` | включён | `0` для отключения |
