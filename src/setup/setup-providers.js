@@ -1,283 +1,348 @@
 #!/usr/bin/env node
 
 /**
- * ctx-setup.js - Setup script for CTX on different providers
+ * CTX Universal Installer — one command to configure all detected AI CLI providers.
  *
  * Usage:
- *   node ctx-setup.js claude
- *   node ctx-setup.js codex
- *   node ctx-setup.js gemini
- *   node ctx-setup.js opencode
- *   node ctx-setup.js all
- *   node ctx-setup.js --interactive
- *   node ctx-setup.js --probe <provider|all>
+ *   npx ctx-plugin install          # Auto-detect & configure all providers
+ *   node ctx-setup.js install       # Same
+ *   node ctx-setup.js claude        # Configure specific provider
+ *   node ctx-setup.js --probe all   # Print detection status as JSON
  */
 
-import { existsSync, copyFileSync, mkdirSync, readFileSync } from 'node:fs';
-import { join, dirname } from 'node:path';
+import { existsSync, copyFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { join, dirname, resolve, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
-import { probeProvider, probeProviders } from './provider-probe.js';
-import { getProviderSetupDefinition } from './provider-catalog.js';
+import { detectProviders } from './provider-detector.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-const ROOT_DIR = join(__dirname, '..');
+const ROOT_DIR = resolve(join(__dirname, '..', '..'));
+const SKILL_SOURCE = join(ROOT_DIR, 'skills', 'ctx', 'SKILL.md');
+const MCP_HUB_SCRIPT = join(ROOT_DIR, 'scripts', 'ctx-mcp-hub.js');
 
-const providers = {
-  antigravity: { ...getProviderSetupDefinition('antigravity'), setup: setupAntigravity },
-  claude: { ...getProviderSetupDefinition('claude'), setup: setupClaude },
-  codex: { ...getProviderSetupDefinition('codex'), setup: setupCodex },
-  gemini: { ...getProviderSetupDefinition('gemini'), setup: setupGemini },
-  opencode: { ...getProviderSetupDefinition('opencode'), setup: setupOpenCode },
+function home() {
+  return process.env.HOME || process.env.USERPROFILE || '';
+}
+
+// ────────────────────────────────────────────────────────────
+// Provider-specific installers
+// ────────────────────────────────────────────────────────────
+
+const PROVIDERS = {
+  claude: {
+    name: 'Claude Code',
+    icon: '◈',
+    install(projectDir) {
+      // Claude Code reads .mcp.json from project root
+      const mcpPath = join(projectDir, '.mcp.json');
+      ensureMcpJson(mcpPath, projectDir);
+
+      // Also copy skill to .claude/commands/ if dir exists
+      const claudeDir = join(projectDir, '.claude');
+      if (existsSync(claudeDir)) {
+        return { status: 'ok', detail: '.mcp.json configured' };
+      }
+      return { status: 'ok', detail: '.mcp.json configured' };
+    },
+  },
+
+  gemini: {
+    name: 'Gemini CLI',
+    icon: '◇',
+    install(projectDir) {
+      const results = [];
+
+      // 1. Copy skill to ~/.config/gemini-cli/skills/ctx/
+      const geminiSkillsDir = join(home(), '.config', 'gemini-cli', 'skills', 'ctx');
+      mkdirSync(geminiSkillsDir, { recursive: true });
+      copyFileSync(SKILL_SOURCE, join(geminiSkillsDir, 'SKILL.md'));
+      results.push('skill → ~/.config/gemini-cli/skills/ctx/');
+
+      // 2. Add MCP server to gemini settings
+      const geminiSettingsPath = join(home(), '.gemini', 'settings.json');
+      if (existsSync(geminiSettingsPath)) {
+        try {
+          const settings = JSON.parse(readFileSync(geminiSettingsPath, 'utf-8'));
+          if (!settings.mcpServers) settings.mcpServers = {};
+          if (!settings.mcpServers['ctx-hub']) {
+            settings.mcpServers['ctx-hub'] = {
+              command: 'node',
+              args: [MCP_HUB_SCRIPT.replace(/\\/g, '/')],
+            };
+            writeFileSync(geminiSettingsPath, JSON.stringify(settings, null, 2) + '\n', 'utf-8');
+            results.push('MCP → ~/.gemini/settings.json');
+          } else {
+            results.push('MCP already configured');
+          }
+        } catch {
+          results.push('MCP: settings.json parse error, skip');
+        }
+      } else {
+        // Create settings.json
+        const settingsDir = join(home(), '.gemini');
+        mkdirSync(settingsDir, { recursive: true });
+        const settings = {
+          mcpServers: {
+            'ctx-hub': {
+              command: 'node',
+              args: [MCP_HUB_SCRIPT.replace(/\\/g, '/')],
+            },
+          },
+        };
+        writeFileSync(geminiSettingsPath, JSON.stringify(settings, null, 2) + '\n', 'utf-8');
+        results.push('MCP → ~/.gemini/settings.json (created)');
+      }
+
+      return { status: 'ok', detail: results.join('; ') };
+    },
+  },
+
+  codex: {
+    name: 'Codex CLI',
+    icon: '▣',
+    install(projectDir) {
+      const results = [];
+
+      // 1. Copy skill to .codex/skills/ctx/
+      const codexSkillDir = join(projectDir, '.codex', 'skills', 'ctx');
+      mkdirSync(codexSkillDir, { recursive: true });
+      copyFileSync(SKILL_SOURCE, join(codexSkillDir, 'SKILL.md'));
+      results.push('skill → .codex/skills/ctx/');
+
+      // 2. Add MCP to .codex/config.toml if not present
+      const tomlPath = join(projectDir, '.codex', 'config.toml');
+      if (existsSync(tomlPath)) {
+        const content = readFileSync(tomlPath, 'utf-8');
+        if (!content.includes('[mcp_servers.ctx-hub]')) {
+          const mcpBlock = `\n[mcp_servers.ctx-hub]\ncommand = "node"\nargs = ["${MCP_HUB_SCRIPT.replace(/\\/g, '/')}"]\nstartup_timeout_sec = 30\n`;
+          writeFileSync(tomlPath, content.trimEnd() + '\n' + mcpBlock, 'utf-8');
+          results.push('MCP → .codex/config.toml');
+        } else {
+          results.push('MCP already in config.toml');
+        }
+      } else {
+        mkdirSync(join(projectDir, '.codex'), { recursive: true });
+        const toml = `[mcp_servers.ctx-hub]\ncommand = "node"\nargs = ["${MCP_HUB_SCRIPT.replace(/\\/g, '/')}"]\nstartup_timeout_sec = 30\n`;
+        writeFileSync(tomlPath, toml, 'utf-8');
+        results.push('MCP → .codex/config.toml (created)');
+      }
+
+      return { status: 'ok', detail: results.join('; ') };
+    },
+  },
+
+  opencode: {
+    name: 'OpenCode',
+    icon: '●',
+    install(projectDir) {
+      const results = [];
+
+      // 1. Copy skill to ~/.opencode/skills/ctx/ (common location)
+      const candidates = [
+        process.env.OPENCODE_SKILLS_DIR,
+        join(home(), '.opencode', 'skills'),
+        join(home(), '.config', 'opencode', 'skills'),
+      ].filter(Boolean);
+
+      let installed = false;
+      for (const dir of candidates) {
+        if (existsSync(dirname(dir))) {
+          const skillDir = join(dir, 'ctx');
+          mkdirSync(skillDir, { recursive: true });
+          copyFileSync(SKILL_SOURCE, join(skillDir, 'SKILL.md'));
+          results.push(`skill → ${skillDir}`);
+          installed = true;
+          break;
+        }
+      }
+
+      if (!installed) {
+        // Fallback: copy to project .opencode/skills/ctx/
+        const localDir = join(projectDir, '.opencode', 'skills', 'ctx');
+        mkdirSync(localDir, { recursive: true });
+        copyFileSync(SKILL_SOURCE, join(localDir, 'SKILL.md'));
+        results.push(`skill → .opencode/skills/ctx/ (local)`);
+      }
+
+      return { status: 'ok', detail: results.join('; ') };
+    },
+  },
 };
 
-function log(message) {
-  console.log(`✓ ${message}`);
-}
+// ────────────────────────────────────────────────────────────
+// Shared helpers
+// ────────────────────────────────────────────────────────────
 
-function error(message) {
-  console.error(`✗ ${message}`);
-  process.exit(1);
-}
+function ensureMcpJson(mcpPath, projectDir) {
+  if (existsSync(mcpPath)) {
+    const content = readFileSync(mcpPath, 'utf-8');
+    if (content.includes('ctx-hub')) return; // already configured
 
-function checkNode() {
-  try {
-    const version = process.version;
-    const major = parseInt(version.slice(1).split('.')[0], 10);
-    if (major < 20) {
-      error(`Node.js version ${version} is too old. Please install Node.js 20+`);
+    // Add ctx-hub to existing .mcp.json
+    try {
+      const mcp = JSON.parse(content);
+      if (!mcp.mcpServers) mcp.mcpServers = {};
+      const hubRelPath = relative(projectDir, MCP_HUB_SCRIPT).replace(/\\/g, '/');
+      mcp.mcpServers['ctx-hub'] = {
+        command: 'node',
+        args: [hubRelPath],
+        env: {},
+      };
+      writeFileSync(mcpPath, JSON.stringify(mcp, null, 2) + '\n', 'utf-8');
+    } catch {
+      // Can't parse — leave it alone
     }
-    log(`Node.js ${version}`);
-  } catch {
-    error('Node.js is not installed. Please install Node.js 20+ from https://nodejs.org/');
+    return;
   }
+
+  // Create new .mcp.json
+  const hubRelPath = relative(projectDir, MCP_HUB_SCRIPT).replace(/\\/g, '/');
+  const mcp = {
+    mcpServers: {
+      'ctx-hub': {
+        command: 'node',
+        args: [hubRelPath],
+        env: {},
+      },
+    },
+  };
+  writeFileSync(mcpPath, JSON.stringify(mcp, null, 2) + '\n', 'utf-8');
 }
 
-function setupAntigravity() {
-  const mcpFile = join(ROOT_DIR, '.mcp.json');
-  if (!existsSync(mcpFile)) {
-    log('Antigravity MCP config noted (will run natively via config).');
-  } else {
-    log(`Antigravity MCP config exists: ${mcpFile}`);
-    const content = readFileSync(mcpFile, 'utf-8');
-    if (!content.includes('ctx-hub')) {
-      error('ctx-hub not found in .mcp.json. Please run ctx init.');
+// ────────────────────────────────────────────────────────────
+// Main installer
+// ────────────────────────────────────────────────────────────
+
+function install(options = {}) {
+  const projectDir = options.projectDir || process.cwd();
+  const silent = options.silent || false;
+  const log = silent ? () => {} : console.log;
+
+  log('\n  CTX Universal Installer\n');
+  log('  Detecting AI CLI providers...\n');
+
+  // 1. Check Node.js version
+  const nodeVersion = parseInt(process.version.slice(1).split('.')[0], 10);
+  if (nodeVersion < 20) {
+    console.error(`  ✗ Node.js ${process.version} too old. Need 20+`);
+    process.exit(1);
+  }
+
+  // 2. Detect providers
+  const detected = detectProviders();
+  const available = detected.filter((p) => p.available && PROVIDERS[p.id]);
+
+  if (available.length === 0) {
+    log('  No AI CLI providers detected.');
+    log('  Install one of: Claude Code, Gemini CLI, OpenCode, Codex CLI\n');
+    return { installed: [], skipped: detected.map((p) => p.id) };
+  }
+
+  // 3. Ensure project basics
+  ensureMcpJson(join(projectDir, '.mcp.json'), projectDir);
+  const dataDir = join(projectDir, '.data');
+  if (!existsSync(dataDir)) mkdirSync(dataDir, { recursive: true });
+
+  // 4. Install for each detected provider
+  const results = [];
+
+  for (const provider of available) {
+    const installer = PROVIDERS[provider.id];
+    if (!installer) continue;
+
+    try {
+      const result = installer.install(projectDir);
+      results.push({ id: provider.id, name: installer.name, icon: installer.icon, ...result });
+      log(`  ${installer.icon} ${installer.name.padEnd(15)} ✓ ${result.detail}`);
+    } catch (err) {
+      results.push({ id: provider.id, name: installer.name, icon: installer.icon, status: 'error', detail: err.message });
+      log(`  ${installer.icon} ${installer.name.padEnd(15)} ✗ ${err.message}`);
     }
   }
-  log('Antigravity plugin integration is ready');
+
+  // 5. Show skipped
+  const skipped = detected.filter((p) => !p.available && PROVIDERS[p.id]);
+  for (const provider of skipped) {
+    const installer = PROVIDERS[provider.id];
+    if (installer) {
+      log(`  ${installer.icon} ${installer.name.padEnd(15)} — not installed`);
+    }
+  }
+
+  // 6. Summary
+  const ok = results.filter((r) => r.status === 'ok');
+  const failed = results.filter((r) => r.status === 'error');
+
+  log(`\n  Configured: ${ok.length}/${Object.keys(PROVIDERS).length} providers`);
+  if (failed.length > 0) {
+    log(`  Failed: ${failed.map((f) => f.name).join(', ')}`);
+  }
+  log('');
+  log('  Usage in any provider:');
+  log('    /ctx                              — start session');
+  log('    /ctx-consilium "your question"    — multi-provider analysis');
+  log('    /ctx-search "error message"       — search knowledge base');
+  log('');
+
+  return { installed: ok.map((r) => r.id), skipped: skipped.map((s) => s.id), failed: failed.map((f) => f.id) };
 }
 
-function setupClaude() {
-  const mcpFile = join(ROOT_DIR, '.mcp.json');
-
-  if (!existsSync(mcpFile)) {
-    error('.mcp.json not found. Please create it with ctx-hub configuration.');
-  }
-
-  log(`MCP config exists: ${mcpFile}`);
-  const content = readFileSync(mcpFile, 'utf-8');
-  if (!content.includes('ctx-hub')) {
-    error('ctx-hub not found in .mcp.json. Please add it manually.');
-  }
-
-  log('ctx-hub MCP server configured');
-}
-
-function setupCodex() {
-  const cliScript = join(ROOT_DIR, 'scripts', 'ctx-cli.js');
-
-  if (!existsSync(cliScript)) {
-    error('CLI wrapper not found. Expected: scripts/ctx-cli.js');
-  }
-
-  log(`CLI wrapper exists: ${cliScript}`);
-
-  const skillDir = join(ROOT_DIR, '.codex', 'skills', 'ctx');
-  if (existsSync(join(skillDir, 'SKILL.md'))) {
-    log(`Codex skill exists: ${skillDir}`);
-  } else {
-    log('Codex skill not found. Using repository fallback skill');
-  }
-}
-
-function setupGemini() {
-  const home = process.env.HOME || process.env.USERPROFILE;
-  const geminiDir = join(home, '.config', 'gemini-cli', 'skills');
-
-  if (!existsSync(geminiDir)) {
-    log(`Creating directory: ${geminiDir}`);
-    mkdirSync(geminiDir, { recursive: true });
-  }
-
-  const srcDir = join(ROOT_DIR, 'skills', 'ctx-gemini');
-  if (!existsSync(srcDir)) {
-    error(`Source directory not found: ${srcDir}`);
-  }
-
-  const destDir = join(geminiDir, 'ctx-gemini');
-  if (!existsSync(destDir)) {
-    mkdirSync(destDir, { recursive: true });
-  }
-
-  copyFileSync(join(srcDir, 'SKILL.md'), join(destDir, 'SKILL.md'));
-  log(`Copied skill to: ${join(destDir, 'SKILL.md')}`);
-
-  console.log('\nTo use CTX in Gemini CLI:');
-  console.log('  gemini /ctx-gemini start');
-  console.log('  gemini /ctx-gemini task "Build REST API"');
-  console.log('  gemini /ctx-gemini status');
-}
-
-function setupOpenCode() {
-  const autoSetupScript = join(ROOT_DIR, 'scripts', 'opencode-auto-setup.js');
-
-  if (!existsSync(autoSetupScript)) {
-    error(`Auto-setup script not found: ${autoSetupScript}`);
-  }
-
-  console.log('\nRunning OpenCode auto-setup...');
-  console.log('This will:');
-  console.log('  1. Find OpenCode skills directory');
-  console.log('  2. Copy universal CTX skill');
-  console.log('  3. Create auto-update scripts');
-  console.log('  4. Provide integration instructions');
-  console.log();
-
-  const result = spawnSync('node', [autoSetupScript], {
-    cwd: ROOT_DIR,
-    stdio: 'inherit',
-    shell: false,
-  });
-
-  if (result.status !== 0) {
-    error('OpenCode auto-setup failed');
-  }
-}
+// ────────────────────────────────────────────────────────────
+// CLI
+// ────────────────────────────────────────────────────────────
 
 function printHelp() {
   console.log(`
-CTX Setup Tool
+CTX Universal Installer — plugin for all AI CLI systems
 
 Usage:
-  node ctx-setup.js <provider>
-  node ctx-setup.js --interactive
-  node ctx-setup.js --probe <provider|all>
+  npx ctx-plugin install             Auto-detect & configure all providers
+  npx ctx-plugin install claude      Configure specific provider
+  npx ctx-plugin install --probe     Print detection status as JSON
 
-Providers:
-  antigravity - Antigravity (Google) (MCP integration)
-  claude   - Claude Code (MCP native)
-  codex    - Codex CLI (CLI wrapper)
-  gemini   - Gemini CLI (copy skill files)
-  opencode - OpenCode (auto-setup with auto-update)
-  all      - Setup for all providers
-  install  - Install plugin for all detected providers
+Supported providers:
+  claude    Claude Code (MCP + .mcp.json)
+  gemini    Gemini CLI  (MCP + skill → ~/.config/gemini-cli/)
+  codex     Codex CLI   (MCP + skill → .codex/skills/)
+  opencode  OpenCode    (skill → ~/.opencode/skills/)
 
-Interactive Mode:
-  --interactive, --wizard  - Run interactive setup wizard with auto-detection
-
-Probe Mode:
-  --probe <provider|all>    - Print onboarding probe status as JSON
-
-Example:
-  npx ctx-plugin install
-  node ctx-setup.js all
-  node ctx-setup.js --probe claude
+Examples:
+  npx ctx-plugin install             # Install for all detected providers
+  npx ctx-plugin install gemini      # Install only for Gemini CLI
+  npx ctx-plugin install --probe     # Show what's detected
 `);
-}
-
-function runProbeMode(target) {
-  const payload = target === 'all'
-    ? probeProviders()
-    : probeProvider(target);
-  console.log(JSON.stringify(payload, null, 2));
-}
-
-function ensureProviderReady(providerKey, provider) {
-  const probe = probeProvider(providerKey);
-  if (probe.readiness === 'ready') {
-    log(`${provider.name} already ready for CTX`);
-    return true;
-  }
-  return false;
-}
-
-function verifyProviderReady(providerKey, provider) {
-  const probe = probeProvider(providerKey);
-  if (probe.readiness !== 'ready') {
-    error(`${provider.name} setup completed but provider is still not ready: ${probe.reason}`);
-  }
 }
 
 function main() {
   const args = process.argv.slice(2);
 
-  if (args.length === 0 || args[0] === '--help' || args[0] === '-h') {
+  if (args.includes('--help') || args.includes('-h')) {
     printHelp();
     process.exit(0);
   }
 
-  const providerArg = args[0];
-
-  if (providerArg === '--probe') {
-    runProbeMode(args[1] || 'all');
+  if (args.includes('--probe')) {
+    const detected = detectProviders();
+    console.log(JSON.stringify(detected, null, 2));
     process.exit(0);
   }
 
-  if (providerArg === '--interactive' || providerArg === '--wizard') {
-    const wizardScript = join(ROOT_DIR, 'scripts', 'ctx-wizard.js');
+  const target = args[0];
 
-    if (!existsSync(wizardScript)) {
-      error(`Interactive wizard not found: ${wizardScript}`);
-    }
-
-    console.log('Launching interactive setup wizard...\n');
-
-    const result = spawnSync('node', [wizardScript], {
-      cwd: ROOT_DIR,
-      stdio: 'inherit',
-      shell: false,
-    });
-
-    process.exit(result.status || 0);
+  // Single provider install
+  if (target && target !== 'install' && target !== 'all' && PROVIDERS[target]) {
+    console.log(`\n  Installing CTX for ${PROVIDERS[target].name}...\n`);
+    const result = PROVIDERS[target].install(process.cwd());
+    console.log(`  ${PROVIDERS[target].icon} ${PROVIDERS[target].name} — ${result.detail}\n`);
+    process.exit(result.status === 'ok' ? 0 : 1);
   }
 
-  if (providerArg === 'all' || providerArg === 'install') {
-    if (providerArg === 'install') {
-      console.log('Installing CTX plugin for all detected AI agents...\n');
-    } else {
-      console.log('Setting up CTX for all providers...\n');
-    }
-    checkNode();
-
-    for (const [key, provider] of Object.entries(providers)) {
-      console.log(`\n${key.toUpperCase()}: ${provider.name}`);
-      console.log(`  ${provider.description}`);
-      if (ensureProviderReady(key, provider)) {
-        continue;
-      }
-      provider.setup();
-      verifyProviderReady(key, provider);
-    }
-
-    console.log('\n✓ Setup complete for all providers');
-  } else {
-    const provider = providers[providerArg];
-    if (!provider) {
-      error(`Unknown provider: ${providerArg}\nAvailable: ${Object.keys(providers).join(', ')}`);
-    }
-
-    console.log(`${provider.name}: ${provider.description}\n`);
-    checkNode();
-    if (!ensureProviderReady(providerArg, provider)) {
-      provider.setup();
-      verifyProviderReady(providerArg, provider);
-    }
-
-    console.log('\n✓ Setup complete');
-  }
-
-  console.log('\nSee CTX_UNIVERSAL.md for detailed documentation');
+  // Full install (default)
+  install();
 }
+
+export { install, PROVIDERS, detectProviders };
 
 main();
