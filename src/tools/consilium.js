@@ -297,6 +297,14 @@ export function registerConsiliumTools(server, { getResults, saveResults, DATA_D
           } catch { /* eval store optional */ }
         }
 
+        // Resolve per-provider models from config
+        let providerModels = {};
+        try {
+          const { resolveConfig } = await import('../core/config/resolve-config.js');
+          const config = resolveConfig({ detectGh: false });
+          if (config.models) providerModels = config.models;
+        } catch { /* config optional */ }
+
         const { createRoundOrchestrator } = await import('../consilium/round-orchestrator.js');
         const orchestrator = createRoundOrchestrator({
           topic,
@@ -305,6 +313,7 @@ export function registerConsiliumTools(server, { getResults, saveResults, DATA_D
           projectContext: projectContext || '',
           timeout: timing.providerTimeoutMs,
           evalStore,
+          providerModels,
           enableClaimExtraction: resolvedClaimExtraction,
           claimProvider: claimProvider || 'claude',
           claimTimeout: timing.claimTimeoutMs,
@@ -423,6 +432,7 @@ export function registerConsiliumTools(server, { getResults, saveResults, DATA_D
             responses: r.responses.map(resp => ({
               alias: resp.alias,
               provider: resp.provider,
+              model: resp.model || null,
               status: resp.status,
               response: resp.response?.slice(0, 5000),
               response_ms: resp.response_ms

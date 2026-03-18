@@ -166,6 +166,7 @@ export function parseStructuredResponseV2(rawResponse, ownAliasPrefix, roundNumb
  * @param {object} [options.evalStore=null]
  * @param {string} [options.runId=null]
  * @param {Function} [options.invokeFn=null] — for testing; defaults to real invoke
+ * @param {Record<string, string>} [options.providerModels={}] — model per provider
  * @returns {{ execute(): Promise<object> }}
  */
 export function createRoundOrchestrator(options) {
@@ -178,6 +179,7 @@ export function createRoundOrchestrator(options) {
     evalStore = null,
     runId: existingRunId = null,
     invokeFn = null,
+    providerModels = {},
     enableClaimExtraction = false,
     claimProvider = 'claude',
     claimTimeout = 30000,
@@ -327,8 +329,9 @@ export function createRoundOrchestrator(options) {
         const results = await Promise.allSettled(
           providers.map(async (provider) => {
             const prompt = providerPrompts.get(provider);
+            const modelForProvider = providerModels[provider] || undefined;
             const startMs = Date.now();
-            const result = await doInvoke(provider, prompt, { timeout });
+            const result = await doInvoke(provider, prompt, { timeout, model: modelForProvider });
             const elapsed = Date.now() - startMs;
             return { provider, result, elapsed };
           })
@@ -390,6 +393,7 @@ export function createRoundOrchestrator(options) {
             const entry = {
               provider,
               alias,
+              model: result.model || providerModels[provider] || null,
               status: isSuccess ? 'success' : (result.status || 'error'),
               response: isSuccess ? result.response : (result.error || 'No response'),
               response_ms: elapsed,

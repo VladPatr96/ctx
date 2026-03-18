@@ -84,7 +84,7 @@ export default {
     return {
       status: 'success',
       response: result.stdout,
-      model: requestedModel || 'gemini-2.0-flash-exp',
+      model: requestedModel || 'gemini-2.5-pro',
       ...(usage && {
         inputTokens: usage.inputTokens,
         outputTokens: usage.outputTokens

@@ -84,7 +84,7 @@ export default {
     return {
       status: 'success',
       response: result.stdout,
-      model: requestedModel || 'gpt-4o',
+      model: requestedModel || 'o3',
       ...(usage && {
         inputTokens: usage.inputTokens,
         outputTokens: usage.outputTokens
@@ -125,7 +125,7 @@ export default {
     return {
       status: 'success',
       response: result.stdout,
-      model: requestedModel || 'gpt-4o',
+      model: requestedModel || 'o3',
       ...(usage && {
         inputTokens: usage.inputTokens,
         outputTokens: usage.outputTokens

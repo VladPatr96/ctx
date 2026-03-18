@@ -87,7 +87,7 @@ function discoverCodex() {
   const cached = getCached('codex');
   if (cached) return cached;
 
-  let defaultModel = 'gpt-5.3-codex';
+  let defaultModel = 'o3';
   const models = [];
 
   // Read ~/.codex/config.toml
@@ -111,45 +111,93 @@ function discoverCodex() {
 
 // ---- OpenCode ----
 
+/**
+ * Extract models from an opencode.json config object.
+ * Reads top-level model, small_model, modes, and provider.models sections.
+ */
+function extractOpenCodeModels(config) {
+  const models = [];
+
+  // 1. Extract from modes (zai-coding-plan, zai-regular, etc.)
+  if (config.mode) {
+    for (const [modeName, modeConfig] of Object.entries(config.mode)) {
+      if (modeConfig.model) {
+        models.push({ id: modeConfig.model, alias: `${modeName}/main`, tier: 'flagship', mode: modeName });
+      }
+      if (modeConfig.small_model) {
+        models.push({ id: modeConfig.small_model, alias: `${modeName}/small`, tier: 'fast', mode: modeName });
+      }
+    }
+  }
+
+  // 2. Extract from provider.*.models (openai, google, ccs-agy, etc.)
+  if (config.provider) {
+    for (const [providerName, providerConfig] of Object.entries(config.provider)) {
+      if (!providerConfig.models) continue;
+      for (const [modelId, modelMeta] of Object.entries(providerConfig.models)) {
+        if (models.find(m => m.id === modelId)) continue;
+        const name = modelMeta.name || modelId;
+        let tier = 'standard';
+        const idLower = modelId.toLowerCase();
+        if (idLower.includes('flash') || /\bmini\b/.test(idLower) || idLower.includes('small') || idLower.includes('lite')) tier = 'fast';
+        else if (idLower.includes('pro') || idLower.includes('opus') || /\bmax\b/.test(idLower) || idLower.includes('codex') || /gpt-5\.\d/.test(idLower) || idLower.includes('glm-5') || idLower.includes('thinking')) tier = 'flagship';
+        models.push({ id: modelId, alias: name, tier, provider: providerName });
+      }
+    }
+  }
+
+  // 3. Add top-level model/small_model if not already present
+  if (config.model && !models.find(m => m.id === config.model)) {
+    models.push({ id: config.model, alias: 'default', tier: 'flagship' });
+  }
+  if (config.small_model && !models.find(m => m.id === config.small_model)) {
+    models.push({ id: config.small_model, alias: 'default/small', tier: 'fast' });
+  }
+
+  return models;
+}
+
+// OpenCode Go subscription models ($10/mo) — available via opencode-go/ prefix
+const OPENCODE_GO_MODELS = [
+  { id: 'opencode-go/glm-5', alias: 'GLM-5 (Go)', tier: 'flagship', provider: 'opencode-go' },
+  { id: 'opencode-go/kimi-k2.5', alias: 'Kimi K2.5 (Go)', tier: 'flagship', provider: 'opencode-go' },
+  { id: 'opencode-go/minimax-m2.5', alias: 'MiniMax M2.5 (Go)', tier: 'balanced', provider: 'opencode-go' },
+];
+
 function discoverOpenCodeSync() {
   const cached = getCached('opencode');
   if (cached) return cached;
 
-  const models = [];
+  const allModels = new Map(); // id → model entry (dedup)
   let defaultModel = null;
 
-  // 1. Read opencode.json project config
-  const configPath = join(PROJECT_ROOT, 'opencode.json');
-  if (existsSync(configPath)) {
+  // 1. Read global config: ~/.config/opencode/opencode.json
+  const home = process.env.USERPROFILE || process.env.HOME || '';
+  const globalConfigPath = join(home, '.config', 'opencode', 'opencode.json');
+  if (home && existsSync(globalConfigPath)) {
     try {
-      const config = JSON.parse(readFileSync(configPath, 'utf-8'));
+      const config = JSON.parse(readFileSync(globalConfigPath, 'utf-8'));
       if (config.model) defaultModel = config.model;
-
-      // Extract models from modes
-      if (config.mode) {
-        for (const [modeName, modeConfig] of Object.entries(config.mode)) {
-          if (modeConfig.model) {
-            models.push({ id: modeConfig.model, alias: `${modeName}/main`, tier: 'flagship', mode: modeName });
-          }
-          if (modeConfig.small_model) {
-            models.push({ id: modeConfig.small_model, alias: `${modeName}/small`, tier: 'fast', mode: modeName });
-          }
-        }
-      }
-
-      // Add top-level model/small_model if not already in modes
-      if (config.model && !models.find(m => m.id === config.model)) {
-        models.push({ id: config.model, alias: 'default', tier: 'flagship' });
-      }
-      if (config.small_model && !models.find(m => m.id === config.small_model)) {
-        models.push({ id: config.small_model, alias: 'default/small', tier: 'fast' });
-      }
+      for (const m of extractOpenCodeModels(config)) allModels.set(m.id, m);
     } catch { /* ignore parse errors */ }
   }
 
-  if (!defaultModel) defaultModel = 'opencode/glm-4.7';
+  // 2. Read project config: ./opencode.json (overrides globals)
+  const projectConfigPath = join(PROJECT_ROOT, 'opencode.json');
+  if (existsSync(projectConfigPath)) {
+    try {
+      const config = JSON.parse(readFileSync(projectConfigPath, 'utf-8'));
+      if (config.model) defaultModel = config.model;
+      for (const m of extractOpenCodeModels(config)) allModels.set(m.id, m);
+    } catch { /* ignore parse errors */ }
+  }
 
-  return setCache('opencode', models, defaultModel);
+  // 3. OpenCode Go subscription models (override config-derived entries with proper metadata)
+  for (const m of OPENCODE_GO_MODELS) allModels.set(m.id, m);
+
+  if (!defaultModel) defaultModel = 'opencode-go/glm-5';
+
+  return setCache('opencode', [...allModels.values()], defaultModel);
 }
 
 /**

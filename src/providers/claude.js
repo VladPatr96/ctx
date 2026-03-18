@@ -82,7 +82,7 @@ export default {
     return {
       status: 'success',
       response: result.stdout,
-      model: requestedModel || 'claude-sonnet-4-6',
+      model: requestedModel || 'claude-sonnet-4-6', // fallback when no model specified
       ...(usage && {
         inputTokens: usage.inputTokens,
         outputTokens: usage.outputTokens

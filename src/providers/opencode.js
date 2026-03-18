@@ -45,7 +45,7 @@ function extractTokenUsage(stdout, stderr) {
 
 const PRIMARY_GLM_MODEL = 'zai-coding-plan/glm-5';
 const FALLBACK_GLM_MODEL = 'zai-coding-plan/glm-4.7';
-const KIMI_MODEL = 'opencode/kimi-k2.5';
+const KIMI_MODEL = 'opencode-go/kimi-k2.5';
 
 export default {
   name: 'opencode',
@@ -170,10 +170,11 @@ export default {
 
 function normalizeModel(model) {
   const raw = String(model).trim().toLowerCase();
-  if (raw === 'kimi-k2-5' || raw === 'kimi-k2.5' || raw === 'opencode/kimi-k2-5') return KIMI_MODEL;
+  if (raw === 'kimi-k2-5' || raw === 'kimi-k2.5' || raw === 'opencode/kimi-k2-5' || raw === 'opencode-go/kimi-k2.5') return KIMI_MODEL;
+  if (raw === 'minimax' || raw === 'minimax-m2.5' || raw === 'opencode-go/minimax-m2.5') return 'opencode-go/minimax-m2.5';
   if (raw.includes('/')) return raw;
   if (raw === 'glm-4.7') return PRIMARY_GLM_MODEL;
-  return `opencode/${raw}`;
+  return `opencode-go/${raw}`;
 }
 
 

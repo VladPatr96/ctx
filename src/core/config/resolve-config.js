@@ -205,10 +205,17 @@ export function resolveConfig(options = {}) {
   // dashboardPort
   const dashboardPort = parseInt(process.env.CTX_DASHBOARD_PORT || fileConfig.dashboardPort || '7331', 10);
 
-  // model - default model for opencode provider
-  const model = process.env.CTX_MODEL
-    || fileConfig.model
-    || null;
+  // models - per-provider model map
+  const modelsFromConfig = fileConfig.models || {};
+  const models = {
+    claude: process.env.CTX_MODEL_CLAUDE || modelsFromConfig.claude || null,
+    gemini: process.env.CTX_MODEL_GEMINI || modelsFromConfig.gemini || null,
+    codex: process.env.CTX_MODEL_CODEX || modelsFromConfig.codex || null,
+    opencode: process.env.CTX_MODEL_OPENCODE || process.env.CTX_MODEL || fileConfig.model || modelsFromConfig.opencode || null,
+  };
+
+  // Backward compat: single "model" field
+  const model = models.opencode;
 
   return {
     githubOwner,
@@ -220,6 +227,7 @@ export function resolveConfig(options = {}) {
     locale,
     dashboardPort,
     model,
+    models,
     warnings,
     configSource,
   };
