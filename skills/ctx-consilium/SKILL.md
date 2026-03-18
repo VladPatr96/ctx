@@ -262,6 +262,43 @@ codex exec --ephemeral --skip-git-repo-check "<промпт-шаблон>" 2>&1 
 }
 ```
 
+### Терминальный режим (режим по умолчанию для провайдеров)
+
+При выборе режимов A/B/F (провайдеры) — используй `ctx_consilium_run` для запуска
+каждого провайдера в отдельном терминальном окне.
+
+**Вызов:**
+```json
+ctx_consilium_run({
+  "topic": "<тема>",
+  "providers": ["claude", "gemini", "codex", "opencode"],
+  "models": {
+    "claude": "opus-4.6",
+    "gemini": "gemini-3.1-pro-preview",
+    "codex": "gpt-5.4",
+    "opencode": "opencode-go/glm-5"
+  },
+  "projectContext": "<контекст проекта>",
+  "createWorktrees": false
+})
+```
+
+**Что происходит:**
+1. Создаётся директория `.data/consilium/<run-id>/` с файлами:
+   - `prompt-<provider>.md` — промпт для каждого провайдера
+   - `<provider>-<model>.md` — файл для ответа
+   - `<provider>-<model>.log` — лог выполнения
+   - `meta.json` — метаданные (тема, провайдеры, модели, статусы)
+   - `synthesis.md` — шаблон итогового решения
+2. Каждый провайдер запускается в **отдельном терминальном сплите** (tmux/wt/wezterm)
+3. Режимы: Claude `--dangerously-skip-permissions`, Gemini `--yolo`, Codex `--full-auto`
+4. Опционально: `createWorktrees: true` создаёт git-ветку `consilium/<agentId>` для каждого
+
+**После ответов:**
+1. Прочитай файлы ответов из `runDir`
+2. Заполни `synthesis.md` синтезом
+3. Сохрани в базу знаний: `ctx_save_lesson({ title, content, category: 'consilium' })`
+
 ### Многораундовый режим (--rounds N)
 
 При N > 1 используется MCP tool `ctx_consilium_multi_round`:

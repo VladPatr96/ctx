@@ -6,7 +6,7 @@
 import { z } from 'zod';
 import { route, routeMulti, delegate } from '../providers/router.js';
 import { getProvider, invoke } from '../providers/index.js';
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readdirSync } from 'node:fs';
@@ -293,6 +293,198 @@ export function registerConsiliumTools(server, { getResults, saveResults, DATA_D
       return {
         content: [{ type: 'text', text: JSON.stringify(result, null, 2) }]
       };
+    }
+  );
+
+  // --- ctx_consilium_run ---
+  server.registerTool(
+    'ctx_consilium_run',
+    {
+      description: 'Запустить консилиум в терминальных окнах. Каждый провайдер запускается в отдельном сплите (tmux/wt/wezterm) с yolo/bypass режимом. Создаёт ветки, логи и .md файлы ответов. Результаты сохраняются в .data/consilium/<run-id>/ для базы знаний.',
+      inputSchema: z.object({
+        topic: z.string().describe('Тема консилиума'),
+        providers: z.array(z.string()).describe('Провайдеры для участия'),
+        models: z.record(z.string(), z.string()).optional().describe('Модель для каждого провайдера'),
+        projectContext: z.string().optional().describe('Контекст проекта'),
+        createWorktrees: z.boolean().optional().default(false).describe('Создать git worktree для каждого провайдера'),
+      }).shape,
+    },
+    async ({ topic, providers: providersList, models: modelsParam, projectContext, createWorktrees }) => {
+      try {
+        // 1. Generate run ID and create output directory
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+        const topicSlug = topic.replace(/[^a-zA-Zа-яА-Я0-9]+/g, '-').slice(0, 40).replace(/-+$/, '');
+        const runId = `${timestamp}-${topicSlug}`;
+        const runDir = join(DATA_DIR, 'consilium', runId);
+        mkdirSync(runDir, { recursive: true });
+
+        // 2. Resolve models from config + params
+        let providerModels = {};
+        try {
+          const { resolveConfig } = await import('../core/config/resolve-config.js');
+          const config = resolveConfig({ detectGh: false });
+          if (config.models) providerModels = { ...config.models };
+        } catch { /* config optional */ }
+        if (modelsParam) providerModels = { ...providerModels, ...modelsParam };
+
+        // 3. Build prompt template
+        const promptTemplate = [
+          `# Консилиум: ${topic}`,
+          '',
+          projectContext ? `## Контекст проекта\n${projectContext}\n` : '',
+          '## Задача',
+          topic,
+          '',
+          'Дай своё предложение. Включи:',
+          '1. Подход (что делать)',
+          '2. Обоснование (почему именно так)',
+          '3. Риски (что может пойти не так)',
+          '4. Альтернативы (что ещё рассматривал)',
+        ].filter(Boolean).join('\n');
+
+        // 4. Prepare agent specs for terminal spawner
+        const cwd = process.cwd();
+        const agents = [];
+        const providerFiles = {};
+
+        for (const provider of providersList) {
+          const model = providerModels[provider] || null;
+          const modelSlug = model ? model.replace(/[/:.]/g, '-') : 'default';
+          const agentId = `consilium-${provider}-${modelSlug}`;
+          const responseFile = join(runDir, `${provider}-${modelSlug}.md`);
+          const logFile = join(runDir, `${provider}-${modelSlug}.log`);
+
+          // Write prompt file
+          const promptFile = join(runDir, `prompt-${provider}.md`);
+          writeFileSync(promptFile, promptTemplate, 'utf-8');
+
+          // Create empty response file
+          writeFileSync(responseFile, `<!-- Consilium response: ${provider} (${model || 'default'}) -->\n<!-- Topic: ${topic} -->\n<!-- Started: ${new Date().toISOString()} -->\n\n`, 'utf-8');
+
+          providerFiles[provider] = { responseFile, logFile, promptFile, model, agentId };
+
+          agents.push({
+            agentId,
+            provider,
+            task: promptTemplate,
+            cwd,
+          });
+        }
+
+        // 5. Create worktree branches if requested
+        const branches = {};
+        if (createWorktrees) {
+          try {
+            const { createWorktree } = await import('../orchestrator/worktree-manager.js');
+            for (const provider of providersList) {
+              const info = providerFiles[provider];
+              try {
+                const wt = await createWorktree(info.agentId);
+                branches[provider] = { branch: wt.branch, path: wt.path };
+                // Update agent cwd to worktree path
+                const agent = agents.find(a => a.agentId === info.agentId);
+                if (agent) agent.cwd = wt.path;
+              } catch (err) {
+                branches[provider] = { error: err.message };
+              }
+            }
+          } catch (err) {
+            // worktree manager not available
+          }
+        }
+
+        // 6. Write metadata
+        const meta = {
+          runId,
+          topic,
+          providers: providersList,
+          models: providerModels,
+          branches,
+          startedAt: new Date().toISOString(),
+          status: 'spawning',
+          files: Object.fromEntries(
+            Object.entries(providerFiles).map(([p, f]) => [p, {
+              response: f.responseFile,
+              log: f.logFile,
+              prompt: f.promptFile,
+              model: f.model,
+              agentId: f.agentId,
+            }])
+          ),
+        };
+        writeFileSync(join(runDir, 'meta.json'), JSON.stringify(meta, null, 2), 'utf-8');
+
+        // 7. Spawn terminal splits
+        let spawnResult = { terminal: null, spawned: [], failed: [] };
+        try {
+          const { spawnAgentSplits } = await import('../orchestrator/terminal-spawner.js');
+          spawnResult = await spawnAgentSplits(agents, { cwd });
+        } catch (err) {
+          spawnResult = { terminal: null, error: err.message };
+        }
+
+        // 8. Update metadata with spawn status
+        meta.status = 'running';
+        meta.terminal = spawnResult.terminal || null;
+        meta.spawnResults = spawnResult.agents || spawnResult;
+        writeFileSync(join(runDir, 'meta.json'), JSON.stringify(meta, null, 2), 'utf-8');
+
+        // 9. Write synthesis template
+        const synthesisPath = join(runDir, 'synthesis.md');
+        const synthTemplate = [
+          `# Решение консилиума`,
+          '',
+          `## Тема: ${topic}`,
+          `**Дата:** ${new Date().toISOString().slice(0, 10)}`,
+          `**Провайдеры:** ${providersList.map(p => `${p} (${providerModels[p] || 'default'})`).join(', ')}`,
+          '',
+          '## Предложения провайдеров',
+          '',
+          '| Провайдер | Модель | Подход | Ключевая идея |',
+          '|-----------|--------|--------|---------------|',
+          ...providersList.map(p => `| ${p} | ${providerModels[p] || 'default'} | _ожидание..._ | |`),
+          '',
+          '## Консенсус',
+          '_Заполнить после получения всех ответов_',
+          '',
+          '## Итоговое решение',
+          '_Заполнить после синтеза_',
+          '',
+          '## План действий',
+          '1. ...',
+          '',
+        ].join('\n');
+        writeFileSync(synthesisPath, synthTemplate, 'utf-8');
+
+        return {
+          content: [{
+            type: 'text',
+            text: JSON.stringify({
+              runId,
+              runDir,
+              topic,
+              terminal: spawnResult.terminal || 'none',
+              providers: providersList.map(p => ({
+                id: p,
+                model: providerModels[p] || 'default',
+                agentId: providerFiles[p].agentId,
+                responseFile: providerFiles[p].responseFile,
+                branch: branches[p]?.branch || null,
+                status: spawnResult.agents?.find(a => a.agentId === providerFiles[p].agentId)?.status || 'unknown',
+              })),
+              files: {
+                meta: join(runDir, 'meta.json'),
+                synthesis: synthesisPath,
+              },
+              instructions: 'Провайдеры запущены в терминальных окнах. Дождись ответов, затем прочитай файлы ответов (.md) и заполни synthesis.md. Сохрани synthesis.md в базу знаний через ctx_save_lesson.',
+            }, null, 2)
+          }]
+        };
+      } catch (err) {
+        return {
+          content: [{ type: 'text', text: JSON.stringify({ error: err.message }) }]
+        };
+      }
     }
   );
 
