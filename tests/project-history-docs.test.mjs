@@ -30,7 +30,7 @@ test('buildProjectHistoryArtifact exports sessions and ADR decisions into one sc
 - Keep GitHub issues as live operational memory
 
 ## Files Modified
-- scripts/docs/project-history.js
+- src/docs/project-history.js
 
 ## Tasks
 - Build docs export
@@ -78,7 +78,7 @@ test('empty Decisions section does not leak the next markdown heading into expor
 
 ## Decisions
 ## Files Modified
-- scripts/docs/project-history.js
+- src/docs/project-history.js
 
 ## Tasks
 - Add regression test
@@ -143,7 +143,7 @@ test('CLI writes the requested project history artifact for a real node invocati
 - Use docs reference artifact for deterministic exports
 
 ## Files Modified
-- scripts/docs/project-history.js
+- src/docs/project-history.js
 
 ## Tasks
 - Build docs export
@@ -152,7 +152,7 @@ test('CLI writes the requested project history artifact for a real node invocati
 History export completed.
 `, 'utf8');
 
-  const scriptPath = resolve('scripts/docs/project-history.js');
+  const scriptPath = resolve('src/docs/project-history.js');
   const result = spawnSync(
     process.execPath,
     [scriptPath, '--write', 'docs/reference/project-memory/session-decision-history.json'],

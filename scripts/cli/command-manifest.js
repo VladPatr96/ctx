@@ -1,4 +1,4 @@
-import { generateCLICommands, syncRegistry } from '../skills/skill-registry.js';
+import { generateCLICommands, syncRegistry } from '../../src/skills/skill-registry.js';
 
 export const BUILT_IN_CLI_COMMANDS = [
   {

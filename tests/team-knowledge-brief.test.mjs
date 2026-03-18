@@ -49,7 +49,7 @@ test('CLI writes the requested team knowledge brief artifact for a real node inv
   const rootDir = mkdtempSync(join(tmpdir(), 'ctx-team-knowledge-cli-'));
   mkdirSync(join(rootDir, 'docs', 'research'), { recursive: true });
 
-  const scriptPath = resolve('scripts/docs/team-knowledge-brief.js');
+  const scriptPath = resolve('src/docs/team-knowledge-brief.js');
   const result = spawnSync(
     process.execPath,
     [scriptPath, '--write', 'docs/research/team-shared-knowledge-boundary.json'],

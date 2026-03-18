@@ -71,7 +71,7 @@ test('probeProviders returns canonical onboarding probes', async () => {
 
     const byId = await withSandboxEnv(sandbox.env, async () => {
       const id = Date.now() + Math.random();
-      const { probeProviders } = await import(`../scripts/setup/provider-probe.js?v=${id}`);
+      const { probeProviders } = await import(`../src/setup/provider-probe.js?v=${id}`);
       const probes = probeProviders();
       return new Map(probes.map((probe) => [probe.id, probe]));
     });
@@ -94,7 +94,7 @@ test('probeProvider marks detected but unconfigured providers as needs_setup', a
 
     const probe = await withSandboxEnv(sandbox.env, async () => {
       const id = Date.now() + Math.random();
-      const { probeProvider } = await import(`../scripts/setup/provider-probe.js?v=${id}`);
+      const { probeProvider } = await import(`../src/setup/provider-probe.js?v=${id}`);
       return probeProvider('opencode');
     });
 
@@ -120,7 +120,7 @@ test('probeProvider honors explicit OpenCode skills override for ready state', a
 
     const probe = await withSandboxEnv(sandbox.env, async () => {
       const id = Date.now() + Math.random();
-      const { probeProvider } = await import(`../scripts/setup/provider-probe.js?v=${id}`);
+      const { probeProvider } = await import(`../src/setup/provider-probe.js?v=${id}`);
       return probeProvider('opencode');
     });
 

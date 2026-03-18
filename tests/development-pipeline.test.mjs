@@ -22,7 +22,7 @@ function restoreEnv() {
 
 async function loadPipelineModule() {
   const id = Date.now() + Math.random();
-  return import(`../scripts/orchestrator/development-pipeline.js?v=${id}`);
+  return import(`../src/orchestrator/development-pipeline.js?v=${id}`);
 }
 
 test('development pipeline uses step machine as source of truth for successful run', async () => {

@@ -85,7 +85,7 @@ test('CLI writes dashboard desktop reference artifact for a real node invocation
     main: 'dist-electron/main.js',
   }), 'utf8');
 
-  const scriptPath = resolve('scripts/docs/dashboard-reference.js');
+  const scriptPath = resolve('src/docs/dashboard-reference.js');
   const result = spawnSync(
     process.execPath,
     [scriptPath, '--write', 'docs/reference/dashboard/dashboard-desktop-surface.json'],

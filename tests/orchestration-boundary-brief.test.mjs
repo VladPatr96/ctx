@@ -54,7 +54,7 @@ test('CLI writes the requested orchestration brief artifact for a real node invo
   const rootDir = mkdtempSync(join(tmpdir(), 'ctx-orchestration-cli-'));
   mkdirSync(join(rootDir, 'docs', 'research'), { recursive: true });
 
-  const scriptPath = resolve('scripts/docs/orchestration-boundary-brief.js');
+  const scriptPath = resolve('src/docs/orchestration-boundary-brief.js');
   const result = spawnSync(
     process.execPath,
     [scriptPath, '--write', 'docs/research/orchestration-programmable-pipeline-boundary.json'],

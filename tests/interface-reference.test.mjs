@@ -41,7 +41,7 @@ test('writeInterfaceReference writes a schema-valid artifact', () => {
 
 test('CLI writes interface reference artifact for a real node invocation', () => {
   const rootDir = mkdtempSync(join(tmpdir(), 'ctx-interface-cli-'));
-  const scriptPath = resolve('scripts/docs/interface-reference.js');
+  const scriptPath = resolve('src/docs/interface-reference.js');
   const result = spawnSync(
     process.execPath,
     [scriptPath, '--write', 'docs/reference/interface-surface.json'],

@@ -48,7 +48,7 @@ test('CLI writes the requested provider compatibility artifact for a real node i
   const rootDir = mkdtempSync(join(tmpdir(), 'ctx-provider-migration-cli-'));
   mkdirSync(join(rootDir, 'docs', 'setup', 'providers'), { recursive: true });
 
-  const scriptPath = resolve('scripts/docs/provider-migration.js');
+  const scriptPath = resolve('src/docs/provider-migration.js');
   const result = spawnSync(
     process.execPath,
     [scriptPath, '--write', 'docs/setup/providers/provider-compatibility.json'],

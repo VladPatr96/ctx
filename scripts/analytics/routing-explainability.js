@@ -1,9 +1,9 @@
 import { join } from 'node:path';
-import { normalizeRoutingConfig } from '../contracts/config-schemas.js';
-import { createRoutingExplainabilitySummary } from '../contracts/analytics-schemas.js';
-import { detectAnomalies } from '../evaluation/routing-anomaly.js';
-import { resolveDataDir } from '../storage/index.js';
-import { readJsonFile } from '../utils/state-io.js';
+import { normalizeRoutingConfig } from '../../src/contracts/config-schemas.js';
+import { createRoutingExplainabilitySummary } from '../../src/contracts/analytics-schemas.js';
+import { detectAnomalies } from '../../src/evaluation/routing-anomaly.js';
+import { resolveDataDir } from '../../src/core/storage/index.js';
+import { readJsonFile } from '../../src/core/utils/state-io.js';
 
 export async function buildRoutingExplainability({
   evalStore,

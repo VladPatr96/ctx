@@ -87,7 +87,7 @@ test('CLI writes the requested inventory artifact for real node invocation', () 
   writeFileSync(join(rootDir, 'README.md'), '# README\n', 'utf8');
   writeFileSync(join(rootDir, 'AGENTS.md'), '# Agents\n', 'utf8');
 
-  const scriptPath = resolve('scripts/docs/build-docs-inventory.js');
+  const scriptPath = resolve('src/docs/build-docs-inventory.js');
   const result = spawnSync(
     process.execPath,
     [scriptPath, '--write', 'docs/docs-surface.inventory.json'],

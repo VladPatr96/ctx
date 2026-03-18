@@ -22,7 +22,7 @@ function restoreEnv() {
 
 async function loadReactor() {
   const id = Date.now() + Math.random();
-  return import(`../scripts/reactions/reactor.js?v=${id}`);
+  return import(`../src/reactions/reactor.js?v=${id}`);
 }
 
 // Mock AI invoke — success

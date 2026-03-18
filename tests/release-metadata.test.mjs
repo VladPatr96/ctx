@@ -131,7 +131,7 @@ test('CLI writes release metadata artifact for a real node invocation', () => {
     '      - run: npm publish --access public',
   ].join('\n'), 'utf8');
 
-  const scriptPath = resolve('scripts/docs/release-metadata.js');
+  const scriptPath = resolve('src/docs/release-metadata.js');
   const result = spawnSync(
     process.execPath,
     [scriptPath, '--write', 'docs/release/release-metadata.json'],

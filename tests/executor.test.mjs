@@ -27,12 +27,12 @@ function restoreEnv() {
 
 async function loadExecutor() {
   const id = Date.now() + Math.random();
-  return import(`../scripts/orchestrator/executor.js?v=${id}`);
+  return import(`../src/orchestrator/executor.js?v=${id}`);
 }
 
 async function loadRunner() {
   const id = Date.now() + Math.random();
-  return import(`../scripts/orchestrator/agent-runner.js?v=${id}`);
+  return import(`../src/orchestrator/agent-runner.js?v=${id}`);
 }
 
 // Mock invoke that returns success

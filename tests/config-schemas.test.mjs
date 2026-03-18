@@ -19,7 +19,7 @@ async function loadRouterWithEnv(dataDir) {
   const id = Date.now() + Math.random();
   process.env.CTX_DATA_DIR = dataDir;
   process.env.CTX_ADAPTIVE_ROUTING = '0';
-  return import(`../scripts/providers/router.js?v=${id}`);
+  return import(`../src/providers/router.js?v=${id}`);
 }
 
 test('normalizeRoutingConfig keeps only canonical overrides', () => {

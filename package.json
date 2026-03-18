@@ -16,7 +16,9 @@
     "./config": "./src/core/config/resolve-config.js"
   },
   "files": [
+    "src/",
     "scripts/",
+    "bin/",
     "skills/",
     "agents/",
     "commands/",
