@@ -3,7 +3,7 @@
 > Универсальный плагин для AI CLI систем (Claude Code, Gemini CLI, OpenCode, Codex CLI).
 > Мульти-провайдерная оркестрация с анонимной deliberation, trust scoring и claim graphs.
 
-[![npm](https://img.shields.io/npm/v/ctx-plugin)](https://www.npmjs.com/package/ctx-plugin)
+[![GitHub](https://img.shields.io/github/v/tag/VladPatr96/ctx?label=version)](https://github.com/VladPatr96/ctx)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D20-brightgreen)](https://nodejs.org/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
@@ -11,7 +11,7 @@
 
 ```bash
 # В любом git-проекте:
-npx ctx-plugin init
+npx -y github:VladPatr96/ctx
 
 # Начать сессию
 /ctx
@@ -44,10 +44,10 @@ npx ctx-plugin init
 ## Установка
 
 ```bash
-npm install ctx-plugin
-# или
-npx ctx-plugin init
+npx -y github:VladPatr96/ctx
 ```
+
+Установщик автоматически определит все доступные AI CLI провайдеры и настроит ctx для каждого из них.
 
 ### Требования
 

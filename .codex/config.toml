@@ -1,2 +1,7 @@
 [mcp_servers.playwright]
 startup_timeout_sec = 30
+
+[mcp_servers.ctx-hub]
+command = "node"
+args = ["scripts/ctx-mcp-hub.js"]
+startup_timeout_sec = 30

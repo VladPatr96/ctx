@@ -28,10 +28,12 @@ const ROOT_DIR = join(__dirname, '..', '..');
  * @returns {boolean} True if command is available
  */
 export function hasCli(command) {
-  const result = spawnSync(command, ['--version'], {
-    stdio: 'ignore',
-    shell: false
-  });
+  if (process.platform === 'win32') {
+    // On Windows, use 'where' to check if command exists (avoids shell arg deprecation)
+    const result = spawnSync('where', [command], { stdio: 'ignore', shell: false });
+    return result.status === 0;
+  }
+  const result = spawnSync(command, ['--version'], { stdio: 'ignore', shell: false });
   return result.status === 0;
 }
 
@@ -40,13 +42,18 @@ export function hasCli(command) {
  * @returns {boolean} True if CTX MCP is configured
  */
 export function hasCtxMcpConfig() {
-  const mcpFile = join(ROOT_DIR, '.mcp.json');
-  if (!existsSync(mcpFile)) return false;
-  try {
-    return readFileSync(mcpFile, 'utf-8').includes('ctx-hub');
-  } catch {
-    return false;
+  // Check both project cwd and package root
+  const candidates = [
+    join(process.cwd(), '.mcp.json'),
+    join(ROOT_DIR, '.mcp.json')
+  ];
+  for (const mcpFile of candidates) {
+    if (!existsSync(mcpFile)) continue;
+    try {
+      if (readFileSync(mcpFile, 'utf-8').includes('ctx-hub')) return true;
+    } catch { /* ignore */ }
   }
+  return false;
 }
 
 /**

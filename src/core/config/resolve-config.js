@@ -113,6 +113,7 @@ export function detectGitHubRepo(cwd) {
  * @property {string|null} projectName - Project name
  * @property {string} locale - Locale for prompts (en/ru)
  * @property {number} dashboardPort - Dashboard port
+ * @property {string|null} model - Default model for opencode (e.g., "zai-coding-plan/glm-5")
  * @property {string[]} warnings - Actionable warnings for missing config
  * @property {string|null} configSource - Which config file was loaded
  */
@@ -204,6 +205,11 @@ export function resolveConfig(options = {}) {
   // dashboardPort
   const dashboardPort = parseInt(process.env.CTX_DASHBOARD_PORT || fileConfig.dashboardPort || '7331', 10);
 
+  // model - default model for opencode provider
+  const model = process.env.CTX_MODEL
+    || fileConfig.model
+    || null;
+
   return {
     githubOwner,
     centralRepo,
@@ -213,6 +219,7 @@ export function resolveConfig(options = {}) {
     projectName,
     locale,
     dashboardPort,
+    model,
     warnings,
     configSource,
   };
