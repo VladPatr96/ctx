@@ -17,6 +17,10 @@ desktop.ini
 # Node
 node_modules/
 
+# Electron build artifacts (too large for GitHub)
+ctx-app/dist/
+ctx-app/node_modules/
+
 # Plugin data (session state, index)
 .data/
 
