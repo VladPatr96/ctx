@@ -3,7 +3,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { detectProviders, hasCtxMcpConfig } from './provider-detector.js';
 import { validateProvider } from './config-validator.js';
-import { parseProviderProbe } from '../contracts/onboarding-schemas.js';
+import { parseProviderProbe } from '../contracts/provider-schemas.js';
 import { hasOpenCodeCtxInstall, resolveHomeDir } from './opencode-paths.js';
 
 const __filename = fileURLToPath(import.meta.url);

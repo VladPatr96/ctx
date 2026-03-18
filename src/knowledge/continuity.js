@@ -1,4 +1,4 @@
-import { createKnowledgeContinuityDigest } from '../contracts/knowledge-continuity-schemas.js';
+import { createKnowledgeContinuityDigest } from '../contracts/knowledge-schemas.js';
 
 export function buildKnowledgeContinuityDigest({
   project,

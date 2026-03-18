@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   buildResilienceAuditInventory,
   ResilienceAuditInventorySchema,
-} from '../src/contracts/resilience-audit-schemas.js';
+} from '../src/contracts/runtime-resilience-schemas.js';
 
 function createProviderRecoveryInventory(providers) {
   return {

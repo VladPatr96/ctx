@@ -6,6 +6,7 @@
 
 import { runCommand, runCliWithFallback, buildDetail } from '../core/utils/shell.js';
 import { discoverModels, getModelIds } from './model-discovery.js';
+import { resolveConfig } from '../core/config/resolve-config.js';
 
 /**
  * Extract token usage from CLI response.
@@ -42,7 +43,7 @@ function extractTokenUsage(stdout, stderr) {
   return null;
 }
 
-const PRIMARY_GLM_MODEL = 'opencode/glm-4.7';
+const PRIMARY_GLM_MODEL = 'zai-coding-plan/glm-5';
 const FALLBACK_GLM_MODEL = 'zai-coding-plan/glm-4.7';
 const KIMI_MODEL = 'opencode/kimi-k2.5';
 
@@ -62,7 +63,9 @@ export default {
 
   async invoke(prompt, opts = {}) {
     const timeout = opts.timeout || 60000;
-    const requestedModel = opts.model ? normalizeModel(opts.model) : null;
+    const config = resolveConfig({ detectGh: false });
+    const defaultModel = config.model || PRIMARY_GLM_MODEL;
+    const requestedModel = opts.model ? normalizeModel(opts.model) : (defaultModel ? normalizeModel(defaultModel) : null);
     const args = ['run', String(prompt), '--format', 'json'];
     if (requestedModel) args.push('--model', requestedModel);
 

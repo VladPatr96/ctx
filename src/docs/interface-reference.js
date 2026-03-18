@@ -1,7 +1,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { createInterfaceReference } from '../contracts/interface-reference-schemas.js';
+import { createInterfaceReference } from '../contracts/artifact-schemas.js';
 import { listCliCommands } from '../../scripts/cli/command-manifest.js';
 import { listMcpTools } from '../tools/tool-manifest.js';
 

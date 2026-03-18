@@ -19,7 +19,7 @@ import { fileURLToPath } from 'node:url';
 import { hasState, loadState, saveState, clearState } from './state-manager.js';
 import { runTutorial } from './tutorial.js';
 import { probeProvider, probeProviders } from './provider-probe.js';
-import { createWizardStateSnapshot, reconcileWizardState } from '../contracts/onboarding-schemas.js';
+import { createWizardStateSnapshot, reconcileWizardState } from '../contracts/provider-schemas.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);

@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 
 import { basename, dirname, join, relative, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { extractSections } from '../knowledge/session-save.js';
-import { createProjectHistoryArtifact } from '../contracts/project-history-schemas.js';
+import { createProjectHistoryArtifact } from '../contracts/artifact-schemas.js';
 
 export function buildProjectHistoryArtifact({
   rootDir = process.cwd(),

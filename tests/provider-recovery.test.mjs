@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   buildProviderRecoveryInventory,
   ProviderRecoveryInventorySchema,
-} from '../src/contracts/provider-recovery-schemas.js';
+} from '../src/contracts/runtime-resilience-schemas.js';
 import { MODE_LIFECYCLE_CONTRACTS } from '../src/providers/provider-modes.js';
 
 function createShellSummary({ models = {}, cards = [] } = {}) {

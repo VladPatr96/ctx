@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { createReleaseMetadata } from '../contracts/release-schemas.js';
+import { createReleaseMetadata } from '../contracts/artifact-schemas.js';
 
 export function readPackageMetadata(rootDir = process.cwd()) {
   const packageJsonPath = join(resolve(rootDir), 'package.json');

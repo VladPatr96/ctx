@@ -1,7 +1,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { createTeamKnowledgeBoundaryBrief } from '../contracts/team-knowledge-brief-schemas.js';
+import { createTeamKnowledgeBoundaryBrief } from '../contracts/artifact-schemas.js';
 
 export function buildTeamKnowledgeBoundaryBrief({
   now = new Date().toISOString(),

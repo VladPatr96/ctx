@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { createDocsInventory } from '../contracts/docs-schemas.js';
+import { createDocsInventory } from '../contracts/artifact-schemas.js';
 
 const ROOT_FILES = ['README.md', 'AGENTS.md', 'WORKFLOW.md'];
 const ROOT_GLOB_PREFIXES = ['CTX_', 'OPENCODE_', 'E2E-', 'verify-'];

@@ -5,7 +5,7 @@ import {
   SHELL_CONNECTION_BUDGET,
   getShellReconnectDelay,
   shouldRecoverShellSnapshot,
-} from '../../../scripts/contracts/shell-connection.js';
+} from '../../../scripts/contracts/shell-schemas.js';
 
 function readTokenForEvents(): string {
   const query = new URLSearchParams(window.location.search);

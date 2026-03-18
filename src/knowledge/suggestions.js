@@ -1,4 +1,4 @@
-import { createKnowledgeSuggestionSummary } from '../contracts/knowledge-suggestion-schemas.js';
+import { createKnowledgeSuggestionSummary } from '../contracts/knowledge-schemas.js';
 
 export function buildKnowledgeSuggestionSummary({
   project,

@@ -15,7 +15,7 @@ import {
   readStoredShellTab,
   readStoredShellTheme,
   resolveInitialShellTab,
-} from '../src/contracts/shell-navigation.js';
+} from '../src/contracts/shell-schemas.js';
 
 test('shell tab registry keeps unique ids and includes the default tab', () => {
   const ids = SHELL_TABS.map((tab) => tab.id);

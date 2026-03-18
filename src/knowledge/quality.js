@@ -1,7 +1,7 @@
 import {
   createKnowledgeProjectExport,
   createKnowledgeQualitySummary,
-} from '../contracts/knowledge-quality-schemas.js';
+} from '../contracts/knowledge-schemas.js';
 
 const EXPORT_CATEGORY_ORDER = ['session-summary', 'decision', 'error', 'solution', 'pattern'];
 

@@ -5,8 +5,7 @@ This document is the canonical reference entrypoint for the dashboard HTTP surfa
 ## Source of Truth
 
 - Dashboard HTTP endpoints are defined in `scripts/contracts/dashboard-surface.js`
-- Desktop shell navigation and connection behavior are defined in `scripts/contracts/shell-navigation.js` and `scripts/contracts/shell-connection.js`
-- Shell summary payload shape is defined in `scripts/contracts/shell-schemas.js`
+- Desktop shell navigation, connection behavior, and summary payload shape are defined in `scripts/contracts/shell-schemas.js`
 - Exact current snapshot lives in `docs/reference/dashboard/dashboard-desktop-surface.json`
 
 Refresh the snapshot with:

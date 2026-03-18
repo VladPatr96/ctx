@@ -8,7 +8,7 @@ import {
   getDashboardHttpPath,
   listDashboardDesktopIpcMethods,
   listDashboardHttpEndpoints,
-} from '../src/contracts/dashboard-surface.js';
+} from '../src/contracts/dashboard-schemas.js';
 import {
   buildDashboardDesktopReference,
   writeDashboardDesktopReference,

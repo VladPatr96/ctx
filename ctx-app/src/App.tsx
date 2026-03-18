@@ -4,7 +4,7 @@ import { useCtxConnection } from './api/hooks';
 import { useAppStore } from './store/useAppStore';
 import { Sidebar } from './components/layout/Sidebar';
 import { ErrorBoundary } from './components/layout/ErrorBoundary';
-import { getShellShortcut } from '../../scripts/contracts/shell-navigation.js';
+import { getShellShortcut } from '../../scripts/contracts/shell-schemas.js';
 
 const CommandCenterPage = lazy(() => import('./pages/CommandCenter').then(m => ({ default: m.CommandCenterPage })));
 const DashboardPage = lazy(() => import('./pages/Dashboard').then(m => ({ default: m.DashboardPage })));

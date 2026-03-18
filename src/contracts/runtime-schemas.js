@@ -19,6 +19,7 @@ export const ExecutionStatusSchema = z.enum([
   'partial',
 ]);
 export const ExecutionModeSchema = z.enum(['api', 'cli', 'agent']);
+export const RuntimeAvailabilityStatusSchema = z.enum(['ready', 'degraded', 'offline']);
 export const StepStatusSchema = z.enum([
   'pending',
   'running',

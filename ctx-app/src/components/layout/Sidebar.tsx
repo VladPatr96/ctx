@@ -1,5 +1,5 @@
 import { LayoutDashboard, BookOpen, Users, GitBranch, Settings, Terminal, Workflow, Bot, MessageSquareMore, Command, type LucideIcon } from 'lucide-react';
-import { SHELL_TABS } from '../../../../scripts/contracts/shell-navigation.js';
+import { SHELL_TABS } from '../../../../scripts/contracts/shell-schemas.js';
 
 export type AppTab = 'command' | 'dashboard' | 'knowledge' | 'agents' | 'routing' | 'devpipeline' | 'orchestrator' | 'debates' | 'settings' | 'terminal';
 

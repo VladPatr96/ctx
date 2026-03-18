@@ -1,6 +1,6 @@
 import { join } from 'node:path';
 import { normalizeRoutingConfig } from '../contracts/config-schemas.js';
-import { createRoutingExplainabilitySummary } from '../contracts/routing-feedback-schemas.js';
+import { createRoutingExplainabilitySummary } from '../contracts/analytics-schemas.js';
 import { detectAnomalies } from '../evaluation/routing-anomaly.js';
 import { resolveDataDir } from '../storage/index.js';
 import { readJsonFile } from '../utils/state-io.js';

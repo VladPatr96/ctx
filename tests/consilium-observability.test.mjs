@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   buildConsiliumObservabilitySnapshot,
   createConsiliumObservabilitySnapshot,
-} from '../src/contracts/consilium-observability.js';
+} from '../src/contracts/consilium-schemas.js';
 
 test('buildConsiliumObservabilitySnapshot normalizes rounds, trust matrix, and synthesis summary', () => {
   const snapshot = buildConsiliumObservabilitySnapshot({

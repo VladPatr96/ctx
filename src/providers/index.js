@@ -19,7 +19,7 @@ import codex from './codex.js';
 import { discoverModels, discoverAllModels, discoverAllModelsAsync, validateModel } from './model-discovery.js';
 import { recordUsage } from '../cost-tracking/index.js';
 import { createProviderAdapter } from './provider-modes.js';
-import { buildProviderExtensibilityInventory } from '../contracts/provider-extensibility-schemas.js';
+import { buildProviderExtensibilityInventory } from '../contracts/provider-schemas.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const HEALTH_FILE = join(__dirname, '..', '..', '.data', 'provider-health.json');

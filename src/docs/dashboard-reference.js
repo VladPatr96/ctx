@@ -5,8 +5,8 @@ import {
   DEFAULT_SHELL_TAB,
   SHELL_SHORTCUTS,
   SHELL_TABS,
-} from '../contracts/shell-navigation.js';
-import { SHELL_CONNECTION_BUDGET } from '../contracts/shell-connection.js';
+  SHELL_CONNECTION_BUDGET,
+} from '../contracts/shell-schemas.js';
 import {
   ShellProjectSummarySchema,
   ShellProviderCardSchema,
@@ -18,8 +18,8 @@ import {
 import {
   listDashboardDesktopIpcMethods,
   listDashboardHttpEndpoints,
-} from '../contracts/dashboard-surface.js';
-import { createDashboardDesktopReference } from '../contracts/dashboard-reference-schemas.js';
+  createDashboardDesktopReference,
+} from '../contracts/dashboard-schemas.js';
 
 export function buildDashboardDesktopReference({
   rootDir = process.cwd(),

@@ -37,7 +37,7 @@ import {
   type RoutingHealthData,
   type ShellSummary,
 } from './types';
-import { getDashboardHttpPath } from '../../../scripts/contracts/dashboard-surface.js';
+import { getDashboardHttpPath } from '../../../src/contracts/dashboard-schemas.js';
 import { ProviderExtensibilityInventorySchema } from '../../../scripts/contracts/provider-extensibility-schemas.js';
 import { ProviderRecoveryInventorySchema } from '../../../scripts/contracts/provider-recovery-schemas.js';
 import { ResilienceAuditInventorySchema } from '../../../scripts/contracts/resilience-audit-schemas.js';

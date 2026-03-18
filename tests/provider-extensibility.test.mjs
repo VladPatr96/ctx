@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   buildProviderExtensibilityInventory,
   ProviderExtensibilityInventorySchema,
-} from '../src/contracts/provider-extensibility-schemas.js';
+} from '../src/contracts/provider-schemas.js';
 import { MODE_LIFECYCLE_CONTRACTS } from '../src/providers/provider-modes.js';
 import { listProviderExtensibilityInventory } from '../src/providers/index.js';
 

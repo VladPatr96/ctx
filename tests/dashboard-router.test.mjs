@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { broadcast, createRouter, resetDashboardRuntimeCachesForTests, sseConnect, state } from '../src/dashboard/server.js';
 import { createEvalStore } from '../src/evaluation/eval-store.js';
-import { buildConsiliumObservabilitySnapshot } from '../src/contracts/consilium-observability.js';
+import { buildConsiliumObservabilitySnapshot } from '../src/contracts/consilium-schemas.js';
 
 const TOKEN = 'test-dashboard-token';
 

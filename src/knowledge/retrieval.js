@@ -1,4 +1,4 @@
-import { createKnowledgeRetrievalHit } from '../contracts/knowledge-continuity-schemas.js';
+import { createKnowledgeRetrievalHit } from '../contracts/knowledge-schemas.js';
 
 export function rankKnowledgeEntries(entries, query, options = {}) {
   const normalizedQuery = tokenize(query);

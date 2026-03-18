@@ -30,22 +30,22 @@ import { discoverAllModelsAsync } from '../providers/model-discovery.js';
 import { buildAnalyticsSummary } from '../../scripts/analytics/summary.js';
 import { buildRoutingExplainability } from '../../scripts/analytics/routing-explainability.js';
 import { listProviderExtensibilityInventory } from '../providers/index.js';
-import { buildRuntimeFallbackInventory } from '../contracts/runtime-fallback-schemas.js';
-import { buildProviderRecoveryInventory } from '../contracts/provider-recovery-schemas.js';
-import { buildResilienceAuditInventory } from '../contracts/resilience-audit-schemas.js';
+import {
+  buildRuntimeFallbackInventory,
+  buildProviderRecoveryInventory,
+  buildResilienceAuditInventory,
+} from '../contracts/runtime-resilience-schemas.js';
 import {
   buildConsiliumObservabilitySnapshot,
   createConsiliumObservabilitySnapshot,
-} from '../contracts/consilium-observability.js';
-import {
   buildConsiliumReplayArchive,
   buildConsiliumReplayExport,
   buildConsiliumReplayKnowledgeContext,
-} from '../contracts/consilium-replay-schemas.js';
+} from '../contracts/consilium-schemas.js';
 import {
   createRoutingFeedbackRecord,
   parseRoutingFeedbackPayload,
-} from '../contracts/routing-feedback-schemas.js';
+} from '../contracts/analytics-schemas.js';
 
 // 1. CONSTANTS
 const DATA_DIR = resolveDataDir();

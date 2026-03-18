@@ -1,7 +1,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { createProviderMigrationArtifact } from '../contracts/provider-docs-schemas.js';
+import { createProviderMigrationArtifact } from '../contracts/provider-schemas.js';
 import { getProviderModeContract } from '../providers/provider-modes.js';
 import { listProviderSetupDefinitions } from '../setup/provider-catalog.js';
 

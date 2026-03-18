@@ -6,7 +6,7 @@ import {
   persistShellTheme,
   readStoredShellTheme,
   resolveInitialShellTab,
-} from '../../../scripts/contracts/shell-navigation.js';
+} from '../../../scripts/contracts/shell-schemas.js';
 
 import type { AppTab } from '../components/layout/Sidebar';
 

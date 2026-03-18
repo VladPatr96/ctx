@@ -1,7 +1,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { createOrchestrationBoundaryBrief } from '../contracts/orchestration-boundary-brief-schemas.js';
+import { createOrchestrationBoundaryBrief } from '../contracts/artifact-schemas.js';
 
 export function buildOrchestrationBoundaryBrief({
   now = new Date().toISOString(),
