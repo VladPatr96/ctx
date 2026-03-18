@@ -201,37 +201,66 @@ codex exec --ephemeral --skip-git-repo-check "<промпт-шаблон>" 2>&1 
 
 ### Интерактивный выбор (без флагов)
 
-**Шаг 1:** Вызови AskUserQuestion — выбор режима:
+При запуске без флагов — ОБЯЗАТЕЛЬНО выполни интерактивный выбор.
+
+**Шаг 1: Загрузи данные о провайдерах.**
+Вызови MCP tool `ctx_consilium_setup()`. Он вернёт:
+- Список доступных провайдеров и их статус
+- Модели для каждого провайдера с тирами (flagship/balanced/fast)
+- Текущие дефолты из ctx.config.json
+
+**Шаг 2: Выбор режима.**
+Покажи пользователю меню (через AskUserQuestion или текстовое меню):
 ```
 Режим консилиума для: "<тема>"
-[A] Все провайдеры — Claude + Gemini + Codex
+[A] Все провайдеры — Claude + Gemini + Codex + OpenCode
 [B] Быстрый — Claude + Gemini
 [C] Агенты — architect + researcher + reviewer
 [D] Board of Advisors — экспертные персоны (Jobs, Karpathy и др.)
-[E] Adversarial Review — skeptic + architect + minimalist (авто-scope по diff)
+[E] Adversarial Review — skeptic + architect + minimalist
 [F] Выбрать вручную
 ```
 
-**Шаг 2:** Если выбран режим с провайдерами (A, B, F) — покажи выбор моделей.
-Получи список доступных моделей вызовом `ctx_provider_health` или прочитав конфиг.
-Вызови AskUserQuestion:
+**Шаг 3: Выбор провайдеров** (если режим A, B, F).
+Покажи только доступные провайдеры (available=true из ctx_consilium_setup).
+Для режима F — дай выбрать конкретных. Для A/B — подтверди список.
+
+**Шаг 4: Выбор модели для КАЖДОГО провайдера.**
+Для каждого выбранного провайдера покажи его модели отдельным вопросом:
 ```
-Модели для консилиума (текущие из ctx.config.json):
+Модель для Claude? (текущая: opus-4.6)
+  [1] opus-4.6      — flagship
+  [2] sonnet-4.6    — balanced
+  [3] haiku-4.5     — fast
 
-  Claude:   opus-4.6
-  Gemini:   gemini-2.5-pro
-  Codex:    o3
-  OpenCode: zai-coding-plan/glm-5
+Модель для Gemini? (текущая: gemini-2.5-pro)
+  [1] gemini-3.1-pro-preview  — flagship
+  [2] gemini-2.5-pro          — balanced
+  [3] gemini-2.5-flash        — fast
 
-[Y] Использовать эти модели
-[M] Изменить модели
-
-Доступные модели OpenCode Go:
-  opencode-go/glm-5, opencode-go/kimi-k2.5, opencode-go/minimax-m2.5
+Модель для OpenCode? (текущая: zai-coding-plan/glm-5)
+  [1] opencode-go/glm-5        — GLM-5 (Go)
+  [2] opencode-go/kimi-k2.5    — Kimi K2.5 (Go)
+  [3] opencode-go/minimax-m2.5 — MiniMax M2.5 (Go)
+  [4] zai-coding-plan/glm-5    — GLM-5 (ZAI)
 ```
+Используй данные из `ctx_consilium_setup` для построения списков.
+Текущая модель из configuredModel — подсвечена как дефолт.
 
-При выборе [M] — попроси пользователя указать модели в формате `provider=model`.
-Передай выбранные модели в параметр `models` MCP tool `ctx_consilium_multi_round`.
+**Шаг 5: Запуск.**
+Передай выбранных провайдеров и модели в `ctx_consilium_multi_round`:
+```json
+{
+  "topic": "<тема>",
+  "providers": ["claude", "gemini", "opencode"],
+  "models": {
+    "claude": "opus-4.6",
+    "gemini": "gemini-3.1-pro-preview",
+    "opencode": "opencode-go/kimi-k2.5"
+  },
+  "rounds": 2
+}
+```
 
 ### Многораундовый режим (--rounds N)
 

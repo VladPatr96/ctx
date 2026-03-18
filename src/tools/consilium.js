@@ -236,6 +236,66 @@ export function registerConsiliumTools(server, { getResults, saveResults, DATA_D
     }
   );
 
+  // --- ctx_consilium_setup ---
+  server.registerTool(
+    'ctx_consilium_setup',
+    {
+      description: 'Получить доступные провайдеры и модели для consilium. Используй перед запуском консилиума для интерактивного выбора провайдеров и моделей. Возвращает: список провайдеров с их моделями, текущие дефолты из ctx.config.json, и health-статус.',
+      inputSchema: z.object({}).shape,
+    },
+    async () => {
+      // 1. Detect available providers
+      let detectedProviders = [];
+      try {
+        const { detectProviders } = await import('../setup/provider-detector.js');
+        detectedProviders = detectProviders().filter(p => ['claude', 'gemini', 'codex', 'opencode'].includes(p.id));
+      } catch { /* fallback below */ }
+
+      // 2. Get models per provider
+      let allModels = {};
+      try {
+        const { discoverAllModels } = await import('../providers/model-discovery.js');
+        allModels = discoverAllModels();
+      } catch { /* empty */ }
+
+      // 3. Get configured defaults from ctx.config.json
+      let configModels = {};
+      try {
+        const { resolveConfig } = await import('../core/config/resolve-config.js');
+        const config = resolveConfig({ detectGh: false });
+        if (config.models) configModels = config.models;
+      } catch { /* no config */ }
+
+      // 4. Build response
+      const providers = ['claude', 'gemini', 'codex', 'opencode'].map(id => {
+        const detected = detectedProviders.find(p => p.id === id);
+        const modelInfo = allModels[id] || { models: [], defaultModel: null };
+        return {
+          id,
+          available: detected ? detected.available : false,
+          reason: detected ? detected.reason : 'not checked',
+          configuredModel: configModels[id] || null,
+          defaultModel: modelInfo.defaultModel,
+          models: modelInfo.models.map(m => ({
+            id: m.id,
+            alias: m.alias,
+            tier: m.tier,
+            provider: m.provider || m.mode || null
+          }))
+        };
+      });
+
+      const result = {
+        providers,
+        instructions: 'Покажи пользователю список доступных провайдеров и для каждого — выбор модели. Дай выбрать провайдеров для участия в консилиуме, затем модель для каждого выбранного провайдера. Передай результат в ctx_consilium_multi_round параметрами providers и models.'
+      };
+
+      return {
+        content: [{ type: 'text', text: JSON.stringify(result, null, 2) }]
+      };
+    }
+  );
+
   // --- ctx_consilium_multi_round ---
   server.registerTool(
     'ctx_consilium_multi_round',
