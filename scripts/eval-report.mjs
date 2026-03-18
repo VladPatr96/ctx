@@ -10,7 +10,7 @@
  */
 
 import { join } from 'node:path';
-import { createEvalStore } from './evaluation/eval-store.js';
+import { createEvalStore } from '../src/evaluation/eval-store.js';
 
 const args = process.argv.slice(2);
 

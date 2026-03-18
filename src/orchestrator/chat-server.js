@@ -1,171 +1,236 @@
 /**
- * Chat Server — центральный HTTP-сервер для межагентного общения.
+ * Chat Server — HTTP + SSE сервер для межагентного общения.
  *
- * Все агенты (через MCP tools) и основной экран подключаются к одному серверу.
- * Сообщения доставляются в реальном времени через SSE (Server-Sent Events).
- *
- * API:
- *   POST /chat/post          — отправить сообщение
- *   GET  /chat/history       — получить историю (?count=50&role=...&type=...)
- *   GET  /chat/stream        — SSE поток (live updates)
- *   POST /chat/team          — зарегистрировать команду
- *   GET  /chat/team          — получить состав команды
- *   GET  /chat/ping          — health check
+ * Endpoints:
+ *   POST /chat/post     — отправить сообщение { role, agent, type, text, target? }
+ *   GET  /chat/stream   — SSE подписка на все сообщения
+ *   GET  /chat/history  — последние N сообщений (?count=20)
+ *   GET  /chat/ping     — статус { clients, messages }
  */
 
 import http from 'node:http';
 
 export function createChatServer() {
   const messages = [];
-  const team = [];
   const sseClients = new Set();
-  let nextId = 1;
+  const agents = new Map(); // agentId → { id, provider, connectedAt, lastSeen, status }
+  let server = null;
+  let onAgentChange = null; // callback for agent status changes
 
-  function broadcast(event, data) {
-    const payload = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+  function broadcast(msg) {
+    const data = JSON.stringify(msg);
     for (const res of sseClients) {
-      try { res.write(payload); } catch { sseClients.delete(res); }
+      try {
+        res.write(`event: message\ndata: ${data}\n\n`);
+      } catch {
+        sseClients.delete(res);
+      }
     }
   }
 
-  function addMessage(msg) {
-    const entry = {
-      id: nextId++,
-      ts: new Date().toISOString(),
-      role: msg.role || 'system',
-      agent: msg.agent || null,
-      type: msg.type || 'system',
-      text: msg.text || '',
-      target: msg.target || null,
-    };
-    messages.push(entry);
-    if (messages.length > 500) messages.shift();
-    broadcast('message', entry);
-    return entry;
-  }
-
-  function readBody(req) {
-    return new Promise((resolve, reject) => {
-      let body = '';
-      req.on('data', chunk => { body += chunk; if (body.length > 50000) reject(new Error('Too large')); });
-      req.on('end', () => { try { resolve(JSON.parse(body)); } catch (e) { reject(e); } });
-      req.on('error', reject);
+  function handlePost(req, res) {
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', () => {
+      try {
+        const msg = JSON.parse(body);
+        msg.ts = Date.now();
+        msg.id = messages.length;
+        messages.push(msg);
+        broadcast(msg);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true, id: msg.id }));
+      } catch {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: false, error: 'Invalid JSON' }));
+      }
     });
   }
 
-  const server = http.createServer(async (req, res) => {
-    // CORS
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  function handleStream(_req, res) {
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+      'Access-Control-Allow-Origin': '*',
+    });
+    res.write(': connected\n\n');
+    sseClients.add(res);
 
-    if (req.method === 'OPTIONS') { res.writeHead(200); res.end(); return; }
+    res.on('close', () => sseClients.delete(res));
+  }
 
-    try {
-      const url = new URL(req.url, `http://${req.headers.host}`);
+  function handleHistory(req, res) {
+    const url = new URL(req.url, `http://${req.headers.host}`);
+    const count = Math.min(parseInt(url.searchParams.get('count') || '20', 10), 500);
+    const typeFilter = url.searchParams.get('type');
+    const roleFilter = url.searchParams.get('role');
+    const sinceFilter = url.searchParams.get('since');
 
-      // POST /chat/post
-      if (req.method === 'POST' && url.pathname === '/chat/post') {
-        const data = await readBody(req);
-        const entry = addMessage(data);
+    let filtered = messages;
+    if (typeFilter) filtered = filtered.filter(m => m.type === typeFilter);
+    if (roleFilter) filtered = filtered.filter(m => m.role === roleFilter);
+    if (sinceFilter) {
+      const ts = parseInt(sinceFilter, 10);
+      if (!isNaN(ts)) filtered = filtered.filter(m => m.ts > ts);
+    }
+
+    const slice = filtered.slice(-count);
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ total: filtered.length, messages: slice }));
+  }
+
+  function handlePing(_req, res) {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({
+      clients: sseClients.size,
+      messages: messages.length,
+      uptime: process.uptime(),
+    }));
+  }
+
+  function handleConnect(req, res) {
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', () => {
+      try {
+        const data = JSON.parse(body);
+        const agentId = data.agentId || data.provider || 'unknown';
+        const alreadyConnected = agents.has(agentId);
+
+        if (alreadyConnected) {
+          // Дедупликация: обновляем lastSeen, не спамим повторным "подключился"
+          const existing = agents.get(agentId);
+          existing.lastSeen = Date.now();
+          existing.status = 'connected';
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: true, agentId, reconnect: true, agents: agentList() }));
+          return;
+        }
+
+        const entry = {
+          id: agentId,
+          provider: data.provider || agentId,
+          name: data.name || agentId,
+          connectedAt: Date.now(),
+          lastSeen: Date.now(),
+          status: 'connected',
+        };
+        agents.set(agentId, entry);
+
+        // Broadcast agent connection as system message
+        const sysMsg = {
+          role: 'system',
+          agent: 'ChatServer',
+          type: 'agent_connected',
+          text: `${entry.name} подключился к сессии`,
+          agentId,
+          ts: Date.now(),
+          id: messages.length,
+        };
+        messages.push(sysMsg);
+        broadcast(sysMsg);
+
+        if (onAgentChange) onAgentChange('connected', entry);
+
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify(entry));
-        return;
+        res.end(JSON.stringify({ ok: true, agentId, agents: agentList() }));
+      } catch {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: false, error: 'Invalid JSON' }));
       }
+    });
+  }
 
-      // GET /chat/history
-      if (req.method === 'GET' && url.pathname === '/chat/history') {
-        const count = parseInt(url.searchParams.get('count') || '50', 10);
-        const role = url.searchParams.get('role');
-        const type = url.searchParams.get('type');
-
-        let filtered = messages;
-        if (role) filtered = filtered.filter(m => m.role === role);
-        if (type) filtered = filtered.filter(m => m.type === type);
-
-        const result = filtered.slice(-Math.min(count, 200));
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ total: result.length, messages: result }));
-        return;
-      }
-
-      // GET /chat/stream — SSE
-      if (req.method === 'GET' && url.pathname === '/chat/stream') {
-        res.writeHead(200, {
-          'Content-Type': 'text/event-stream',
-          'Cache-Control': 'no-cache',
-          'Connection': 'keep-alive',
-        });
-        res.write(': connected\n\n');
-        sseClients.add(res);
-        req.on('close', () => sseClients.delete(res));
-
-        // Keep-alive every 30s
-        const keepAlive = setInterval(() => {
-          try { res.write(': ping\n\n'); } catch { clearInterval(keepAlive); sseClients.delete(res); }
-        }, 30000);
-        req.on('close', () => clearInterval(keepAlive));
-        return;
-      }
-
-      // POST /chat/team
-      if (req.method === 'POST' && url.pathname === '/chat/team') {
-        const data = await readBody(req);
-        if (data.members && Array.isArray(data.members)) {
-          team.length = 0;
-          team.push(...data.members);
-          broadcast('team', { members: team });
+  function handleHeartbeat(req, res) {
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', () => {
+      try {
+        const data = JSON.parse(body);
+        const agentId = data.agentId || 'unknown';
+        const agent = agents.get(agentId);
+        if (agent) {
+          agent.lastSeen = Date.now();
+          agent.status = data.status || 'active';
         }
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ members: team }));
-        return;
+        res.end(JSON.stringify({ ok: true }));
+      } catch {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: false }));
       }
+    });
+  }
 
-      // GET /chat/team
-      if (req.method === 'GET' && url.pathname === '/chat/team') {
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ members: team, messageCount: messages.length }));
-        return;
-      }
+  function agentList() {
+    const now = Date.now();
+    return Array.from(agents.values()).map(a => ({
+      ...a,
+      alive: (now - a.lastSeen) < 60000, // считаем живым, если heartbeat < 60s
+    }));
+  }
 
-      // GET /chat/ping
-      if (req.method === 'GET' && url.pathname === '/chat/ping') {
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ ok: true, clients: sseClients.size, messages: messages.length }));
-        return;
-      }
+  function handleAgents(_req, res) {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ agents: agentList() }));
+  }
 
-      res.writeHead(404);
-      res.end('Not found');
-    } catch (err) {
-      res.writeHead(400, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: err.message }));
-    }
-  });
+  function handleCors(_req, res) {
+    res.writeHead(204, {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type',
+    });
+    res.end();
+  }
+
+  function requestHandler(req, res) {
+    // CORS preflight
+    if (req.method === 'OPTIONS') return handleCors(req, res);
+
+    const path = req.url?.split('?')[0];
+
+    if (req.method === 'POST' && path === '/chat/post') return handlePost(req, res);
+    if (req.method === 'POST' && path === '/chat/connect') return handleConnect(req, res);
+    if (req.method === 'POST' && path === '/chat/heartbeat') return handleHeartbeat(req, res);
+    if (req.method === 'GET' && path === '/chat/agents') return handleAgents(req, res);
+    if (req.method === 'GET' && path === '/chat/stream') return handleStream(req, res);
+    if (req.method === 'GET' && path === '/chat/history') return handleHistory(req, res);
+    if (req.method === 'GET' && path === '/chat/ping') return handlePing(req, res);
+
+    res.writeHead(404, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: 'Not found' }));
+  }
 
   return {
-    server,
-    addMessage,
-    getMessages: (count = 50) => messages.slice(-count),
-    getTeam: () => [...team],
-    sseClientCount: () => sseClients.size,
-
-    start(port = 0) {
+    async start(port = 0) {
       return new Promise((resolve, reject) => {
+        server = http.createServer(requestHandler);
         server.listen(port, '127.0.0.1', () => {
-          const assignedPort = server.address().port;
-          resolve(assignedPort);
+          const addr = server.address();
+          resolve(addr.port);
         });
         server.on('error', reject);
       });
     },
 
-    stop() {
-      for (const client of sseClients) {
-        try { client.end(); } catch { /* ignore */ }
+    async stop() {
+      // Close all SSE connections
+      for (const res of sseClients) {
+        try { res.end(); } catch { /* ignore */ }
       }
       sseClients.clear();
-      return new Promise(resolve => server.close(resolve));
+
+      return new Promise((resolve) => {
+        if (!server) return resolve();
+        server.close(() => resolve());
+      });
     },
+
+    getMessages() { return messages; },
+    getClientCount() { return sseClients.size; },
+    getAgents() { return agentList(); },
+    onAgentChange(cb) { onAgentChange = cb; },
   };
 }

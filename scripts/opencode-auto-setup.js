@@ -15,13 +15,13 @@ import { spawnSync } from 'node:child_process';
 import {
   findOpenCodeSkillsDir as resolveOpenCodeSkillsDir,
   getOpenCodeSkillsDirCandidates,
-} from './setup/opencode-paths.js';
+} from '../src/setup/opencode-paths.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const ROOT_DIR = join(__dirname, '..');
 
-const UNIVERSAL_SKILL = join(ROOT_DIR, 'skills', 'ctx-universal-full', 'SKILL.md');
+const UNIVERSAL_SKILL = join(ROOT_DIR, 'skills', 'ctx', 'SKILL.md');
 
 // Possible OpenCode skills directories on different platforms
 const POSSIBLE_PATHS = [

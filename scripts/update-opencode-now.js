@@ -10,9 +10,9 @@ import { join } from 'node:path';
 import {
   findOpenCodeSkillsDir,
   getOpenCodeSkillsDirCandidates,
-} from './setup/opencode-paths.js';
+} from '../src/setup/opencode-paths.js';
 
-const UNIVERSAL_SKILL = join(process.cwd(), 'skills', 'ctx-universal-full', 'SKILL.md');
+const UNIVERSAL_SKILL = join(process.cwd(), 'skills', 'ctx', 'SKILL.md');
 
 console.log('\n🔄 OpenCode CTX Skill — Quick Update\n');
 

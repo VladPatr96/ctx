@@ -21,8 +21,8 @@ import { fileURLToPath } from 'node:url';
 import { writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import http from 'node:http';
-import { createChatRoom } from './ui/team-chat.js';
-import { createChatServer } from './orchestrator/chat-server.js';
+import { createChatRoom } from '../src/ui/team-chat.js';
+import { createChatServer } from '../src/orchestrator/chat-server.js';
 
 const execFileP = promisify(execFile);
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -33,29 +33,76 @@ const isWin = process.platform === 'win32';
 const PROVIDERS = {
   claude:   { name: 'Claude Code',  cmd: 'claude',   args: ['--dangerously-skip-permissions'], color: '\x1b[35m', hasMcp: true },
   gemini:   { name: 'Gemini CLI',   cmd: 'gemini',   args: ['--yolo'],        color: '\x1b[34m', hasMcp: true },
-  codex:    { name: 'Codex CLI',    cmd: 'codex',    args: ['--full-auto'],   color: '\x1b[32m', hasMcp: false },
+  codex:    { name: 'Codex CLI',    cmd: 'codex',    args: ['--full-auto'],   color: '\x1b[32m', hasMcp: true },
   opencode: { name: 'OpenCode CLI', cmd: 'opencode', args: [],                color: '\x1b[33m', hasMcp: false },
 };
 
 /**
- * Построить промпт для агента — включает задачу и инструкции по MCP чату.
+ * Построить промпт для агента — включает задачу, роль и инструкции.
+ * isLead: true если этот агент — тимлид (координирует и консолидирует ответы)
  */
-function buildTaskPrompt(provider, taskText, chatUrl) {
+/**
+ * Построить промпт для агента.
+ *
+ * Lead flow:
+ *   1. Получает задачу от пользователя
+ *   2. Делегирует подзадачи каждому члену команды через ctx_chat_post (type=delegation)
+ *   3. Ждёт ответы через ctx_chat_history (type=report)
+ *   4. Синтезирует финальный ответ (type=synthesis)
+ *
+ * Member flow:
+ *   1. Получает делегацию от лида
+ *   2. Выполняет подзадачу
+ *   3. Отправляет результат через ctx_chat_post (type=report)
+ *
+ * teamMembers: массив id участников (для лида — чтобы знал кому делегировать)
+ */
+function buildTaskPrompt(provider, taskText, chatUrl, isLead = false, teamMembers = []) {
   const p = PROVIDERS[provider];
+
+  if (isLead) {
+    const memberList = teamMembers.map(id => `${id} (${PROVIDERS[id]?.name || id})`).join(', ');
+    return [
+      `Ты ${p.name} — TEAM LEAD мульти-агентной команды CTX.`,
+      `Проект: ${process.cwd()}`,
+      ``,
+      `Твоя команда: ${memberList || 'нет участников'}`,
+      ``,
+      `ЗАДАЧА ОТ ПОЛЬЗОВАТЕЛЯ: ${taskText}`,
+      ``,
+      `ТВОЙ WORKFLOW:`,
+      `1. Разбей задачу на подзадачи для каждого участника команды.`,
+      `2. Делегируй каждому через ctx_chat_post:`,
+      `   role=${provider}, agent=${p.name}, type=delegation, target=<id участника>, text=<подзадача>`,
+      `3. Подожди 30-60 секунд, затем проверь ответы через ctx_chat_history (type=report).`,
+      `4. Когда все ответят (или через 2 минуты) — собери синтез.`,
+      `5. Отправь ФИНАЛЬНЫЙ ответ через ctx_chat_post:`,
+      `   role=${provider}, agent=${p.name}, type=synthesis, text=<итоговый синтез>`,
+      ``,
+      `ВАЖНО:`,
+      `- НЕ выполняй задачу сам — делегируй команде и синтезируй их ответы.`,
+      `- НЕ создавай файлы и НЕ модифицируй код без явного запроса.`,
+      `- В синтезе укажи что ответил каждый участник и твоё финальное решение.`,
+    ].join('\n');
+  }
+
+  // Member prompt
   const lines = [
     `Ты ${p.name}, участник мульти-агентной команды CTX.`,
     `Проект: ${process.cwd()}`,
     ``,
     `ЗАДАЧА: ${taskText}`,
     ``,
-    `Выполни задачу. Работай в этом проекте.`,
+    `ВАЖНО:`,
+    `- Отвечай текстом. НЕ создавай файлы и НЕ модифицируй код без явного запроса.`,
+    `- Дай краткий, содержательный ответ по задаче.`,
   ];
 
   if (p.hasMcp) {
     lines.push(
       ``,
-      `Когда закончишь, отправь краткий результат через MCP-инструмент ctx_chat_post`,
-      `с параметрами role=${provider}, agent=${p.name}, type=result, text=твой результат`,
+      `Когда закончишь, отправь результат через MCP-инструмент ctx_chat_post`,
+      `с параметрами role=${provider}, agent=${p.name}, type=report, text=твой ответ`,
     );
   }
 
@@ -220,95 +267,78 @@ async function detectTerminal() {
 // ==================== Terminal spawners ====================
 
 /**
- * Запустить провайдера в сплите с CTX_CHAT_URL в окружении.
+ * Запустить провайдера:
+ *   1. Сплит-панель = agent-viewer.js (SSE-стрим ответов, мгновенный старт)
+ *   2. Фоновый процесс = agent-start.js (выполняет CLI, постит в чат)
+ *
+ * Viewer стартует первым → сразу показывает хедер + спиннер.
+ * Agent стартует в фоне → ответы появляются через SSE в viewer.
  */
-/**
- * Запустить провайдера в сплите — интерактивный режим с задачей.
- * Пишет промпт задачи в temp файл → agent-start.js читает его и запускает CLI.
- * stdio: inherit → пользователь видит нативный UI провайдера.
- */
-/**
- * Запустить провайдера в сплите.
- * - taskText заполнен → пишем task file, агент стартует с задачей
- * - taskText пустой → idle режим, агент ждёт задачи через MCP чат
- */
-async function spawnSplit(terminal, provider, cwd, index, chatUrl, taskText) {
+async function spawnSplit(terminal, provider, cwd, index, chatUrl, isLead = false) {
   const providerName = PROVIDERS[provider]?.name || provider;
-  const agentStart = join(__dirname, 'agent-start.js').replace(/\//g, '\\');
+  const agentViewer = join(__dirname, 'agent-viewer.js').replace(/\//g, '\\');
 
-  // Записываем промпт задачи в temp файл (только если есть задача)
-  let taskFile = '';
-  if (taskText) {
-    const taskPrompt = buildTaskPrompt(provider, taskText, chatUrl);
-    taskFile = join(tmpdir(), `ctx-task-${provider}-${Date.now()}.txt`).replace(/\//g, '\\');
-    writeFileSync(taskFile, taskPrompt, 'utf-8');
-  }
-
-  // Первый сплит — вертикальный, остальные — горизонтальные
   const wtDir = index === 0 ? '-V' : '-H';
 
+  // === 1. Сплит-панель: viewer (лёгкий SSE-клиент) ===
   switch (terminal) {
     case 'wt': {
       const winCwd = cwd.replace(/\//g, '\\');
-      const envParts = [
+      const viewerEnv = [
         `set CTX_CHAT_URL=${chatUrl}`,
         `set CTX_AGENT_ID=${provider}`,
         `set CTX_AGENT_NAME=${providerName}`,
-      ];
-      if (taskFile) envParts.push(`set CTX_TASK_FILE=${taskFile}`);
-      const envSetup = envParts.join('&& ');
-      const args = [
+        isLead ? `set CTX_IS_LEAD=1` : '',
+      ].filter(Boolean).join('&& ');
+      const viewerArgs = [
         '-w', '0', 'sp', wtDir,
         '-d', winCwd,
-        'cmd', '/k', `${envSetup}&& node "${agentStart}"`,
+        'cmd', '/k', `${viewerEnv}&& node "${agentViewer}"`,
       ];
       await new Promise((resolve, reject) => {
-        const child = spawn('wt', args, {
-          shell: false,
-          stdio: 'ignore',
-          windowsHide: false,
-        });
+        const child = spawn('wt', viewerArgs, { shell: false, stdio: 'ignore', windowsHide: false });
         child.on('close', resolve);
         child.on('error', reject);
-        setTimeout(resolve, 5000);
+        setTimeout(resolve, 3000);
       });
-      return { provider, status: 'spawned', terminal: 'wt', idle: !taskText };
+      break;
     }
 
     case 'tmux': {
-      const startPath = join(__dirname, 'agent-start.js');
+      const viewerPath = join(__dirname, 'agent-viewer.js');
       const envExports = [
         `CTX_CHAT_URL="${chatUrl}"`,
         `CTX_AGENT_ID="${provider}"`,
         `CTX_AGENT_NAME="${providerName}"`,
       ];
-      if (taskFile) envExports.push(`CTX_TASK_FILE="${taskFile.replace(/\\/g, '/')}"`);
-      const shellCmd = `export ${envExports.join(' ')} && cd "${cwd}" && node "${startPath}"`;
+      if (isLead) envExports.push(`CTX_IS_LEAD="1"`);
+      const shellCmd = `export ${envExports.join(' ')} && cd "${cwd}" && node "${viewerPath}"`;
       const dir = index === 0 ? '-h' : '-v';
       await execFileP('tmux', ['split-window', dir, '-d', 'bash', '-c', shellCmd], { timeout: 10000 });
-      return { provider, status: 'spawned', terminal: 'tmux', idle: !taskText };
+      break;
     }
 
     case 'wezterm': {
-      const startPath = join(__dirname, 'agent-start.js');
+      const viewerPath = join(__dirname, 'agent-viewer.js');
       const envExports = [
         `CTX_CHAT_URL="${chatUrl}"`,
         `CTX_AGENT_ID="${provider}"`,
         `CTX_AGENT_NAME="${providerName}"`,
       ];
-      if (taskFile) envExports.push(`CTX_TASK_FILE="${taskFile.replace(/\\/g, '/')}"`);
+      if (isLead) envExports.push(`CTX_IS_LEAD="1"`);
       const dir = index === 0 ? '--right' : '--bottom';
-      const shellCmd = `export ${envExports.join(' ')} && node "${startPath}"`;
+      const shellCmd = `export ${envExports.join(' ')} && node "${viewerPath}"`;
       await execFileP('wezterm', [
         'cli', 'split-pane', dir, '--cwd', cwd,
         '--', 'bash', '-c', shellCmd,
       ], { timeout: 10000 });
-      return { provider, status: 'spawned', terminal: 'wezterm', idle: !taskText };
+      break;
     }
-
-    default:
-      return { provider, status: 'error', error: `Unknown terminal: ${terminal}` };
   }
+
+  // Agent запускается viewer-ом (agent-viewer.js → agent-start.js)
+  // При закрытии сплита viewer убивает агента автоматически.
+  return { provider, status: 'spawned', terminal };
 }
 
 // ==================== SSE client ====================
@@ -346,9 +376,24 @@ function connectSSE(chatUrl, chat) {
             const msg = JSON.parse(data);
             // agent_connected обрабатывается через onAgentChange callback — skip
             if (msg.type === 'agent_connected') return;
-            // Отображаем в локальном чате (если не от нас самих)
+            // Обновляем статус при завершении
+            if (msg.type === 'done' || msg.type === 'report' || msg.type === 'error') {
+              const agentId = (msg.role || '').toLowerCase();
+              if (agentId && chat.updateStatus) {
+                chat.updateStatus(agentId, msg.type === 'error' ? 'error' : 'done');
+              }
+            }
+            // Отображаем в main chat:
+            // - delegation (задачи от лида)
+            // - synthesis (финальный ответ лида)
+            // - system, done, error
+            // НЕ показываем report — они видны в viewer-ах агентов
             if (msg.agent !== 'User' && msg.agent !== 'System (local)') {
-              chat.post(msg);
+              if (msg.type === 'report' || msg.type === 'opinion') {
+                // Skip — viewer каждого агента показывает свои ответы
+              } else {
+                chat.post(msg);
+              }
             }
           } catch { /* ignore parse errors */ }
         }
@@ -401,13 +446,23 @@ async function main() {
     console.log(`  ${YELLOW}⚠ Мультиплексор не найден (wt/tmux/wezterm). Сплиты недоступны.${RESET}\n`);
   }
 
-  // Step 1: Select lead provider
-  const providerOptions = Object.entries(PROVIDERS).map(([id, p]) => ({
+  // Step 1: Select lead provider (только MCP-провайдеры — лид делегирует через чат)
+  const leadOptions = Object.entries(PROVIDERS)
+    .filter(([, p]) => p.hasMcp)
+    .map(([id, p]) => ({ id, name: p.name, color: p.color, desc: p.hasMcp ? 'MCP ✓' : '' }));
+
+  const allProviderOptions = Object.entries(PROVIDERS).map(([id, p]) => ({
     id, name: p.name, color: p.color,
   }));
 
-  const lead = await selectOne(prompt, 'Выберите Team Lead', providerOptions);
-  console.log(`\n  ${GREEN}✓${RESET} Team Lead: ${lead.color}${lead.name}${RESET}\n`);
+  if (leadOptions.length === 0) {
+    console.log(`  ${YELLOW}⚠ Нет MCP-провайдеров для роли лида.${RESET}`);
+    prompt.close();
+    process.exit(1);
+  }
+
+  const lead = await selectOne(prompt, 'Выберите Team Lead (MCP)', leadOptions);
+  console.log(`\n  ${GREEN}✓${RESET} Team Lead: ${lead.color}${lead.name}${RESET} ★\n`);
 
   // Step 2: Select consilium type
   const consiliumOptions = Object.entries(CONSILIUM_TYPES).map(([id, c]) => ({
@@ -423,7 +478,7 @@ async function main() {
     if (!terminal) {
       console.log(`  ${YELLOW}⚠ Сплиты недоступны без мультиплексора. Переключаюсь на internal.${RESET}\n`);
     } else {
-      teamMembers = await selectMultiple(prompt, 'Выберите команду для консилиума', providerOptions, lead.id);
+      teamMembers = await selectMultiple(prompt, 'Выберите команду для консилиума', allProviderOptions, lead.id);
       console.log(`\n  ${GREEN}✓${RESET} Команда: ${teamMembers.map(m => `${m.color}${m.name}${RESET}`).join(', ')}\n`);
     }
   }
@@ -444,16 +499,10 @@ async function main() {
 
   printBox('Запуск консилиума', summaryItems);
 
-  // Step 5: Enter task (optional — можно запустить idle)
-  console.log();
-  console.log(`  ${BOLD}Введите задачу для команды ${DIM}(Enter = idle режим, задачи через чат)${RESET}:`);
-  const taskText = await prompt.ask(`  ${CYAN}▸${RESET} Задача: `);
-  const isIdle = !taskText.trim();
-  if (isIdle) {
-    console.log(`\n  ${CYAN}◎${RESET} Idle режим — агенты стартуют без задачи, используйте ${GREEN}/task${RESET} для назначения\n`);
-  } else {
-    console.log(`\n  ${GREEN}✓${RESET} Задача: ${taskText}\n`);
-  }
+  // Агенты стартуют в интерактивном режиме (без задачи).
+  // Задачи назначаются через /task после запуска.
+  const isIdle = true;
+  console.log(`\n  ${CYAN}◎${RESET} Агенты стартуют в интерактивном режиме. Используйте ${GREEN}/task${RESET} для назначения задач.\n`);
 
   prompt.close();
 
@@ -462,8 +511,8 @@ async function main() {
   const chatPort = await chatServer.start(0);
   const chatUrl = `http://127.0.0.1:${chatPort}`;
 
-  // Local chat room for display
-  const chat = createChatRoom({ autoScroll: true });
+  // Local chat room for display with lead badge
+  const chat = createChatRoom({ autoScroll: true, leadId: lead.id });
 
   console.log();
   chat.separator('CTX Team Session');
@@ -507,47 +556,22 @@ async function main() {
   const spawnedProviders = [];
   const skippedProviders = [];
 
-  function canSpawnIdle(providerId) {
-    return PROVIDERS[providerId]?.hasMcp === true;
-  }
-
-  function getSpawnTask(providerId) {
-    if (!isIdle) return taskText;
-    // Idle: только MCP-провайдеры могут стартовать без задачи
-    if (canSpawnIdle(providerId)) return '';
-    return null; // skip — не может idle
-  }
-
   if (terminal) {
-    // Lead — первый сплит
-    const leadTask = getSpawnTask(lead.id);
-    if (leadTask === null) {
-      chat.postSystem(`${YELLOW}⚠${RESET} ${lead.color}${lead.name}${RESET} (Lead) — нет MCP, idle невозможен. Пропущен.`);
-      skippedProviders.push({ id: lead.id, name: lead.name, reason: 'no MCP' });
-    } else {
-      try {
-        const result = await spawnSplit(terminal, lead.id, cwd, 0, chatUrl, leadTask);
-        const mode = result.idle ? `${CYAN}idle${RESET}` : `${GREEN}task${RESET}`;
-        chat.postSystem(`${lead.color}${lead.name}${RESET} (Lead) → ${result.terminal} split [${mode}]`);
-        spawnedProviders.push({ id: lead.id, name: lead.name, role: 'lead' });
-      } catch (err) {
-        chat.postError('system', null, `Lead ${lead.name}: ${err.message}`);
-      }
+    // Lead — первый сплит + таб
+    try {
+      const result = await spawnSplit(terminal, lead.id, cwd, 0, chatUrl, true);
+      chat.postSystem(`${lead.color}${lead.name}${RESET} ★ Lead → viewer + CLI tab`);
+      spawnedProviders.push({ id: lead.id, name: lead.name, role: 'lead' });
+    } catch (err) {
+      chat.postError('system', null, `Lead ${lead.name}: ${err.message}`);
     }
 
-    // Team members — дополнительные сплиты
+    // Team members — сплиты + табы
     let splitIdx = spawnedProviders.length;
     for (const member of teamMembers) {
-      const memberTask = getSpawnTask(member.id);
-      if (memberTask === null) {
-        chat.postSystem(`${YELLOW}⚠${RESET} ${member.color}${member.name}${RESET} — нет MCP, idle невозможен. Пропущен.`);
-        skippedProviders.push({ id: member.id, name: member.name, reason: 'no MCP' });
-        continue;
-      }
       try {
-        const result = await spawnSplit(terminal, member.id, cwd, splitIdx, chatUrl, memberTask);
-        const mode = result.idle ? `${CYAN}idle${RESET}` : `${GREEN}task${RESET}`;
-        chat.postSystem(`${member.color}${member.name}${RESET} → ${result.terminal} split [${mode}]`);
+        const result = await spawnSplit(terminal, member.id, cwd, splitIdx, chatUrl);
+        chat.postSystem(`${member.color}${member.name}${RESET} → viewer + CLI tab`);
         spawnedProviders.push({ id: member.id, name: member.name, role: 'member' });
         splitIdx++;
       } catch (err) {
@@ -562,22 +586,30 @@ async function main() {
 
   chat.separator(isIdle ? 'Агенты готовы — ожидают задачи' : 'Агенты работают');
 
-  // Трекинг подключений агентов
+  // Регистрируем агентов для статус-дашборда
+  for (const p of spawnedProviders) {
+    chat.registerAgent(p.id, p.name);
+  }
+  chat.showStatusDashboard();
+
+  // Трекинг подключений и завершений агентов
   const connectedAgents = new Set();
+  const agentStartTimes = new Map();
+
   chatServer.onAgentChange((event, agent) => {
     if (event === 'connected') {
       connectedAgents.add(agent.id);
+      agentStartTimes.set(agent.id, Date.now());
+      chat.updateStatus(agent.id, 'working');
       const color = PROVIDERS[agent.id]?.color || '';
-      chat.postSystem(`${color}${agent.name}${RESET} ✓ подключен, работает над задачей`);
+      chat.postSystem(`${color}${agent.name}${RESET} ◉ подключен, работает...`);
     }
   });
 
   if (isIdle) {
     chat.postSystem('Агенты в idle-режиме. Назначьте задачу через /task или /send.');
-    chat.postSystem('MCP-агенты (Claude, Gemini) будут проверять чат для получения задач.');
   } else {
-    chat.postSystem('Агенты запущены с задачей. Наблюдайте за их работой в сплитах.');
-    chat.postSystem('Результаты от MCP-агентов (Claude, Gemini) появятся в чате автоматически.');
+    chat.postSystem('Агенты запущены. Ответы появятся в чате.');
   }
   printChatHelp();
 
@@ -719,7 +751,7 @@ async function runChatMonitor(chat, chatServer, chatUrl, terminal, spawnedProvid
         return;
       }
 
-      // /task <text> — отправить задачу ВСЕМ агентам через chat server
+      // /task <text> — отправить задачу ЛИДУ (он делегирует команде и синтезирует)
       if (cmd.startsWith('/task ')) {
         const broadcastText = cmd.substring(6).trim();
         if (!broadcastText) {
@@ -728,29 +760,35 @@ async function runChatMonitor(chat, chatServer, chatUrl, terminal, spawnedProvid
           return;
         }
 
-        // Пост через HTTP — MCP-агенты увидят через ctx_chat_history
+        // Находим лида среди запущенных
+        const leadProvider = spawnedProviders.find(p => p.role === 'lead');
+        const leadId = leadProvider?.id || lead.id;
+
+        // Пост через HTTP — задача идёт ТОЛЬКО лиду
         const result = await postToServer(chatUrl, {
           role: 'lead',
           agent: 'User',
           type: 'delegation',
           text: broadcastText,
-          target: 'все агенты',
+          target: leadId,
         });
 
         if (result) {
-          chat.postDelegation('lead', 'User', broadcastText, 'все агенты');
-          chat.postSystem('Задача опубликована на Chat Server — MCP-агенты получат через ctx_chat_history');
+          chat.postDelegation('lead', 'User', broadcastText, `★ ${leadProvider?.name || lead.name}`);
+          chat.postSystem(`Задача отправлена лиду → ${leadProvider?.name || lead.name} делегирует команде`);
         } else {
           chat.postError('system', null, 'Не удалось отправить на Chat Server');
         }
 
-        // Пропущенные non-MCP провайдеры — спавним с задачей
+        // Пропущенные non-MCP — спавним, но они получат задачу через делегацию лида
         if (skippedProviders.length > 0 && terminal) {
-          const toSpawn = [...skippedProviders]; // копируем, т.к. мутируем
+          const toSpawn = [...skippedProviders];
           for (const skipped of toSpawn) {
-            chat.postSystem(`${skipped.name} (no MCP) — запускаю сплит с задачей...`);
+            // Non-MCP агенты не могут получить делегацию от лида через chat
+            // Спавним их напрямую с задачей
+            chat.postSystem(`${skipped.name} (no MCP) — запускаю с задачей напрямую...`);
             try {
-              const res = await spawnSplit(terminal, skipped.id, cwd, spawnedProviders.length, chatUrl, broadcastText);
+              const res = await spawnSplit(terminal, skipped.id, cwd, spawnedProviders.length, chatUrl);
               chat.postSystem(`${PROVIDERS[skipped.id]?.color || ''}${skipped.name}${RESET} → ${res.terminal} split [${GREEN}task${RESET}]`);
               spawnedProviders.push({ id: skipped.id, name: skipped.name, role: 'member' });
               const idx = skippedProviders.findIndex(p => p.id === skipped.id);
@@ -805,7 +843,7 @@ async function runChatMonitor(chat, chatServer, chatUrl, terminal, spawnedProvid
           if (skipped && terminal) {
             chat.postSystem(`${skipped.name} не имеет MCP — запускаю новый сплит с задачей...`);
             try {
-              const result = await spawnSplit(terminal, skipped.id, cwd, spawnedProviders.length, chatUrl, sendTaskText);
+              const result = await spawnSplit(terminal, skipped.id, cwd, spawnedProviders.length, chatUrl);
               chat.postSystem(`${PROVIDERS[skipped.id]?.color || ''}${skipped.name}${RESET} → ${result.terminal} split [${GREEN}task${RESET}]`);
               spawnedProviders.push({ id: skipped.id, name: skipped.name, role: 'member' });
               // Убираем из пропущенных
@@ -877,20 +915,19 @@ async function runChatMonitor(chat, chatServer, chatUrl, terminal, spawnedProvid
         return;
       }
 
-      // Любой другой текст — сообщение от пользователя (в сервер + локальный чат)
+      // Любой текст → задача лиду (как /task)
+      const leadProvider = spawnedProviders.find(p => p.role === 'lead');
+      const leadTarget = leadProvider?.id || lead.id;
+
       await postToServer(chatUrl, {
         role: 'lead',
         agent: 'User',
-        type: 'opinion',
+        type: 'delegation',
         text: cmd,
+        target: leadTarget,
       });
 
-      chat.post({
-        role: 'lead',
-        agent: 'User',
-        type: 'opinion',
-        text: cmd,
-      });
+      chat.postDelegation('lead', 'User', cmd, `★ ${leadProvider?.name || lead.name}`);
 
       askNext();
     });

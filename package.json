@@ -12,8 +12,8 @@
   "exports": {
     ".": "./scripts/ctx-mcp-hub.js",
     "./cli": "./scripts/ctx-cli.js",
-    "./consilium": "./scripts/consilium/round-orchestrator.js",
-    "./config": "./scripts/config/resolve-config.js"
+    "./consilium": "./src/consilium/round-orchestrator.js",
+    "./config": "./src/core/config/resolve-config.js"
   },
   "files": [
     "scripts/",

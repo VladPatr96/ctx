@@ -30,7 +30,7 @@ function restoreEnv() {
 async function loadModule() {
   // Force fresh import each time by using query param
   const id = Date.now() + Math.random();
-  return import(`../scripts/orchestrator/worktree-manager.js?v=${id}`);
+  return import(`../src/orchestrator/worktree-manager.js?v=${id}`);
 }
 
 // ==================== Tests ====================

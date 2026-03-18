@@ -13,9 +13,9 @@
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { existsSync, readFileSync, writeFileSync, unlinkSync } from 'node:fs';
-import { recordUsage, getCostSummary, getCostsByProvider, clearCostData } from './cost-tracking/index.js';
-import { getRecommendations } from './cost-tracking/optimization-engine.js';
-import { setBudget, setProviderBudget, checkBudget, checkAllBudgets } from './cost-tracking/budget-alerts.js';
+import { recordUsage, getCostSummary, getCostsByProvider, clearCostData } from '../src/cost-tracking/index.js';
+import { getRecommendations } from '../src/cost-tracking/optimization-engine.js';
+import { setBudget, setProviderBudget, checkBudget, checkAllBudgets } from '../src/cost-tracking/budget-alerts.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);

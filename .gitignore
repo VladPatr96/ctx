@@ -38,3 +38,23 @@ agents/generated/
 .claude_settings.json
 .security-key
 logs/security/
+
+# Coverage reports (CI artifact)
+coverage/
+
+# Runtime logs
+logs/
+
+# Test directories
+.test-opencode-skills/
+
+# Local user config
+ctx.config.json
+
+# OS/IDE artifacts
+Microsoft/
+nul
+
+# Junk from broken commands
+-p/
+project_index.json
