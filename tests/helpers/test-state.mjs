@@ -6,7 +6,7 @@
  */
 
 import { join, relative } from 'node:path';
-import { readJsonFile, writeJsonAtomic } from '../core/utils/state-io.js';
+import { readJsonFile, writeJsonAtomic } from '../../src/core/utils/state-io.js';
 
 function getStateFile() {
   const dataDir = process.env.CTX_DATA_DIR || join(process.cwd(), '.data');

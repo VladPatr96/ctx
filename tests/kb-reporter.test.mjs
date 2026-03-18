@@ -11,7 +11,7 @@ test('testKey — normalizes Windows paths and builds stable key', async () => {
   const origRoot = process.env.CLAUDE_PLUGIN_ROOT;
   process.env.CLAUDE_PLUGIN_ROOT = 'D:/projects/myapp';
   try {
-    const { testKey } = await import(`../scripts/testing/test-state.mjs?v=${Date.now()}a`);
+    const { testKey } = await import(`./helpers/test-state.mjs?v=${Date.now()}a`);
     const key = testKey('D:\\projects\\myapp\\tests\\foo.test.mjs', 'my test');
     assert.equal(key, 'tests/foo.test.mjs::my test');
   } finally {
@@ -25,7 +25,7 @@ test('testKey — handles relative paths', async () => {
   const cwd = process.cwd();
   process.env.CLAUDE_PLUGIN_ROOT = cwd;
   try {
-    const { testKey } = await import(`../scripts/testing/test-state.mjs?v=${Date.now()}b`);
+    const { testKey } = await import(`./helpers/test-state.mjs?v=${Date.now()}b`);
     const key = testKey(join(cwd, 'tests', 'bar.test.mjs'), 'another test');
     assert.equal(key, 'tests/bar.test.mjs::another test');
   } finally {
@@ -35,7 +35,7 @@ test('testKey — handles relative paths', async () => {
 });
 
 test('diffResults — classifies newFailures correctly', async () => {
-  const { diffResults } = await import(`../scripts/testing/test-state.mjs?v=${Date.now()}c`);
+  const { diffResults } = await import(`./helpers/test-state.mjs?v=${Date.now()}c`);
   const previous = { lastRun: null, lastCommit: null, tests: {} };
   const failures = [{ key: 'a::test1', name: 'test1', file: 'a', error: 'err' }];
   const passes = [];
@@ -47,7 +47,7 @@ test('diffResults — classifies newFailures correctly', async () => {
 });
 
 test('diffResults — classifies fixedTests correctly', async () => {
-  const { diffResults } = await import(`../scripts/testing/test-state.mjs?v=${Date.now()}d`);
+  const { diffResults } = await import(`./helpers/test-state.mjs?v=${Date.now()}d`);
   const previous = {
     lastRun: '2026-01-01', lastCommit: 'abc',
     tests: {
@@ -65,7 +65,7 @@ test('diffResults — classifies fixedTests correctly', async () => {
 });
 
 test('diffResults — classifies persistentFailures correctly', async () => {
-  const { diffResults } = await import(`../scripts/testing/test-state.mjs?v=${Date.now()}e`);
+  const { diffResults } = await import(`./helpers/test-state.mjs?v=${Date.now()}e`);
   const previous = {
     lastRun: '2026-01-01', lastCommit: 'abc',
     tests: {
@@ -84,14 +84,14 @@ test('diffResults — classifies persistentFailures correctly', async () => {
 // ==================== solution-capture tests ====================
 
 test('inferSourceFile — maps test file to source glob', async () => {
-  const { inferSourceFile } = await import(`../scripts/testing/solution-capture.mjs?v=${Date.now()}f`);
+  const { inferSourceFile } = await import(`./helpers/solution-capture.mjs?v=${Date.now()}f`);
   assert.equal(inferSourceFile('tests/knowledge-store.test.mjs'), 'scripts/**/knowledge-store.{js,mjs}');
   assert.equal(inferSourceFile('tests/shell-utils.test.mjs'), 'scripts/**/shell-utils.{js,mjs}');
   assert.equal(inferSourceFile('tests/worktree-manager.test.mjs'), 'scripts/**/worktree-manager.{js,mjs}');
 });
 
 test('inferSourceFile — returns null for empty basename', async () => {
-  const { inferSourceFile } = await import(`../scripts/testing/solution-capture.mjs?v=${Date.now()}g`);
+  const { inferSourceFile } = await import(`./helpers/solution-capture.mjs?v=${Date.now()}g`);
   assert.equal(inferSourceFile('.test.mjs'), null);
 });
 
@@ -110,7 +110,7 @@ test('saveTestFailure — creates correctly formatted KB entry', async () => {
   };
 
   // Monkey-patch createKnowledgeStore for this test
-  const bridge = await import(`../scripts/testing/test-kb-bridge.mjs?v=${Date.now()}h`);
+  const bridge = await import(`./helpers/test-kb-bridge.mjs?v=${Date.now()}h`);
 
   // We can't easily inject the mock, so test the entry format expectations
   // by checking the module's behavior with a real (temporary) KB
@@ -119,7 +119,7 @@ test('saveTestFailure — creates correctly formatted KB entry', async () => {
   process.env.CTX_KB_PATH = join(tmpDir, 'knowledge.json');
   try {
     // Re-init with temp path
-    const freshBridge = await import(`../scripts/testing/test-kb-bridge.mjs?v=${Date.now()}i`);
+    const freshBridge = await import(`./helpers/test-kb-bridge.mjs?v=${Date.now()}i`);
     const kb = await freshBridge.initKB();
     if (!kb) {
       // KB unavailable — skip gracefully
@@ -153,7 +153,7 @@ test('saveTestFix — creates correctly formatted solution entry', async () => {
   const origKbPath = process.env.CTX_KB_PATH;
   process.env.CTX_KB_PATH = join(tmpDir, 'knowledge.json');
   try {
-    const bridge = await import(`../scripts/testing/test-kb-bridge.mjs?v=${Date.now()}j`);
+    const bridge = await import(`./helpers/test-kb-bridge.mjs?v=${Date.now()}j`);
     const kb = await bridge.initKB();
     if (!kb) return;
 
@@ -194,7 +194,7 @@ test('integration — state file persists failures across calls', async () => {
 
   try {
     const { loadPreviousResults, saveCurrentResults, diffResults, testKey }
-      = await import(`../scripts/testing/test-state.mjs?v=${Date.now()}int`);
+      = await import(`./helpers/test-state.mjs?v=${Date.now()}int`);
 
     // Simulate first run with a failure
     const key = testKey(join(tmpDir, 'tests', 'foo.test.mjs'), 'broken test');

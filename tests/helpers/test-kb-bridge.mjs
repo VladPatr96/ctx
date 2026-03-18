@@ -6,7 +6,7 @@
  */
 
 import { basename } from 'node:path';
-import { createKnowledgeStore } from '../knowledge/kb-json-fallback.js';
+import { createKnowledgeStore } from '../../src/knowledge/kb-json-fallback.js';
 
 let store = null;
 let projectName = null;

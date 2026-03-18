@@ -6,7 +6,7 @@
  */
 
 import { basename } from 'node:path';
-import { runCommand } from '../core/utils/shell.js';
+import { runCommand } from '../../src/core/utils/shell.js';
 
 const MAX_DIFF_LENGTH = 2000;
 
