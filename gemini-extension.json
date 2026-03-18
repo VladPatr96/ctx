@@ -1,7 +1,7 @@
 {
   "name": "ctx",
   "version": "0.1.0",
-  "description": "CTX — unified multi-provider pipeline for project orchestration",
+  "description": "CTX — Universal AI CLI plugin. Multi-provider orchestration, consilium, knowledge base, and adaptive routing.",
   "mcpServers": {
     "ctx": {
       "command": "node",

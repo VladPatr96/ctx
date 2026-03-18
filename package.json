@@ -1,7 +1,7 @@
 {
   "name": "ctx-plugin",
   "version": "0.1.0",
-  "description": "Complex Task eXecution (ctx) — Multi-provider AI orchestration with consilium (CBDP), knowledge base, and adaptive routing",
+  "description": "CTX — Universal plugin for AI CLI systems (Claude Code, Gemini CLI, OpenCode, Codex CLI). Multi-provider orchestration with consilium (CBDP), knowledge base, and adaptive routing",
   "type": "module",
   "main": "scripts/ctx-mcp-hub.js",
   "bin": {
@@ -43,7 +43,11 @@
     "ai",
     "multi-provider",
     "consilium",
+    "ai-cli",
     "claude-code",
+    "gemini-cli",
+    "opencode",
+    "codex-cli",
     "mcp",
     "orchestration",
     "cbdp"

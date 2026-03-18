@@ -1,6 +1,7 @@
 # ctx — Ваш AI-совет директоров
 
-> Мульти-провайдерная AI-оркестрация с анонимной deliberation, trust scoring и claim graphs.
+> Универсальный плагин для AI CLI систем (Claude Code, Gemini CLI, OpenCode, Codex CLI).
+> Мульти-провайдерная оркестрация с анонимной deliberation, trust scoring и claim graphs.
 
 [![npm](https://img.shields.io/npm/v/ctx-plugin)](https://www.npmjs.com/package/ctx-plugin)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D20-brightgreen)](https://nodejs.org/)
@@ -183,22 +184,26 @@ finalScore = (1 - α - ε) * staticScore + α * evalScore + ε * exploreBonus
 ### Структура проекта
 
 ```
-scripts/
-  ctx-mcp-hub.js               # MCP Hub сервер
-  ctx-cli.js                    # CLI обёртка
-  config/resolve-config.js      # Цепочка резолвинга конфигурации
-  cli/init.js                   # Команда ctx init
-  providers/                    # Реестр провайдеров + роутинг
-  tools/                        # MCP tool handlers по доменам
-  evaluation/                   # Eval store + адаптивный роутинг
-  consilium/                    # Движок CBDP
+src/                            # Модульная библиотека (16 доменов)
+  core/                         # MCP Hub, CLI, конфиг, cache, storage
+  providers/                    # Claude, Gemini, OpenCode, Codex + router
+  consilium/                    # Движок CBDP: advisors, claims, раунды
+  contracts/                    # 10 Zod-схем по доменам
+  orchestrator/                 # Agent runner, dev pipeline, worktrees
   knowledge/                    # SQLite FTS5 база знаний
-  storage/                      # JSON/SQLite адаптеры хранения
+  evaluation/                   # Адаптивный роутинг + anomaly detection
+  cost-tracking/                # Budget alerts, pricing, optimization
+  dashboard/                    # HTTP + SSE сервер
+  runtime/                      # State machines (task + step)
+  setup/                        # Wizard, provider detection/probe
+  tools/                        # 51 MCP tool handler по доменам
 
-skills/                         # Определения скиллов (SKILL.md)
+scripts/                        # Entry points и CLI утилиты
+bin/                            # Platform-specific скрипты (sh, ps1, cmd)
+skills/                         # 16 скиллов (SKILL.md — универсальный формат)
 agents/                         # Определения AI-агентов
 ctx-app/                        # Десктоп-приложение (Electron + React)
-tests/                          # Node.js тесты
+tests/                          # 64 теста (419 pass, 95% rate)
 ```
 
 </details>
