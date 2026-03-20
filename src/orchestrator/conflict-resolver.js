@@ -140,7 +140,8 @@ export function parseConflictResponse(raw) {
     if (!valid) return null;
 
     return { files: parsed.files, reasoning: parsed.reasoning || '' };
-  } catch {
+  } catch (err) {
+    console.warn('[conflict-resolver] Failed to parse AI response:', err.message);
     return null;
   }
 }

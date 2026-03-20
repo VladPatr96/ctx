@@ -21,7 +21,7 @@ Search past solutions across all projects. Uses local KB first, gh CLI as fallba
 ### 1. Search local Knowledge Base (FTS5)
 
 ```bash
-node "${CLAUDE_PLUGIN_ROOT:-$(dirname "$(dirname "$0")")}/scripts/knowledge/kb-verify.js" search "$ARGUMENTS"
+node "${CLAUDE_PLUGIN_ROOT:-$(dirname "$(dirname "$0")")}/src/knowledge/kb-verify.js" search "$ARGUMENTS"
 ```
 
 ### 2. If KB unavailable or empty — fallback to gh CLI

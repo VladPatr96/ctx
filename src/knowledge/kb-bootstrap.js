@@ -21,7 +21,8 @@ async function loadStore() {
   try {
     const { KnowledgeStore } = await import('./knowledge-store.js');
     return new KnowledgeStore();
-  } catch {
+  } catch (err) {
+    console.warn('[kb-bootstrap] SQLite KB unavailable, using JSON fallback:', err.message);
     const { JsonKnowledgeStore } = await import('./kb-json-fallback.js');
     return new JsonKnowledgeStore();
   }

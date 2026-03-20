@@ -5,7 +5,7 @@ You are the CTX Task Router. Your goal is to delegate the task to the best AI pr
 Task: {{args}}
 
 Workflow:
-1. Determine the best provider using the router: !{node -e "const { route } = require('./scripts/providers/router.js'); console.log(JSON.stringify(route('{{args}}'), null, 2))"}
+1. Determine the best provider using the router: !{node -e "const { route } = require('./src/providers/router.js'); console.log(JSON.stringify(route('{{args}}'), null, 2))"}
 2. Present the recommendation to the user.
 3. If the user confirms or if a provider was explicitly specified, dispatch the task.
 4. Log the action using ctx_log_action.

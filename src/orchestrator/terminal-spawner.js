@@ -13,6 +13,7 @@ import { execFile, spawn } from 'node:child_process';
 import { promisify } from 'node:util';
 import { writeFileSync } from 'node:fs';
 import { resolve as resolvePath } from 'node:path';
+import { shellEscape } from '../core/utils/shell.js';
 
 const execFileP = promisify(execFile);
 const isWin = process.platform === 'win32';
@@ -34,15 +35,30 @@ const PROVIDER_COMMANDS_TUI = {
  * @param {string} model — model to use
  * @returns {string} shell command
  */
+/**
+ * Validate model parameter to prevent shell injection.
+ * Model IDs should only contain alphanumeric chars, dots, hyphens, underscores, colons, slashes.
+ */
+function validateModel(model) {
+  if (!model) return null;
+  const safe = String(model);
+  if (!/^[a-zA-Z0-9_.:\-/]+$/.test(safe)) {
+    throw new Error(`Invalid model ID: "${safe}" — contains unsafe characters`);
+  }
+  return safe;
+}
+
 const PROVIDER_COMMANDS_HEADLESS = {
   claude:   (promptFile, model) => {
     let cmd = `claude -p "$(cat '${promptFile}')" --output-format text --dangerously-skip-permissions`;
-    if (model) cmd += ` --model ${model}`;
+    const safeModel = validateModel(model);
+    if (safeModel) cmd += ` --model ${safeModel}`;
     return cmd;
   },
   gemini:   (promptFile, model) => {
     let cmd = `gemini -p "$(cat '${promptFile}')" -o text`;
-    if (model) cmd += ` -m ${model}`;
+    const safeModel = validateModel(model);
+    if (safeModel) cmd += ` -m ${safeModel}`;
     return cmd;
   },
   codex:    (promptFile, model) => {
@@ -50,7 +66,8 @@ const PROVIDER_COMMANDS_HEADLESS = {
   },
   opencode: (promptFile, model) => {
     let cmd = `opencode run "$(cat '${promptFile}')"`;
-    if (model) cmd += ` --model ${model}`;
+    const safeModel = validateModel(model);
+    if (safeModel) cmd += ` --model ${safeModel}`;
     return cmd;
   },
 };
@@ -211,19 +228,20 @@ async function spawnWt(agents, opts = {}) {
         const absLogFile = logFile ? resolvePath(agentCwd, logFile) : null;
 
         // Build PowerShell-native headless command per provider
+        const safeModel = model ? validateModel(model) : null;
         let cliPsCmd;
         switch (provider) {
           case 'claude':
-            cliPsCmd = `claude -p $prompt --output-format text --dangerously-skip-permissions${model ? ` --model ${model}` : ''}`;
+            cliPsCmd = `claude -p $prompt --output-format text --dangerously-skip-permissions${safeModel ? ` --model ${safeModel}` : ''}`;
             break;
           case 'gemini':
-            cliPsCmd = `gemini -p $prompt -o text${model ? ` -m ${model}` : ''}`;
+            cliPsCmd = `gemini -p $prompt -o text${safeModel ? ` -m ${safeModel}` : ''}`;
             break;
           case 'codex':
             cliPsCmd = `codex exec --ephemeral --skip-git-repo-check $prompt`;
             break;
           case 'opencode':
-            cliPsCmd = `opencode run $prompt${model ? ` --model ${model}` : ''}`;
+            cliPsCmd = `opencode run $prompt${safeModel ? ` --model ${safeModel}` : ''}`;
             break;
           default:
             results.push({ agentId: paneName, provider, status: 'error', error: `No headless command for ${provider}`, terminal: 'wt' });
@@ -245,7 +263,8 @@ async function spawnWt(agents, opts = {}) {
       } else {
         // TUI mode
         const { shellCmd } = buildProviderCommand(provider, task, agentCwd);
-        fullCmd = `wt -w 0 sp ${direction} -d "${winCwd}" powershell -ExecutionPolicy Bypass -NoExit -Command "${shellCmd}"`;
+        const escapedCmd = shellCmd.replace(/"/g, '`"');
+        fullCmd = `wt -w 0 sp ${direction} -d "${winCwd}" powershell -ExecutionPolicy Bypass -NoExit -Command "${escapedCmd}"`;
       }
 
       await new Promise((resolve, reject) => {

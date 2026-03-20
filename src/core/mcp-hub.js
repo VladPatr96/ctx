@@ -109,7 +109,7 @@ try {
   if (knowledgeStore) {
     kbSync = new KbSync();
     // Background pull at startup (non-blocking)
-    kbSync.pull().catch(() => {});
+    kbSync.pull().catch(err => console.warn('[mcp-hub] KB background pull failed:', err.message));
   }
 } catch {
   // KB unavailable — tools will report "KB disabled"

@@ -148,8 +148,8 @@ export async function executeAgent(agentId, opts = {}) {
     if (cleanup) {
       try {
         await removeWorktree(agentId, { force: true });
-      } catch {
-        // non-fatal: worktree cleanup failure shouldn't fail the execution
+      } catch (cleanupErr) {
+        console.warn(`[executor] Worktree cleanup failed for ${agentId}:`, cleanupErr.message);
       }
     }
 
@@ -174,8 +174,8 @@ export async function executeAgent(agentId, opts = {}) {
     if (cleanup && worktreePath) {
       try {
         await removeWorktree(agentId, { force: true });
-      } catch {
-        // non-fatal
+      } catch (cleanupErr) {
+        console.warn(`[executor] Worktree cleanup failed for ${agentId}:`, cleanupErr.message);
       }
     }
 

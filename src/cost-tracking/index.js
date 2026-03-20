@@ -12,7 +12,7 @@
  * - Предоставляет unified API для всех операций с затратами
  */
 
-import { calculateCost, calculateCostBreakdown } from './cost-calculator.js';
+import { calculateCost } from './cost-calculator.js';
 import { createCostStore } from './cost-store.js';
 import { checkBudget } from './budget-alerts.js';
 
