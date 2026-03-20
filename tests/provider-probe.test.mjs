@@ -66,8 +66,8 @@ function restoreEnv(original) {
 test('probeProviders returns canonical onboarding probes', async () => {
   const sandbox = createSandbox();
   try {
-    mkdirSync(join(sandbox.env.HOME, '.config', 'gemini-cli', 'skills', 'ctx-gemini'), { recursive: true });
-    writeFileSync(join(sandbox.env.HOME, '.config', 'gemini-cli', 'skills', 'ctx-gemini', 'SKILL.md'), '# gemini');
+    mkdirSync(join(sandbox.env.HOME, '.config', 'gemini-cli', 'skills', 'ctx'), { recursive: true });
+    writeFileSync(join(sandbox.env.HOME, '.config', 'gemini-cli', 'skills', 'ctx', 'SKILL.md'), '# gemini');
 
     const byId = await withSandboxEnv(sandbox.env, async () => {
       const id = Date.now() + Math.random();
@@ -114,7 +114,6 @@ test('probeProvider honors explicit OpenCode skills override for ready state', a
     const overrideSkillsDir = join(sandbox.root, 'opencode-skills');
     mkdirSync(join(overrideSkillsDir, 'ctx'), { recursive: true });
     writeFileSync(join(overrideSkillsDir, 'ctx', 'SKILL.md'), '# ctx');
-    writeFileSync(join(overrideSkillsDir, 'update-ctx-skill.js'), '// update');
     sandbox.env.OPENCODE_API_KEY = 'x'.repeat(24);
     sandbox.env.CTX_OPENCODE_SKILLS_DIR = overrideSkillsDir;
 

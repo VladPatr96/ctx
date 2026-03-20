@@ -45,6 +45,5 @@ export function hasOpenCodeCtxInstall({
 } = {}) {
   return getOpenCodeSkillsDirCandidates(env).some((skillsDir) => (
     exists(join(skillsDir, 'ctx', 'SKILL.md'))
-    && exists(join(skillsDir, 'update-ctx-skill.js'))
   ));
 }

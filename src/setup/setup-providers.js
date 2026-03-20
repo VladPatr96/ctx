@@ -231,6 +231,16 @@ function install(options = {}) {
     process.exit(1);
   }
 
+  // 1b. Verify required files exist
+  if (!existsSync(SKILL_SOURCE)) {
+    console.error(`  ✗ Skills template not found: ${SKILL_SOURCE}`);
+    process.exit(1);
+  }
+  if (!existsSync(MCP_HUB_SCRIPT)) {
+    console.error(`  ✗ MCP hub not found: ${MCP_HUB_SCRIPT}`);
+    process.exit(1);
+  }
+
   // 2. Detect providers
   const detected = detectProviders();
   const available = detected.filter((p) => p.available && PROVIDERS[p.id]);

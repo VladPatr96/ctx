@@ -56,7 +56,7 @@ function isCtxConfigured(providerId) {
         || existsSync(join(ROOT_DIR, 'skills', 'ctx', 'SKILL.md'))
         || existsSync(join(ROOT_DIR, 'skills', 'ctx-universal-full', 'SKILL.md'));
     case 'gemini':
-      return existsSync(join(resolveHomeDir(), '.config', 'gemini-cli', 'skills', 'ctx-gemini', 'SKILL.md'));
+      return existsSync(join(resolveHomeDir(), '.config', 'gemini-cli', 'skills', 'ctx', 'SKILL.md'));
     case 'opencode':
       return hasOpenCodeCtxInstall();
     default:

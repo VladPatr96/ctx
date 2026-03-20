@@ -76,18 +76,19 @@ test('findOpenCodeSkillsDir returns the first existing candidate directory', () 
   }
 });
 
-test('hasOpenCodeCtxInstall detects ctx installation only when skill and update script exist', () => {
+test('hasOpenCodeCtxInstall detects ctx installation when SKILL.md exists', () => {
   const sandbox = createSandbox();
   try {
     const skillsDir = join(sandbox.root, 'override-skills');
     mkdirSync(join(skillsDir, 'ctx'), { recursive: true });
-    writeFileSync(join(skillsDir, 'ctx', 'SKILL.md'), '# ctx');
 
+    // No SKILL.md yet → not installed
     assert.equal(hasOpenCodeCtxInstall({
       env: { ...sandbox.env, CTX_OPENCODE_SKILLS_DIR: skillsDir },
     }), false);
 
-    writeFileSync(join(skillsDir, 'update-ctx-skill.js'), '// update');
+    // Add SKILL.md → installed
+    writeFileSync(join(skillsDir, 'ctx', 'SKILL.md'), '# ctx');
 
     assert.equal(hasOpenCodeCtxInstall({
       env: { ...sandbox.env, CTX_OPENCODE_SKILLS_DIR: skillsDir },
