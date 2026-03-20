@@ -80,10 +80,11 @@ const PROVIDER_COMMANDS_HEADLESS = {
   },
   // opencode run: non-interactive mode
   // -m: model as provider/model
+  // Default to opencode-go/minimax-m2.5: default zai provider has 429 balance
+  // issues causing infinite retry loop (diagnosed 2026-03-20)
   opencode: (promptFile, model) => {
-    let cmd = `opencode run`;
-    const safeModel = validateModel(model);
-    if (safeModel) cmd += ` -m ${safeModel}`;
+    const safeModel = validateModel(model) || 'opencode-go/minimax-m2.5';
+    let cmd = `opencode run -m ${safeModel}`;
     cmd += ` "$(cat '${promptFile}')"`;
     return cmd;
   },
@@ -260,7 +261,7 @@ async function spawnWt(agents, opts = {}) {
             cliPsCmd = `codex exec --ephemeral --skip-git-repo-check${safeModel ? ` -m ${safeModel}` : ''} $prompt`;
             break;
           case 'opencode':
-            cliPsCmd = `opencode run${safeModel ? ` -m ${safeModel}` : ''} $prompt`;
+            cliPsCmd = `opencode run -m ${safeModel || 'opencode-go/minimax-m2.5'} $prompt`;
             break;
           default:
             results.push({ agentId: paneName, provider, status: 'error', error: `No headless command for ${provider}`, terminal: 'wt' });
