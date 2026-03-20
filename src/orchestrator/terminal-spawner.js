@@ -49,25 +49,42 @@ function validateModel(model) {
 }
 
 const PROVIDER_COMMANDS_HEADLESS = {
+  // claude -p: non-interactive mode (print & exit)
+  // --output-format text: plain text output
+  // --model: sonnet, opus, or full model ID
   claude:   (promptFile, model) => {
     let cmd = `claude -p "$(cat '${promptFile}')" --output-format text --dangerously-skip-permissions`;
     const safeModel = validateModel(model);
     if (safeModel) cmd += ` --model ${safeModel}`;
     return cmd;
   },
+  // gemini: positional prompt arg for non-interactive mode (no -p flag)
+  // --output-format: text/json/stream-json
+  // -m: model selection
   gemini:   (promptFile, model) => {
-    let cmd = `gemini -p "$(cat '${promptFile}')" -o text`;
+    let cmd = `gemini --output-format text`;
     const safeModel = validateModel(model);
     if (safeModel) cmd += ` -m ${safeModel}`;
+    cmd += ` "$(cat '${promptFile}')"`;
     return cmd;
   },
+  // codex exec: non-interactive mode
+  // --ephemeral: no session persistence
+  // -m: model selection
   codex:    (promptFile, model) => {
-    return `codex exec --ephemeral --skip-git-repo-check "$(cat '${promptFile}')"`;
-  },
-  opencode: (promptFile, model) => {
-    let cmd = `opencode run "$(cat '${promptFile}')"`;
+    let cmd = `codex exec --ephemeral --skip-git-repo-check`;
     const safeModel = validateModel(model);
-    if (safeModel) cmd += ` --model ${safeModel}`;
+    if (safeModel) cmd += ` -m ${safeModel}`;
+    cmd += ` "$(cat '${promptFile}')"`;
+    return cmd;
+  },
+  // opencode run: non-interactive mode
+  // -m: model as provider/model
+  opencode: (promptFile, model) => {
+    let cmd = `opencode run`;
+    const safeModel = validateModel(model);
+    if (safeModel) cmd += ` -m ${safeModel}`;
+    cmd += ` "$(cat '${promptFile}')"`;
     return cmd;
   },
 };
@@ -228,6 +245,7 @@ async function spawnWt(agents, opts = {}) {
         const absLogFile = logFile ? resolvePath(agentCwd, logFile) : null;
 
         // Build PowerShell-native headless command per provider
+        // Flags match official CLI docs (fetched 2026-03-20)
         const safeModel = model ? validateModel(model) : null;
         let cliPsCmd;
         switch (provider) {
@@ -235,13 +253,14 @@ async function spawnWt(agents, opts = {}) {
             cliPsCmd = `claude -p $prompt --output-format text --dangerously-skip-permissions${safeModel ? ` --model ${safeModel}` : ''}`;
             break;
           case 'gemini':
-            cliPsCmd = `gemini -p $prompt -o text${safeModel ? ` -m ${safeModel}` : ''}`;
+            // gemini uses positional prompt, --output-format (not -o), -m for model
+            cliPsCmd = `gemini --output-format text${safeModel ? ` -m ${safeModel}` : ''} $prompt`;
             break;
           case 'codex':
-            cliPsCmd = `codex exec --ephemeral --skip-git-repo-check $prompt`;
+            cliPsCmd = `codex exec --ephemeral --skip-git-repo-check${safeModel ? ` -m ${safeModel}` : ''} $prompt`;
             break;
           case 'opencode':
-            cliPsCmd = `opencode run $prompt${safeModel ? ` --model ${safeModel}` : ''}`;
+            cliPsCmd = `opencode run${safeModel ? ` -m ${safeModel}` : ''} $prompt`;
             break;
           default:
             results.push({ agentId: paneName, provider, status: 'error', error: `No headless command for ${provider}`, terminal: 'wt' });
