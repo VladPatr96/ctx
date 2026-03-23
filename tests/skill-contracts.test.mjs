@@ -170,3 +170,28 @@ test('registerSkillTools exposes provider-health MCP tool through shared resolve
     sandbox.cleanup();
   }
 });
+
+test('registerSkillTools stays silent on stdout by default during MCP registration', () => {
+  const sandbox = createSkillsSandbox();
+  const server = {
+    registerTool() {}
+  };
+  const previousRegistryFile = process.env.CTX_SKILL_REGISTRY_FILE;
+  const previousConsoleLog = console.log;
+  const logCalls = [];
+
+  process.env.CTX_SKILL_REGISTRY_FILE = join(sandbox.root, 'skill-registry.json');
+  console.log = (...args) => {
+    logCalls.push(args);
+  };
+
+  try {
+    registerSkillTools(server);
+    assert.deepEqual(logCalls, []);
+  } finally {
+    console.log = previousConsoleLog;
+    if (previousRegistryFile === undefined) delete process.env.CTX_SKILL_REGISTRY_FILE;
+    else process.env.CTX_SKILL_REGISTRY_FILE = previousRegistryFile;
+    sandbox.cleanup();
+  }
+});

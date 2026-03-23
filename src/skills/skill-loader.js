@@ -10,6 +10,17 @@ import { loadSkillCommandHandlerByName } from './skill-contracts.js';
 
 const SKILL_TOOL_INPUT_SCHEMA = z.object({}).passthrough();
 
+function emitSkillLog(logger, message) {
+  if (!logger) return;
+  if (typeof logger === 'function') {
+    logger(message);
+    return;
+  }
+  if (typeof logger.log === 'function') {
+    logger.log(message);
+  }
+}
+
 /**
  * Execute skill command
  */
@@ -21,15 +32,15 @@ async function executeSkillCommand(skillName, command, params) {
 /**
  * Register skill-based MCP tools
  */
-export function registerSkillTools(server) {
+export function registerSkillTools(server, { logger = null } = {}) {
   // Sync registry on startup
-  console.log('[skill-loader] Syncing skill registry...');
-  const registry = syncRegistry();
-  console.log(`[skill-loader] Found ${registry.size} skills`);
+  emitSkillLog(logger, '[skill-loader] Syncing skill registry...');
+  const registry = syncRegistry({ logger });
+  emitSkillLog(logger, `[skill-loader] Found ${registry.size} skills`);
   
   // Generate MCP tools from skills
   const tools = generateMCPTools();
-  console.log(`[skill-loader] Generated ${tools.length} MCP tools from skills`);
+  emitSkillLog(logger, `[skill-loader] Generated ${tools.length} MCP tools from skills`);
   
   // Register each tool
   for (const tool of tools) {
@@ -62,7 +73,7 @@ export function registerSkillTools(server) {
       }
     );
     
-    console.log(`[skill-loader] ✓ Registered MCP tool: ${toolName}`);
+    emitSkillLog(logger, `[skill-loader] Registered MCP tool: ${toolName}`);
   }
   
   return tools;

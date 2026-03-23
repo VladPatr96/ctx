@@ -14,6 +14,17 @@ const __dirname = dirname(__filename);
 const DEFAULT_SKILLS_DIR = join(__dirname, '..', '..', 'skills');
 const DEFAULT_REGISTRY_FILE = join(__dirname, '..', '..', '.data', 'skill-registry.json');
 
+function emitRegistryLog(logger, message) {
+  if (!logger) return;
+  if (typeof logger === 'function') {
+    logger(message);
+    return;
+  }
+  if (typeof logger.log === 'function') {
+    logger.log(message);
+  }
+}
+
 export function getSkillsDir() {
   return process.env.CTX_SKILLS_DIR || DEFAULT_SKILLS_DIR;
 }
@@ -166,14 +177,18 @@ export function saveRegistry(registry, registryFile = getRegistryFile()) {
 /**
  * Sync discovered skills with registry
  */
-export function syncRegistry({ skillsDir = getSkillsDir(), registryFile = getRegistryFile() } = {}) {
+export function syncRegistry({
+  skillsDir = getSkillsDir(),
+  registryFile = getRegistryFile(),
+  logger = null,
+} = {}) {
   const discovered = discoverSkills(skillsDir);
   const registry = loadRegistry(registryFile);
   
   // Add new skills
   for (const [name, skill] of discovered) {
     if (!registry.has(name)) {
-      console.log(`[skill-registry] ✓ New skill discovered: ${name}`);
+      emitRegistryLog(logger, `[skill-registry] New skill discovered: ${name}`);
       registry.set(name, skill);
     } else {
       // Update metadata
@@ -185,7 +200,7 @@ export function syncRegistry({ skillsDir = getSkillsDir(), registryFile = getReg
   // Mark removed skills as disabled
   for (const [name, skill] of registry) {
     if (!discovered.has(name)) {
-      console.log(`[skill-registry] ⚠ Skill removed: ${name}`);
+      emitRegistryLog(logger, `[skill-registry] Skill removed: ${name}`);
       skill.enabled = false;
     }
   }

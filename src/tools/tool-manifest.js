@@ -20,7 +20,7 @@ export function listMcpTools({ rootDir = process.cwd(), registryFile } = {}) {
           name,
           source: skillTool ? 'skill' : 'built_in',
           description: config?.description || '',
-          inputType: config?.inputSchema?.type || 'object',
+          inputType: typeof config?.inputSchema?.type === 'string' ? config.inputSchema.type : 'object',
           skill: skillTool?.skill || null,
           category: skillTool?.category || null,
         });
