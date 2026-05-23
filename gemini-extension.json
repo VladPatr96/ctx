@@ -5,7 +5,8 @@
   "mcpServers": {
     "ctx": {
       "command": "node",
-      "args": ["scripts/ctx-mcp-hub.js"]
+      "args": ["${extensionPath}${/}scripts${/}ctx-mcp-hub.js"],
+      "cwd": "${extensionPath}"
     }
   }
 }
