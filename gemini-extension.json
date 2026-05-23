@@ -1,6 +1,6 @@
 {
   "name": "ctx",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "CTX — Universal AI CLI plugin. Multi-provider orchestration, consilium, knowledge base, and adaptive routing.",
   "mcpServers": {
     "ctx": {

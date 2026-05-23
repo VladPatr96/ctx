@@ -1,6 +1,6 @@
 {
   "name": "ctx",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "CTX — Universal AI CLI plugin. Multi-provider orchestration, consilium (CBDP), knowledge base, and adaptive routing. Works with Claude Code, Gemini CLI, OpenCode, Codex CLI.",
   "author": {
     "name": "VladPatr96",

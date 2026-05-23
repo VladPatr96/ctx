@@ -1,6 +1,6 @@
 {
   "name": "ctx-plugin",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "CTX — Universal plugin for AI CLI systems (Claude Code, Gemini CLI, OpenCode, Codex CLI). Multi-provider orchestration with consilium (CBDP), knowledge base, and adaptive routing",
   "type": "module",
   "main": "scripts/ctx-mcp-hub.js",

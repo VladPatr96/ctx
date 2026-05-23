@@ -10,7 +10,7 @@
       "name": "ctx",
       "source": "./",
       "description": "Multi-provider context management: session logging, knowledge base, file indexing, and AI consilium",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "author": { "name": "VladPatr96" },
       "license": "MIT",
       "keywords": ["context", "session", "knowledge-base", "multi-provider"]
