@@ -1,6 +1,6 @@
 {
   "hooks": {
-    "PreCompress": [
+    "PreCompact": [
       {
         "hooks": [
           {
