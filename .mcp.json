@@ -2,7 +2,7 @@
   "mcpServers": {
     "ctx-hub": {
       "command": "node",
-      "args": ["scripts/ctx-mcp-hub.js"],
+      "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/ctx-mcp-hub.js"],
       "env": {}
     }
   }
